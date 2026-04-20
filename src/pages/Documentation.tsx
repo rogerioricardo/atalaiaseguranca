@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/auth/context';
+import { useAuth } from '@/context/AuthContext';
 import { 
     ShieldCheck, Users, Video, Bell, MessageCircle, MapPin, 
     Smartphone, CreditCard, Lock, ArrowLeft, Star, 

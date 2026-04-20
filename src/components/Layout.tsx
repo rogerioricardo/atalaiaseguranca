@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useAuth } from '@/auth/context';
+import { useAuth } from '@/context/AuthContext';
 import { UserRole } from '../types';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 

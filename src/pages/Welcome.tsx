@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/auth/context';
+import { useAuth } from '@/context/AuthContext';
 import { ShieldCheck, AlertTriangle, Eye, Lock, HeartHandshake, CheckCircle } from 'lucide-react';
 import { Button, Card } from '../components/UI';
 

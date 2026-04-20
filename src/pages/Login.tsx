@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/auth/context';
+import { useAuth } from '@/context/AuthContext';
 import { UserRole, Neighborhood } from '../types';
 import { Button, Input, Card } from '../components/UI';
 import { ShieldCheck, ArrowLeft, AlertCircle, MapPin, CheckCircle, RefreshCw, Loader2 } from 'lucide-react';

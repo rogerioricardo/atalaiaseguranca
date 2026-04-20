@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/auth/context';
+import { useAuth } from '@/context/AuthContext';
 import { MockService } from '../services/mockService';
 import { Card, Button } from '../components/UI';
 import { CheckCircle, ShieldCheck, Loader2 } from 'lucide-react';

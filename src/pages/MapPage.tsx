@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { MockService } from '../services/mockService';
 import { User, Neighborhood, UserRole, Camera } from '../types';
 import L from 'leaflet';
-import { useAuth } from '@/auth/context';
+import { useAuth } from '@/context/AuthContext';
 import { Video, MapPin, Globe } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 

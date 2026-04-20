@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/auth/context';
+import { useAuth } from '@/context/AuthContext';
 import { Lock, ArrowLeft, Eye, MapPin, MessageSquare } from 'lucide-react';
 import { Button, Card } from '../components/UI';
 

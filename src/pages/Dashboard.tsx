@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import Layout from '../components/Layout';
-import { useAuth } from '@/auth/context';
+import { useAuth } from '@/context/AuthContext';
 import { UserRole, Alert, Neighborhood, Notification, User, ServiceRequest } from '../types';
 import { Card, Badge, Button, Modal, Input } from '../components/UI';
 import { MockService } from '../services/mockService';

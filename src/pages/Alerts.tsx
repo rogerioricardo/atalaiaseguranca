@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
-import { useAuth } from '@/auth/context';
+import { useAuth } from '@/context/AuthContext';
 import { Card, Button, Badge } from '../components/UI';
 import { 
     AlertTriangle, ShieldAlert, CheckCircle, Eye, Phone, Shield, 
