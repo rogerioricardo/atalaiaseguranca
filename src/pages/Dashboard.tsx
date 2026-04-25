@@ -4,6 +4,7 @@ import Layout from '@/components/Layout';
 import { useAuth } from '@/auth/context';
 import { UserRole, Alert, Neighborhood, Notification, User, ServiceRequest, SupportTicket } from '@/types';
 import { Card, Badge, Button, Modal, Input } from '@/components/UI';
+import { UpgradeModal } from '@/components/UpgradeModal';
 import { MockService } from '@/services/mockService';
 import { supabase } from '@/lib/supabaseClient';
 import { 
@@ -285,8 +286,8 @@ const Dashboard: React.FC = () => {
   // Service Request Loading State
   const [requestLoading, setRequestLoading] = useState<string | null>(null);
 
-  // Upgrade Modal for SCR feature
-  const [showSCRUpgradeModal, setShowSCRUpgradeModal] = useState(false);
+  // Upgrade Modal visibility
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   
   // POPUP FEEDBACK STATE
   const [feedback, setFeedback] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
@@ -420,7 +421,7 @@ const Dashboard: React.FC = () => {
   const handleRequestService = async (type: 'ESCORT' | 'EXTRA_ROUND' | 'TRAVEL_NOTICE') => {
       if (!user || !user.neighborhoodId) return;
       if (user.plan !== 'PREMIUM') {
-          setShowSCRUpgradeModal(true);
+          setShowUpgradeModal(true);
           return;
       }
 
@@ -750,7 +751,30 @@ const Dashboard: React.FC = () => {
           </h2>
           
           <div className="flex-1 flex flex-col items-center justify-center bg-black/60 rounded-lg border border-dashed border-gray-700 min-h-[200px]">
-             {myNeighborhood ? (
+             {user?.plan === 'FREE' && user?.role === UserRole.RESIDENT ? (
+                 <div className="text-center px-6 py-8">
+                     <Lock className="text-atalaia-neon/30 mx-auto mb-4" size={40} />
+                     <h3 className="text-white font-bold mb-2">Monitoramento VIP Indisponível</h3>
+                     <p className="text-gray-400 text-sm mb-6 max-w-xs mx-auto">
+                         Para visualizar as câmeras do seu bairro, você precisa de uma assinatura ativa.
+                     </p>
+                     <div className="flex flex-col gap-2">
+                        <Button 
+                            className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold"
+                            onClick={() => setShowUpgradeModal(true)}
+                        >
+                            Assinar Plano Família (R$ 39,90)
+                        </Button>
+                        <Button 
+                            variant="outline"
+                            className="text-atalaia-neon border-atalaia-neon/20"
+                            onClick={() => setShowUpgradeModal(true)}
+                        >
+                            Assinar Plano Prêmio (R$ 79,90)
+                        </Button>
+                     </div>
+                 </div>
+             ) : myNeighborhood ? (
                  <div className="text-center">
                      <p className="text-gray-400 mb-4">Câmera Principal: {myNeighborhood.name}</p>
                      <Button onClick={() => navigate('/cameras')}>Abrir Monitoramento</Button>
@@ -767,24 +791,8 @@ const Dashboard: React.FC = () => {
         </Card>
       </div>
 
-       {/* Modal Upgrade for SCR */}
-       <Modal isOpen={showSCRUpgradeModal} onClose={() => setShowSCRUpgradeModal(false)}>
-           <div className="p-4 text-center">
-               <div className="w-16 h-16 bg-atalaia-neon/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                   <Star size={32} fill="white" className="text-atalaia-neon" />
-               </div>
-               <h2 className="text-2xl font-bold text-white mb-2">Desbloqueie o Suporte SCR</h2>
-               <p className="text-gray-400 mb-6">
-                   O serviço de Apoio Tático Motovigia (Escolta, Rondas Extras) é exclusivo para assinantes do <strong>Plano Prêmio</strong>.
-               </p>
-               <Button onClick={() => {
-                   window.location.href = '#/cameras'; 
-                   setShowSCRUpgradeModal(false);
-               }} className="w-full">
-                   Fazer Upgrade para Prêmio
-               </Button>
-           </div>
-       </Modal>
+       {/* Modal Upgrade Global */}
+       <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
     </Layout>
   );
 };

@@ -6,7 +6,8 @@ import { MockService } from '../services/mockService';
 import { User, Neighborhood, UserRole, Camera } from '../types';
 import L from 'leaflet';
 import { useAuth } from '@/auth/context';
-import { Video, MapPin, Globe } from 'lucide-react';
+import { Video, MapPin, Globe, Lock } from 'lucide-react';
+import { UpgradeModal } from '@/components/UpgradeModal';
 import { supabase } from '../lib/supabaseClient';
 
 // Fix Leaflet Default Icon in React using CDN URLs
@@ -66,8 +67,10 @@ const MapResizer = () => {
     return null;
 };
 
-const CameraPopupContent: React.FC<{ cam: Camera }> = ({ cam }) => {
+const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ cam, onUpgrade }) => {
   const [showLive, setShowLive] = useState(false);
+  const { user } = useAuth();
+  const isFreeResident = user?.plan === 'FREE' && user?.role === UserRole.RESIDENT;
 
   return (
     <div className="min-w-[280px]">
@@ -82,7 +85,29 @@ const CameraPopupContent: React.FC<{ cam: Camera }> = ({ cam }) => {
       
       <div className="w-full aspect-video bg-black rounded-lg overflow-hidden border border-gray-200 shadow-inner mt-1 relative">
           {showLive ? (
-              cam.iframeCode.trim().startsWith('<') ? (
+              isFreeResident ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 px-4 text-center">
+                    <Lock className="text-atalaia-neon/40 mb-2" size={24} />
+                    <h4 className="text-white font-bold text-[10px] uppercase mb-1">Acesso Bloqueado</h4>
+                    <p className="text-[8px] text-gray-500 mb-2">
+                        Requer assinatura para monitorar.
+                    </p>
+                    <div className="flex flex-col gap-1 w-full">
+                        <button 
+                            onClick={onUpgrade}
+                            className="bg-yellow-600 text-white text-[8px] font-black py-1 rounded uppercase"
+                        >
+                            Plano Família (R$ 39,90)
+                        </button>
+                        <button 
+                            onClick={onUpgrade}
+                            className="bg-atalaia-neon text-black text-[8px] font-black py-1 rounded uppercase"
+                        >
+                            Plano Prêmio (R$ 79,90)
+                        </button>
+                    </div>
+                </div>
+              ) : cam.iframeCode.trim().startsWith('<') ? (
                   <iframe 
                       srcDoc={`
                           <html>
@@ -122,11 +147,11 @@ const CameraPopupContent: React.FC<{ cam: Camera }> = ({ cam }) => {
             onClick={() => setShowLive(!showLive)}
             className="absolute bottom-2 right-2 bg-black/60 hover:bg-black/80 text-white text-[9px] font-bold px-2 py-1 rounded backdrop-blur-sm border border-white/20 transition-all z-10"
           >
-            {showLive ? 'Ver Foto do Poste' : 'Ver Câmera ao Vivo'}
+            {showLive ? 'Ver Foto do Poste' : (isFreeResident ? 'Desbloquear Câmera' : 'Ver Câmera ao Vivo')}
           </button>
       </div>
       <div className="mt-2 text-[9px] text-gray-500 italic text-center">
-          {showLive ? 'Monitoramento em tempo real Atalaia' : 'Localização física do poste de monitoramento'}
+          {showLive ? (isFreeResident ? '🔒 Plano Premium Requerido' : 'Monitoramento em tempo real Atalaia') : 'Localização física do poste de monitoramento'}
       </div>
     </div>
   );
@@ -137,6 +162,7 @@ const MapPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   
   const centerPos: [number, number] = user?.lat && user?.lng ? [user.lat, user.lng] : [-27.5969, -48.5495];
 
@@ -246,7 +272,7 @@ const MapPage: React.FC = () => {
                     cam.lat && cam.lng && (
                         <Marker key={`cam-${cam.id}`} position={[cam.lat, cam.lng]} icon={CameraIcon}>
                              <Popup className="text-black" minWidth={300}>
-                                <CameraPopupContent cam={cam} />
+                                <CameraPopupContent cam={cam} onUpgrade={() => setShowUpgradeModal(true)} />
                              </Popup>
                         </Marker>
                     )
@@ -284,6 +310,7 @@ const MapPage: React.FC = () => {
             </div>
         </div>
       </div>
+      <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
     </Layout>
   );
 };

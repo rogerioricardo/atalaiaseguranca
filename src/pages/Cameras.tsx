@@ -8,9 +8,10 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
     Video, Plus, Trash2, Search, MapPin, 
     AlertTriangle, Shield, CheckCircle, Info, ExternalLink,
-    ChevronRight, Camera as CameraIcon, Loader2, Edit2, X
+    ChevronRight, Camera as CameraIcon, Loader2, Edit2, X, Lock
 } from 'lucide-react';
 import { Card, Button, Input, Badge } from '@/components/UI';
+import { UpgradeModal } from '@/components/UpgradeModal';
 import { motion, AnimatePresence } from 'motion/react';
 
 const Cameras: React.FC = () => {
@@ -33,6 +34,7 @@ const Cameras: React.FC = () => {
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [supportMessage, setSupportMessage] = useState('');
   const [sendingSupport, setSendingSupport] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -229,7 +231,30 @@ const Cameras: React.FC = () => {
                   {filteredCameras.map((cam) => (
                     <Card key={cam.id} className="group overflow-hidden border-white/5 hover:border-atalaia-neon/30 transition-all duration-300">
                       <div className="aspect-video bg-black relative">
-                         {cam.iframeCode.trim().startsWith('<') ? (
+                         {user?.plan === 'FREE' && user?.role === UserRole.RESIDENT ? (
+                             <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 px-6 text-center">
+                                 <Lock className="text-atalaia-neon/40 mb-3" size={32} />
+                                 <h4 className="text-white font-bold text-xs uppercase mb-1">Assinatura Necessária</h4>
+                                 <p className="text-[10px] text-gray-500 max-w-[180px] mb-3">
+                                     Câmeras liberadas nos planos pagos.
+                                 </p>
+                                 <div className="flex flex-col gap-1.5 w-full max-w-[160px]">
+                                     <Button 
+                                         className="h-7 text-[8px] font-black bg-yellow-600 hover:bg-yellow-700"
+                                         onClick={() => setShowUpgradeModal(true)}
+                                     >
+                                         PLANO FAMÍLIA (R$ 39,90)
+                                     </Button>
+                                     <Button 
+                                         variant="outline"
+                                         className="h-7 text-[8px] font-black border-atalaia-neon/30 text-atalaia-neon"
+                                         onClick={() => setShowUpgradeModal(true)}
+                                     >
+                                         PLANO PRÊMIO (R$ 79,90)
+                                     </Button>
+                                 </div>
+                             </div>
+                         ) : cam.iframeCode.trim().startsWith('<') ? (
                             <iframe 
                                 srcDoc={`
                                     <html>
@@ -501,6 +526,7 @@ const Cameras: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+      <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
     </Layout>
   );
 };
