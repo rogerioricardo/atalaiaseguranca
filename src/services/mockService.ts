@@ -304,9 +304,10 @@ export const MockService = {
             if (!profileErr && profiles && profiles.length > 0) {
                 const numbers = profiles.map(p => p.phone).filter(Boolean) as string[];
                 if (numbers.length > 0) {
-                    await supabase.functions.invoke('send-alert', { 
+                    // Dispara em background para não travar a resposta do app
+                    supabase.functions.invoke('send-alert', { 
                         body: { message, numbers } 
-                    });
+                    }).catch(err => console.error("[WhatsApp Broadcast] Error:", err));
                 }
             }
         }
@@ -335,6 +336,21 @@ export const MockService = {
     if (error) {
         console.error("[MockService] Error in sendMessage:", error);
         throw error;
+    }
+  },
+
+  sendChatMessageToWhatsApp: async (userName: string, text: string, phoneNumber?: string) => {
+    if (!phoneNumber) return;
+    try {
+        const settings = await MockService.getSettings();
+        const template = settings['chat_mirror_template'] || "*CHAT ATALAIA*\nDe: {user}\n{text}";
+        const message = template.replace('{user}', userName).replace('{text}', text);
+
+        supabase.functions.invoke('send-alert', { 
+            body: { message, numbers: [phoneNumber] } 
+        }).catch(e => console.error("[WhatsApp Chat Mirror] Failed:", e));
+    } catch (e) {
+        console.error("[WhatsApp Chat Mirror] Error:", e);
     }
   },
 
@@ -371,7 +387,11 @@ export const MockService = {
               });
               
               if (funcError) throw funcError;
-              if (funcData?.error) throw new Error(funcData.error);
+              
+              const failed = funcData?.results?.find((r: any) => !r.success);
+              if (failed) {
+                  throw new Error(`Erro na API WhatsApp: ${failed.error || 'Falha no envio'}`);
+              }
               
               return funcData;
           } else {
@@ -397,6 +417,22 @@ export const MockService = {
 
   createServiceRequest: async (userId: string, userName: string, neighborhoodId: string, requestType: string) => {
     const { error } = await supabase.from('service_requests').insert([{ user_id: userId, user_name: userName, neighborhood_id: sanitizeUUID(neighborhoodId), request_type: requestType, status: 'PENDING' }]);
+    
+    if (!error) {
+        const integrator = await MockService.getNeighborhoodIntegrator(neighborhoodId);
+        if (integrator?.phone) {
+            const settings = await MockService.getSettings();
+            const template = settings['service_request_template'] || "*SOLICITAÇÃO*\nTipo: {type}\nMorador: {user}";
+            const label = requestType === 'ESCORT' ? 'ESCOLTA' : requestType === 'EXTRA_ROUND' ? 'RONDA EXTRA' : 'AVISO DE VIAGEM';
+            
+            const message = template.replace('{type}', label).replace('{user}', userName);
+
+            await supabase.functions.invoke('send-alert', {
+                body: { message, numbers: [integrator.phone] }
+            });
+        }
+    }
+
     if (error) {
         console.error("[MockService] Error in createServiceRequest:", error);
         throw error;
@@ -477,6 +513,19 @@ export const MockService = {
             status: 'OPEN'
         }]);
     
+    if (!error) {
+        const settings = await MockService.getSettings();
+        const adminPhone = settings['admin_whatsapp'];
+        const template = settings['support_ticket_template'] || "*SUPORTE*\n{user}: {text}";
+        
+        if (adminPhone) {
+            const finalMsg = template.replace('{user}', userName).replace('{text}', message);
+            await supabase.functions.invoke('send-alert', {
+                body: { message: finalMsg, numbers: [adminPhone] }
+            });
+        }
+    }
+
     if (error) {
         console.error("[MockService] Error in createSupportTicket:", error);
         throw error;

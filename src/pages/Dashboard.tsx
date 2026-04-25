@@ -10,7 +10,7 @@ import {
     AlertTriangle, Video, Users, Activity, MapPin, Inbox, Copy, Trash2, 
     Heart, DollarSign, Loader2, Navigation, FileText, 
     Shield, Star, Lock, Send, Search, CheckCircle, UserCheck, XCircle,
-    Wrench
+    Wrench, MessageSquare
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PaymentService } from '@/services/paymentService';
@@ -542,7 +542,31 @@ const Dashboard: React.FC = () => {
         </Card>
       )}
 
-      {/* SUPPORT TICKETS FEED (Admins only) */}
+          {/* GESTÃO GERAL (ADMIN ONLY) */}
+          {user?.role === UserRole.ADMIN && (
+              <Card className="p-6 mb-8 border-atalaia-neon/30 bg-atalaia-neon/5 animate-in slide-in-from-top-4">
+                  <h2 className="text-xl font-bold flex items-center gap-2 mb-4 text-white">
+                      <Shield className="text-atalaia-neon" size={20} />
+                      Atalhos Administrativos
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <Button onClick={() => navigate('/admin/whatsapp')} className="bg-green-600/20 border border-green-500/40 hover:bg-green-600/30 text-green-400 font-bold">
+                          <MessageSquare size={18} className="mr-2"/> Central WhatsApp
+                      </Button>
+                      <Button onClick={() => navigate('/integrator/users')} className="bg-blue-600/20 border border-blue-500/40 hover:bg-blue-600/30 text-blue-400 font-bold">
+                          <Users size={18} className="mr-2"/> Gestão de Usuários
+                      </Button>
+                      <Button onClick={() => navigate('/admin/financial')} className="bg-yellow-600/20 border border-yellow-500/40 hover:bg-yellow-600/30 text-yellow-400 font-bold">
+                          <DollarSign size={18} className="mr-2"/> Financeiro Geral
+                      </Button>
+                      <Button onClick={() => navigate('/cameras')} className="bg-purple-600/20 border border-purple-500/40 hover:bg-purple-600/30 text-purple-400 font-bold">
+                          <Video size={18} className="mr-2"/> Config. Câmeras
+                      </Button>
+                  </div>
+              </Card>
+          )}
+
+          {/* SUPPORT TICKETS FEED (Admins only) */}
       {user?.role === UserRole.ADMIN && supportTickets.length > 0 && (
           <Card className="p-6 mb-8 border-atalaia-neon/30 bg-atalaia-neon/5">
               <h2 className="text-xl font-bold flex items-center gap-2 mb-4 text-white uppercase italic tracking-tighter">

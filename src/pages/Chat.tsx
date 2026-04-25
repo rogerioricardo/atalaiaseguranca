@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Layout';
 import { useAuth } from '@/auth/context';
 import { Card, Input, Button } from '../components/UI';
-import { MessageCircle, Send, AlertTriangle, ShieldAlert, CheckCircle, Eye, ImageIcon, MapPin, Loader2, Wifi, WifiOff } from 'lucide-react';
+import { MessageCircle, MessageSquare, Send, AlertTriangle, ShieldAlert, CheckCircle, Eye, ImageIcon, MapPin, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { MockService } from '../services/mockService';
 import { ChatMessage, UserRole } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -15,6 +15,7 @@ const Chat: React.FC = () => {
   const [neighborhoodName, setNeighborhoodName] = useState('');
   const [connectionStatus, setConnectionStatus] = useState<'CONNECTING' | 'CONNECTED' | 'DISCONNECTED'>('CONNECTING');
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [isWhatsAppMirrorActive, setIsWhatsAppMirrorActive] = useState(false);
 
   // 1. Carrega Nome do Bairro (Apenas visual)
   useEffect(() => {
@@ -135,6 +136,11 @@ const Chat: React.FC = () => {
             userRole: user.role,
             text: msgText,
         });
+
+        // ESPELHAMENTO WHATSAPP (Se ativo e usuário tiver telefone)
+        if (isWhatsAppMirrorActive && user.phone) {
+            await MockService.sendChatMessageToWhatsApp(user.name, msgText, user.phone);
+        }
       } catch (err) {
           console.error("Error sending message", err);
       }
@@ -281,17 +287,40 @@ const Chat: React.FC = () => {
                 </div>
 
                 {/* Input Area */}
-                <form onSubmit={handleSendMessage} className="p-4 bg-[#111] border-t border-white/5 flex gap-3">
-                    <Input 
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="Digite sua mensagem..."
-                        className="flex-1 !bg-black !border-white/10 focus:!border-atalaia-neon !h-12"
-                        disabled={connectionStatus !== 'CONNECTED'} // Evita envio sem conexão
-                    />
-                    <Button type="submit" disabled={connectionStatus !== 'CONNECTED'} className="px-6 bg-white/5 hover:bg-atalaia-neon hover:text-black text-atalaia-neon transition-colors h-12 disabled:opacity-50">
-                        <Send size={20} />
-                    </Button>
+                <form onSubmit={handleSendMessage} className="p-4 bg-[#111] border-t border-white/5 flex flex-col gap-3">
+                    <div className="flex gap-3 items-center">
+                        <button 
+                            type="button"
+                            onClick={() => {
+                                if (!user?.phone) {
+                                    alert("Você precisa cadastrar seu telefone no perfil para usar esta função.");
+                                    return;
+                                }
+                                setIsWhatsAppMirrorActive(!isWhatsAppMirrorActive);
+                            }}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-[10px] font-bold uppercase tracking-tight ${isWhatsAppMirrorActive ? 'bg-green-600 text-white border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.3)]' : 'bg-white/5 text-gray-500 border-white/5 hover:bg-white/10'}`}
+                        >
+                            <MessageSquare size={14} className={isWhatsAppMirrorActive ? "fill-white/20" : ""} />
+                            {isWhatsAppMirrorActive ? "Cópia no Zap Ativa" : "Cópia p/ meu Zap"}
+                        </button>
+                        {!user?.phone && (
+                            <span className="text-[10px] text-yellow-500 italic">Cadastre seu celular no perfil</span>
+                        )}
+                        <div className="flex-1" />
+                    </div>
+
+                    <div className="flex gap-3 items-center">
+                        <Input 
+                            value={newMessage}
+                            onChange={(e) => setNewMessage(e.target.value)}
+                            placeholder="Digite sua mensagem..."
+                            className="flex-1 !bg-black !border-white/10 focus:!border-atalaia-neon !h-12"
+                            disabled={connectionStatus !== 'CONNECTED'} // Evita envio sem conexão
+                        />
+                        <Button type="submit" disabled={connectionStatus !== 'CONNECTED'} className="px-6 bg-white/5 hover:bg-atalaia-neon hover:text-black text-atalaia-neon transition-colors h-12 disabled:opacity-50">
+                            <Send size={20} />
+                        </Button>
+                    </div>
                 </form>
             </Card>
         </div>

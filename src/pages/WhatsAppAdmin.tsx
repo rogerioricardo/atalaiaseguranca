@@ -106,9 +106,9 @@ const WhatsAppAdmin: React.FC = () => {
                 <div className="flex justify-between items-center mb-10">
                     <div>
                         <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-                            <MessageSquare className="text-green-500" size={32} /> Central WhatsApp
+                            <MessageSquare className="text-green-500" size={32} /> Central WhatsApp (Whaticket)
                         </h1>
-                        <p className="text-gray-400">Sincronizado com tabela `system_settings`.</p>
+                        <p className="text-gray-400">Canal: app.whatendimento.digital</p>
                     </div>
                     <div className="flex bg-[#111] p-1 rounded-xl border border-atalaia-border shadow-inner">
                         <button onClick={() => setActiveTab('broadcast')} className={`px-6 py-2 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${activeTab === 'broadcast' ? 'bg-atalaia-neon text-black shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>Disparos</button>
@@ -168,6 +168,82 @@ const WhatsAppAdmin: React.FC = () => {
                                 </form>
                             </Card>
                         )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                             {/* Configuração Extra: Admin WhatsApp */}
+                             <div className="bg-white/5 p-5 rounded-2xl border border-white/10 flex flex-col justify-between hover:border-atalaia-neon/30 transition-all group">
+                                <div>
+                                    <h3 className="text-white font-bold mb-3 flex items-center gap-2 text-sm">
+                                        <Smartphone size={16} className="text-blue-400" /> Admin Monitor
+                                    </h3>
+                                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Monitor Geral do Sistema</label>
+                                    <input 
+                                        type="text"
+                                        value={templates['admin_whatsapp'] || ''}
+                                        onChange={(e) => setTemplates({...templates, admin_whatsapp: e.target.value})}
+                                        placeholder="554899999999"
+                                        className="w-full bg-black border border-white/10 rounded-xl px-4 py-2.5 text-white text-xs focus:border-atalaia-neon outline-none"
+                                    />
+                                    <p className="text-[9px] text-gray-600 mt-2">Recebe notificações de chamados técnicos (Suporte).</p>
+                                </div>
+                                <Button 
+                                    className="mt-4 h-9 text-xs font-bold" 
+                                    onClick={() => handleSaveTemplate('admin_whatsapp', templates['admin_whatsapp'] || '')}
+                                    disabled={savingKeys.has('admin_whatsapp')}
+                                >
+                                    {savingKeys.has('admin_whatsapp') ? 'Gravando...' : 'Salvar Admin'}
+                                </Button>
+                            </div>
+
+                            <div className="bg-white/5 p-5 rounded-2xl border border-white/10 flex flex-col hover:border-atalaia-neon/30 transition-all">
+                                <h3 className="text-white font-bold mb-2 flex items-center gap-2 text-sm">
+                                    <RefreshCw size={16} className="text-green-400" /> Espelhamento Chat
+                                </h3>
+                                <p className="text-[10px] text-gray-500 mb-2 font-medium">Define como a mensagem do chat chega no Zap do morador (Tags: <strong>{'{user}'}</strong>, <strong>{'{text}'}</strong>).</p>
+                                <Button 
+                                    variant="outline" 
+                                    className="mt-auto h-8 text-[9px] uppercase font-black"
+                                    onClick={() => setTemplateSearch('chat_mirror')}
+                                >
+                                    Configurar Template
+                                </Button>
+                            </div>
+
+                            <div className="bg-white/5 p-5 rounded-2xl border border-white/10 flex flex-col hover:border-atalaia-neon/30 transition-all">
+                                <h3 className="text-white font-bold mb-2 flex items-center gap-2 text-sm">
+                                    <Shield size={16} className="text-yellow-400" /> Alertas Integrador
+                                </h3>
+                                <p className="text-[10px] text-gray-500 mb-2 font-medium">Define alertas de Escolta/Ronda para os Integradores (Tags: <strong>{'{type}'}</strong>, <strong>{'{user}'}</strong>).</p>
+                                <Button 
+                                    variant="outline" 
+                                    className="mt-auto h-8 text-[9px] uppercase font-black"
+                                    onClick={() => setTemplateSearch('service_request')}
+                                >
+                                    Configurar Template
+                                </Button>
+                            </div>
+
+                            <div className="bg-white/5 p-5 rounded-2xl border border-white/10 flex flex-col hover:border-atalaia-neon/30 transition-all">
+                                <h3 className="text-white font-bold mb-2 flex items-center gap-2 text-sm">
+                                    <HelpCircle size={16} className="text-purple-400" /> Chamados Administrativos
+                                </h3>
+                                <p className="text-[10px] text-gray-500 mb-2 font-medium">Avisos de novos chamados de suporte (Tags: <strong>{'{user}'}</strong>, <strong>{'{text}'}</strong>).</p>
+                                <Button 
+                                    variant="outline" 
+                                    className="mt-auto h-8 text-[9px] uppercase font-black"
+                                    onClick={() => setTemplateSearch('support_ticket')}
+                                >
+                                    Configurar Template
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="mb-4 flex items-center justify-between">
+                            <h2 className="text-white font-black uppercase tracking-tighter italic text-xl">Dicionário de Configurações</h2>
+                            <p className="text-xs text-gray-500 italic">
+                                Use o campo abaixo para buscar e editar qualquer valor de sistema.
+                            </p>
+                        </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {filteredTemplates.map(([key, val]) => {
