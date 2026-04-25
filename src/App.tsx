@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 // App Entry Point - Sync Fix Attempt
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { AuthProvider, useAuth } from '@/auth/context';
 import Landing from '@/pages/Landing';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';

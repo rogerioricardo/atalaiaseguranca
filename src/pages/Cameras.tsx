@@ -1,356 +1,506 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import Layout from '../components/Layout';
-import { useAuth } from '@/context/AuthContext';
-import { UserRole, Neighborhood, Camera } from '../types';
-import { MockService } from '../services/mockService';
-import { supabase } from '../lib/supabaseClient';
-import { Card, Button, Input, Badge } from '../components/UI';
+import Layout from '@/components/Layout';
+import { useAuth } from '@/auth/context';
+import { UserRole, Neighborhood, Camera } from '@/types';
+import { MockService } from '@/services/mockService';
+import { supabase } from '@/lib/supabaseClient';
 import { 
-    Video, Plus, Edit2, Trash2, MapPin, RefreshCw, Maximize2, Loader2, 
-    Camera as CameraIcon, List, Settings, Save, XCircle, RotateCw,
-    AlertTriangle, Lock, Info 
+    Video, Plus, Trash2, Search, MapPin, 
+    AlertTriangle, Shield, CheckCircle, Info, ExternalLink,
+    ChevronRight, Camera as CameraIcon, Loader2, Edit2, X
 } from 'lucide-react';
-
-const UniversalPlayer: React.FC<{ url: string; title?: string }> = ({ url, title }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [key, setKey] = useState(0);
-  const [rotation, setRotation] = useState(0);
-  const [hasError, setHasError] = useState(false);
-
-  const toggleFullscreen = async () => {
-      if (!containerRef.current) return;
-      if (!document.fullscreenElement) await containerRef.current.requestFullscreen();
-      else await document.exitFullscreen();
-  };
-
-  const rotate = () => {
-      setRotation(prev => (prev + 90) % 360);
-  };
-
-  if (!url) return null;
-  const isRawHtml = url.trim().startsWith('<');
-  const isInsecure = !isRawHtml && url.trim().startsWith('http://');
-  const isIncomplete = !isRawHtml && !url.trim().startsWith('http');
-
-  const isDirectVideo = !isRawHtml && (
-      /\.(mp4|webm|ogg|m4v|mov)($|\?)/i.test(url) || 
-      url.includes('video/mp4') ||
-      url.includes('servcam.alienmonitoramento')
-  );
-
-  return (
-      <div ref={containerRef} className="w-full bg-black border border-atalaia-border relative shadow-lg aspect-video group rounded-xl overflow-hidden">
-           {title && <div className="absolute top-0 left-0 w-full p-2 bg-black/60 backdrop-blur-sm z-10 text-[10px] font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity">{title}</div>}
-           
-           <div 
-             className="w-full h-full transition-all duration-300 flex items-center justify-center" 
-             style={{ 
-                 transform: `rotate(${rotation}deg)`,
-                 width: (rotation === 90 || rotation === 270) ? '56.25%' : '100%',
-                 margin: 'auto'
-             }} 
-             key={key}
-           >
-              {hasError ? (
-                  <div className="text-center p-4">
-                      <AlertTriangle className="text-red-500 mx-auto mb-2" size={32} />
-                      <p className="text-white text-xs font-bold uppercase">Erro de Conexão</p>
-                      <p className="text-gray-500 text-[10px] mt-1 mb-4">O servidor da câmera recusou a conexão ou o link está quebrado.</p>
-                      <a 
-                        href={url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold rounded-lg transition-colors"
-                      >
-                        <RefreshCw size={12} /> Testar Link em Nova Aba
-                      </a>
-                  </div>
-              ) : isIncomplete ? (
-                  <div className="text-center p-4">
-                      <AlertTriangle className="text-yellow-500 mx-auto mb-2" size={32} />
-                      <p className="text-white text-xs font-bold uppercase">Link Incompleto</p>
-                      <p className="text-gray-500 text-[10px] mt-1">O link deve começar com https://</p>
-                  </div>
-              ) : isInsecure ? (
-                  <div className="text-center p-4">
-                      <Lock className="text-orange-500 mx-auto mb-2" size={32} />
-                      <p className="text-white text-xs font-bold uppercase">Link Inseguro (HTTP)</p>
-                      <p className="text-gray-500 text-[10px] mt-1">Navegadores bloqueiam links HTTP em sites HTTPS. Use HTTPS.</p>
-                  </div>
-              ) : isRawHtml ? (
-                <iframe 
-                  srcDoc={`
-                    <html>
-                      <head>
-                        <style>
-                          body { margin: 0; padding: 0; background: black; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
-                          video, iframe { width: 100%; height: 100%; object-fit: contain; border: none; }
-                        </style>
-                      </head>
-                      <body>${url}</body>
-                    </html>
-                  `}
-                  className="w-full h-full border-0"
-                  allowFullScreen
-                />
-              ) : isDirectVideo ? (
-                <video 
-                    src={url} 
-                    controls 
-                    autoPlay 
-                    muted 
-                    playsInline 
-                    preload="auto"
-                    className="w-full h-full object-contain"
-                    onError={() => setHasError(true)}
-                />
-              ) : (
-                <iframe src={url} className="w-full h-full bg-black border-0" allowFullScreen onError={() => setHasError(true)} />
-              )}
-           </div>
-
-           <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-20">
-               <button onClick={rotate} className="p-2 rounded bg-black/70 text-white hover:text-atalaia-neon" title="Rotacionar 90°"><RotateCw size={14} /></button>
-               <button onClick={() => { setKey(k => k + 1); setHasError(false); }} className="p-2 rounded bg-black/70 text-white hover:text-atalaia-neon" title="Recarregar"><RefreshCw size={14} /></button>
-               <button onClick={toggleFullscreen} className="p-2 rounded bg-black/70 text-white hover:text-atalaia-neon" title="Tela Cheia"><Maximize2 size={14} /></button>
-           </div>
-      </div>
-  );
-};
+import { Card, Button, Input, Badge } from '@/components/UI';
+import { motion, AnimatePresence } from 'motion/react';
 
 const Cameras: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'view' | 'manage'>('view');
-  const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
-  const [selectedNeighborhood, setSelectedNeighborhood] = useState<Neighborhood | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const [editingHoodId, setEditingHoodId] = useState<string | null>(null);
-  const [newHoodName, setNewHoodName] = useState('');
-  const [newHoodUrl, setNewHoodUrl] = useState('');
-
-  const [selectedManageHoodId, setSelectedManageHoodId] = useState('');
+  const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedNeighborhoodId, setSelectedNeighborhoodId] = useState<string>('');
+  
+  // States for adding/editing camera
+  const [selectedManageHoodId, setSelectedManageHoodId] = useState<string>('');
   const [newCameraName, setNewCameraName] = useState('');
   const [newCameraCode, setNewCameraCode] = useState('');
   const [newCameraLat, setNewCameraLat] = useState('');
   const [newCameraLng, setNewCameraLng] = useState('');
+  const [newCameraPhoto, setNewCameraPhoto] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [editingCameraId, setEditingCameraId] = useState<string | null>(null);
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [supportMessage, setSupportMessage] = useState('');
+  const [sendingSupport, setSendingSupport] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setIsUploading(true);
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setNewCameraPhoto(reader.result as string);
+              setIsUploading(false);
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const handleEditCamera = (cam: Camera) => {
+      setEditingCameraId(cam.id);
+      setNewCameraName(cam.name);
+      setNewCameraCode(cam.iframeCode);
+      setNewCameraLat(cam.lat?.toString() || '');
+      setNewCameraLng(cam.lng?.toString() || '');
+      setNewCameraPhoto(cam.locationPhotoUrl || '');
+      
+      // Select the neighborhood of the camera being edited
+      setSelectedManageHoodId(cam.neighborhoodId);
+  };
+
+  const handleCancelEdit = () => {
+      setEditingCameraId(null);
+      setNewCameraName('');
+      setNewCameraCode('');
+      setNewCameraLat('');
+      setNewCameraLng('');
+      setNewCameraPhoto('');
+  };
+
+  const handleSendSupport = async (e: React.FormEvent) => {
+      e.preventDefault();
+      console.log("[Cameras] handleSendSupport triggered");
+      
+      if (!supportMessage || !supportMessage.trim()) {
+          alert('Por favor, descreva o problema antes de enviar.');
+          return;
+      }
+
+      if (!user) {
+          console.warn("[Cameras] No user found in context");
+          alert('Sessão expirada. Por favor, faça login novamente.');
+          return;
+      }
+      
+      setSendingSupport(true);
+      try {
+          console.log("[Cameras] Sending support ticket:", { 
+              userId: user.id, 
+              name: user.name, 
+              neighborhoodId: user.neighborhoodId 
+          });
+
+          await MockService.createSupportTicket(
+              user.id,
+              user.name,
+              supportMessage.trim(),
+              user.neighborhoodId
+          );
+          
+          console.log("[Cameras] Support ticket sent successfully");
+          alert('Sua solicitação de suporte foi enviada com sucesso! Em breve um técnico entrará em contato.');
+          setSupportMessage('');
+          setIsSupportModalOpen(false);
+      } catch (err: any) {
+          console.error("[Cameras] Error creating support ticket:", err);
+          alert('Erro ao enviar solicitação: ' + (err.message || 'Erro desconhecido.'));
+      } finally {
+          setSendingSupport(false);
+      }
+  };
 
   const loadData = async () => {
       setLoading(true);
       try {
-          const allHoods = await MockService.getNeighborhoods(true);
+          const cams = await MockService.getAllSystemCameras();
+          setCameras(cams);
           
-          // Filtro de segurança: Moradores e SCR só veem seu próprio bairro
-          const filteredHoods = (user?.role === UserRole.ADMIN || user?.role === UserRole.INTEGRATOR)
-            ? allHoods
-            : allHoods.filter(h => h.id === user?.neighborhoodId);
-
-          setNeighborhoods(filteredHoods);
-
-          // Seleção automática do bairro do usuário
-          if (user?.neighborhoodId) {
-              const myHood = filteredHoods.find(h => h.id === user.neighborhoodId);
-              if (myHood) setSelectedNeighborhood(myHood);
-          } else if (filteredHoods.length > 0 && !selectedNeighborhood) {
-              setSelectedNeighborhood(filteredHoods[0]);
+          const hoods = await MockService.getNeighborhoods();
+          setNeighborhoods(hoods);
+          
+          if (hoods.length > 0) {
+              if (user?.role === UserRole.INTEGRATOR && user?.neighborhoodId) {
+                  setSelectedNeighborhoodId(user.neighborhoodId);
+                  setSelectedManageHoodId(user.neighborhoodId);
+              } else {
+                  setSelectedNeighborhoodId(hoods[0].id);
+                  if (user?.role === UserRole.ADMIN) {
+                      setSelectedManageHoodId(hoods[0].id);
+                  }
+              }
           }
-
-          if (user?.role === UserRole.INTEGRATOR) {
-              setSelectedManageHoodId(user.neighborhoodId || '');
-          } else if (user?.role === UserRole.ADMIN && filteredHoods.length > 0) {
-              setSelectedManageHoodId(filteredHoods[0].id);
-          }
+      } catch (err) {
+          console.error("Error loading cameras:", err);
       } finally {
           setLoading(false);
       }
   };
 
-  useEffect(() => { loadData(); }, [user]);
+  const managedNeighborhoods = user?.role === UserRole.ADMIN 
+    ? neighborhoods 
+    : neighborhoods.filter(h => h.id === user?.neighborhoodId);
 
   useEffect(() => {
-    const subHoods = MockService.subscribeToTable('neighborhoods', loadData);
-    const subCameras = MockService.subscribeToTable('cameras', () => {
-        const hoodId = activeTab === 'view' ? selectedNeighborhood?.id : selectedManageHoodId;
-        if (hoodId) MockService.getAdditionalCameras(hoodId).then(setCameras);
-    });
-
-    return () => {
-        supabase.removeChannel(subHoods);
-        supabase.removeChannel(subCameras);
-    };
-  }, [selectedNeighborhood, selectedManageHoodId, activeTab]);
+    if (user?.id) {
+        loadData();
+    }
+  }, [user?.id]);
 
   useEffect(() => {
-      const hoodId = activeTab === 'view' ? selectedNeighborhood?.id : selectedManageHoodId;
-      if (hoodId) {
-          MockService.getAdditionalCameras(hoodId).then(setCameras);
-      } else {
-          setCameras([]);
-      }
-  }, [selectedNeighborhood, selectedManageHoodId, activeTab]);
+    if (user?.role === UserRole.INTEGRATOR && user?.neighborhoodId) {
+        setSelectedManageHoodId(user.neighborhoodId);
+    }
+  }, [user, neighborhoods]);
 
-  const handleSaveNeighborhood = async (e: React.FormEvent) => {
-      e.preventDefault();
-      setSaving(true);
-      try {
-          if (editingHoodId) {
-              await MockService.updateNeighborhood(editingHoodId, newHoodName, '', newHoodUrl);
-          } else {
-              await MockService.createNeighborhood(newHoodName, '', newHoodUrl);
-          }
-          setEditingHoodId(null); 
-          setNewHoodName(''); 
-          setNewHoodUrl('');
-          await loadData();
-          alert('Bairro atualizado!');
-      } catch (e: any) { 
-          alert('Erro ao salvar: ' + e.message); 
-      } finally {
-          setSaving(false);
-      }
-  };
+  const filteredCameras = cameras.filter(cam => {
+    const matchesSearch = cam.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesNeighborhood = selectedNeighborhoodId ? cam.neighborhoodId === selectedNeighborhoodId : true;
+    return matchesSearch && matchesNeighborhood;
+  });
 
-  const isManagementAllowed = user?.role === UserRole.ADMIN || user?.role === UserRole.INTEGRATOR;
+  const isIntegrator = user?.role === UserRole.INTEGRATOR || user?.role === UserRole.ADMIN;
 
   return (
     <Layout>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-        <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">Vigilância nos Bairros</h1>
-            <p className="text-gray-400">Monitoramento colaborativo e gestão territorial.</p>
-        </div>
-        <div className="flex bg-[#111] p-1 rounded-xl border border-atalaia-border w-full md:w-auto shadow-lg">
-            <button onClick={() => setActiveTab('view')} className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'view' ? 'bg-atalaia-neon text-black shadow-lg' : 'text-gray-500 hover:text-white'}`}>Visualizar</button>
-            {isManagementAllowed && <button onClick={() => setActiveTab('manage')} className={`flex-1 md:flex-none px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'manage' ? 'bg-atalaia-neon text-black shadow-lg' : 'text-gray-500 hover:text-white'}`}>Gestão Geral</button>}
-        </div>
-      </div>
-
-      {activeTab === 'view' && (
-          <div className="space-y-6 animate-in fade-in duration-500">
-              <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                  {neighborhoods.map(h => (
-                      <button key={h.id} onClick={() => setSelectedNeighborhood(h)} className={`whitespace-nowrap px-4 py-2 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all ${selectedNeighborhood?.id === h.id ? 'border-atalaia-neon bg-atalaia-neon/10 text-atalaia-neon shadow-lg' : 'border-white/5 bg-[#111] text-gray-500 hover:text-white'}`}>
-                        {h.name}
-                      </button>
-                  ))}
+      <div className="space-y-8 animate-in fade-in duration-700 pb-12">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-2 bg-atalaia-neon/10 rounded-lg">
+                <Video className="text-atalaia-neon" size={20} />
               </div>
-
-              {selectedNeighborhood ? (
-                  <div className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {selectedNeighborhood.iframeUrl && <UniversalPlayer url={selectedNeighborhood.iframeUrl} title={`Principal - ${selectedNeighborhood.name}`} />}
-                          {cameras.map(c => <UniversalPlayer key={c.id} url={c.iframeCode} title={c.name} />)}
-                      </div>
-                  </div>
-              ) : (
-                  <div className="text-center py-40 text-gray-700 bg-black/10 rounded-3xl border border-dashed border-white/5">
-                      <MapPin size={48} className="mx-auto mb-4 opacity-20" />
-                      <p className="uppercase tracking-[0.3em] text-xs font-black">Selecione um bairro acima</p>
-                  </div>
-              )}
+              <h1 className="text-2xl font-black text-white italic tracking-tighter">CENTRAL DE CÂMERAS</h1>
+            </div>
+            <p className="text-gray-400 text-sm font-medium">Gestão e monitoramento de ativos de segurança.</p>
           </div>
-      )}
+          
+          <div className="flex items-center gap-2">
+             <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <Input 
+                  className="pl-10 min-w-[240px]" 
+                  placeholder="Pesquisar câmeras..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+             </div>
+          </div>
+        </div>
 
-      {activeTab === 'manage' && (
-          <div className="space-y-12 pb-20 animate-in slide-in-from-bottom-4">
-              {user?.role === UserRole.ADMIN && (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                      <Card className="p-6 h-fit border-atalaia-neon/20 bg-[#080808]">
-                          <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2"><MapPin size={20} className="text-atalaia-neon" /> {editingHoodId ? 'Editar Bairro' : 'Novo Bairro'}</h2>
-                          <form onSubmit={handleSaveNeighborhood} className="space-y-4">
-                              <Input label="Nome" value={newHoodName} onChange={e => setNewHoodName(e.target.value)} required />
-                              <Input label="Iframe Principal" value={newHoodUrl} onChange={e => setNewHoodUrl(e.target.value)} />
-                              <Button type="submit" disabled={saving} className="w-full mt-4">{saving ? <Loader2 className="animate-spin" /> : <Save size={16} className="mr-2"/>} Salvar</Button>
-                              {editingHoodId && <Button type="button" variant="outline" onClick={() => setEditingHoodId(null)} className="w-full mt-2">Cancelar</Button>}
-                          </form>
-                      </Card>
-                      <Card className="lg:col-span-2 overflow-hidden bg-[#0a0a0a]">
-                          <div className="p-4 border-b border-white/5 font-black uppercase text-[10px] tracking-widest text-gray-500">Bairros no Banco</div>
-                          <div className="max-h-[400px] overflow-y-auto">
-                              <table className="w-full text-sm text-left">
-                                  <tbody className="divide-y divide-white/5">
-                                      {neighborhoods.map(h => (
-                                          <tr key={h.id} className="hover:bg-white/5">
-                                              <td className="p-4 font-bold text-white">{h.name}</td>
-                                              <td className="p-4 text-right">
-                                                  <button onClick={() => { setEditingHoodId(h.id); setNewHoodName(h.name); setNewHoodUrl(h.iframeUrl || ''); }} className="p-2 text-blue-500"><Edit2 size={16}/></button>
-                                                  <button onClick={async () => { if(confirm('Excluir?')) { await MockService.deleteNeighborhood(h.id); loadData(); } }} className="p-2 text-red-500"><Trash2 size={16}/></button>
-                                              </td>
-                                          </tr>
-                                      ))}
-                                  </tbody>
-                              </table>
-                          </div>
-                      </Card>
-                  </div>
-              )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Grid: Cameras List */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                {user?.role === UserRole.ADMIN && (
+                    <Button 
+                        variant={selectedNeighborhoodId === '' ? 'primary' : 'outline'}
+                        onClick={() => setSelectedNeighborhoodId('')}
+                        className="whitespace-nowrap px-4 py-2 text-xs"
+                    >
+                        Todas
+                    </Button>
+                )}
+                {managedNeighborhoods.map(hood => (
+                    <Button
+                        key={hood.id}
+                        variant={selectedNeighborhoodId === hood.id ? 'primary' : 'outline'}
+                        onClick={() => setSelectedNeighborhoodId(hood.id)}
+                        className="whitespace-nowrap px-4 py-2 text-xs"
+                    >
+                        {hood.name}
+                    </Button>
+                ))}
+            </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <Card className="p-6 h-fit border-blue-500/20 bg-[#080808]">
-                         <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2"><CameraIcon size={20} className="text-blue-500" /> Câmera Individual</h2>
-                         <div className="bg-blue-900/10 border border-blue-500/20 p-3 rounded-lg mb-6">
-                             <h4 className="text-[10px] font-black text-blue-400 uppercase mb-1 flex items-center gap-1"><Info size={12}/> Regras de Link</h4>
-                             <ul className="text-[9px] text-gray-400 space-y-1 list-disc list-inside">
-                                 <li>Use sempre links com <strong className="text-white">https://</strong></li>
-                                 <li>Evite links <strong className="text-orange-400">http://</strong> (serão bloqueados)</li>
-                                 <li>O link deve ser <strong className="text-white">completo</strong> (ex: https://site.com/video.mp4)</li>
-                             </ul>
+            {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 bg-black/40 rounded-3xl border border-white/5">
+                    <Loader2 className="text-atalaia-neon animate-spin mb-4" size={32} />
+                    <p className="text-gray-400 text-sm font-bold uppercase tracking-widest">Carregando dispositivos...</p>
+                </div>
+            ) : filteredCameras.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 bg-black/40 rounded-3xl border border-white/5">
+                    <Video className="text-gray-600 mb-4" size={48} />
+                    <p className="text-gray-400 text-sm font-bold uppercase tracking-widest">Nenhuma câmera encontrada</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredCameras.map((cam) => (
+                    <Card key={cam.id} className="group overflow-hidden border-white/5 hover:border-atalaia-neon/30 transition-all duration-300">
+                      <div className="aspect-video bg-black relative">
+                         {cam.iframeCode.trim().startsWith('<') ? (
+                            <iframe 
+                                srcDoc={`
+                                    <html>
+                                        <head>
+                                            <style>
+                                                body { margin: 0; padding: 0; background: black; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
+                                                video, iframe { width: 100%; height: 100%; object-fit: contain; border: none; }
+                                            </style>
+                                        </head>
+                                        <body>${cam.iframeCode}</body>
+                                    </html>
+                                `}
+                                className="w-full h-full border-0"
+                                allowFullScreen
+                            />
+                         ) : (
+                            <iframe src={cam.iframeCode} className="w-full h-full border-0" allowFullScreen />
+                         )}
+                         <div className="absolute top-2 left-2 flex gap-2">
+                             <Badge color="green" className="text-[8px] px-1.5 animate-pulse">LIVE</Badge>
+                             <Badge color="blue" className="text-[8px] px-1.5 bg-black/50 backdrop-blur-sm border-white/20">HD</Badge>
                          </div>
-                         <select className="w-full bg-black border border-white/10 rounded-xl p-3 text-white mb-4" value={selectedManageHoodId} onChange={(e) => setSelectedManageHoodId(e.target.value)} disabled={user?.role === UserRole.INTEGRATOR}>
-                            <option value="">Selecione o Bairro...</option>
-                            {neighborhoods.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-                        </select>
+                      </div>
+                      <div className="p-4 bg-gradient-to-b from-transparent to-black/20">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-sm text-white group-hover:text-atalaia-neon transition-colors truncate">{cam.name}</h3>
+                            <div className="flex items-center gap-1 text-[10px] text-gray-500 font-mono">
+                                <MapPin size={10} />
+                                {cam.lat?.toFixed(2)}, {cam.lng?.toFixed(2)}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                            <span className="text-[10px] text-gray-500 font-medium">Bairro:</span>
+                            <span className="text-[10px] text-atalaia-neon/70 font-black uppercase tracking-wider">
+                                {neighborhoods.find(h => h.id === cam.neighborhoodId)?.name || 'Desconhecido'}
+                            </span>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+            )}
+          </div>
+
+          {/* Sidebar: Management */}
+          <div className="space-y-6">
+            {/* Legend / Status */}
+            <Card className="bg-atalaia-neon/5 border-atalaia-neon/20 p-5">
+                <h3 className="text-gray-300 text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Info size={14} className="text-atalaia-neon" />
+                    Status do Sistema
+                </h3>
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs font-medium">
+                        <span className="text-gray-400">Total de Câmeras</span>
+                        <span className="text-white">{cameras.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-medium">
+                        <span className="text-gray-400">Ativas Online</span>
+                        <span className="text-green-400">{cameras.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-medium">
+                        <span className="text-gray-400">Em Manutenção</span>
+                        <span className="text-red-400">0</span>
+                    </div>
+                </div>
+                <Button 
+                    variant="outline" 
+                    className="w-full mt-6 text-[10px] h-9 border-atalaia-neon/30 text-atalaia-neon font-black"
+                    onClick={() => setIsSupportModalOpen(true)}
+                >
+                    SOLICITAR SUPORTE TÉCNICO
+                </Button>
+            </Card>
+
+            {/* Admin/Integrator Controls */}
+            {isIntegrator && (
+                <Card className="p-6 border-white/10 bg-black/20">
+                    <h3 className="text-white text-sm font-black uppercase tracking-tighter italic mb-4 flex items-center gap-2">
+                        <Shield className="text-atalaia-neon" size={16} />
+                        Gestão de Dispositivos
+                    </h3>
+                    
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-1.5 block pl-1">Bairro para Gestão</label>
+                            <select 
+                                value={selectedManageHoodId}
+                                onChange={(e) => setSelectedManageHoodId(e.target.value)}
+                                disabled={user?.role === UserRole.INTEGRATOR}
+                                className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-atalaia-neon/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <option value="">Selecione um bairro</option>
+                                {managedNeighborhoods.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                            </select>
+                        </div>
+
                         {selectedManageHoodId && (
-                            <form onSubmit={async (e) => { 
-                                e.preventDefault(); 
+                            <form onSubmit={async (e) => {
+                                e.preventDefault();
                                 try {
                                     const lat = newCameraLat ? parseFloat(newCameraLat) : undefined;
                                     const lng = newCameraLng ? parseFloat(newCameraLng) : undefined;
-                                    await MockService.addCamera(selectedManageHoodId, newCameraName, newCameraCode, lat, lng); 
-                                    setNewCameraName(''); 
-                                    setNewCameraCode(''); 
-                                    setNewCameraLat('');
-                                    setNewCameraLng('');
+                                    
+                                    if (editingCameraId) {
+                                        await MockService.updateCamera(editingCameraId, newCameraName, newCameraCode, lat, lng, newCameraPhoto);
+                                        alert('Câmera atualizada com sucesso!');
+                                    } else {
+                                        await MockService.addCamera(selectedManageHoodId, newCameraName, newCameraCode, lat, lng, newCameraPhoto); 
+                                        alert('Câmera adicionada com sucesso!');
+                                    }
+                                    
+                                    handleCancelEdit();
                                     const updated = await MockService.getAdditionalCameras(selectedManageHoodId);
                                     setCameras(updated);
-                                    alert('Câmera adicionada com sucesso!');
-                                } catch (err: any) {
-                                    alert('Erro ao adicionar câmera: ' + err.message);
+                                } catch (err) {
+                                    alert('Erro ao processar câmera. Tente novamente.');
                                 }
-                            }} className="space-y-4">
-                                <Input label="Nome da Câmera" value={newCameraName} onChange={e => setNewCameraName(e.target.value)} required />
-                                <Input label="Código Iframe" value={newCameraCode} onChange={e => setNewCameraCode(e.target.value)} required />
-                                <div className="grid grid-cols-2 gap-4">
+                            }} className="mt-4 space-y-4 pt-4 border-t border-white/5">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="text-xs font-bold text-atalaia-neon flex items-center gap-2">
+                                        {editingCameraId ? <Edit2 size={14} /> : <Plus size={14} />}
+                                        {editingCameraId ? 'Editar Câmera' : 'Adicionar Nova Câmera'}
+                                    </h4>
+                                    {editingCameraId && (
+                                        <button 
+                                            type="button"
+                                            onClick={handleCancelEdit}
+                                            className="text-[10px] text-gray-400 hover:text-white transition-colors"
+                                        >
+                                            Cancelar Edição
+                                        </button>
+                                    )}
+                                </div>
+                                <Input label="Nome da Câmera" value={newCameraName} onChange={e => setNewCameraName(e.target.value)} placeholder="Ex: Câmera Rua X" required />
+                                <Input label="Código Iframe (Link Youtube ou RTMP)" value={newCameraCode} onChange={e => setNewCameraCode(e.target.value)} placeholder="<iframe... />" required />
+                                
+                                <div className="grid grid-cols-2 gap-3">
                                     <Input label="Latitude (Opcional)" value={newCameraLat} onChange={e => setNewCameraLat(e.target.value)} placeholder="-23.5505" />
                                     <Input label="Longitude (Opcional)" value={newCameraLng} onChange={e => setNewCameraLng(e.target.value)} placeholder="-46.6333" />
                                 </div>
-                                <Button type="submit" className="w-full">Adicionar</Button>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest pl-1">Foto do Local (Poste)</label>
+                                    <div className="flex items-center gap-4">
+                                        <label className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-black border border-white/10 rounded-xl cursor-pointer hover:border-atalaia-neon/50 transition-all text-xs font-bold text-gray-400">
+                                            {isUploading ? <Loader2 className="animate-spin" size={16} /> : <CameraIcon size={16} />}
+                                            {newCameraPhoto ? 'Foto Selecionada' : 'Fazer Upload da Foto'}
+                                            <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                                        </label>
+                                        {newCameraPhoto && (
+                                            <div className="w-12 h-12 rounded-lg overflow-hidden border border-atalaia-neon/30">
+                                                <img src={newCameraPhoto} className="w-full h-full object-cover" alt="Preview" />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <Button type="submit" className="w-full">{editingCameraId ? 'Atualizar Câmera' : 'Adicionar'}</Button>
+                                
+                                <div className="mt-4 space-y-2">
+                                    {cameras.filter(c => c.neighborhoodId === selectedManageHoodId).map(cam => (
+                                        <div key={cam.id} className="flex items-center justify-between p-2 bg-white/5 rounded border border-white/10">
+                                            <div className="flex items-center gap-3">
+                                                <Video size={14} className="text-gray-400" />
+                                                <span className="text-[11px] font-medium">{cam.name}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleEditCamera(cam)}
+                                                    className="p-1.5 hover:bg-atalaia-neon/20 rounded text-atalaia-neon transition-colors"
+                                                    title="Editar"
+                                                >
+                                                    <Edit2 size={14} />
+                                                </button>
+                                                <button 
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        if(confirm('Excluir câmera?')) {
+                                                            await MockService.deleteCamera(cam.id);
+                                                            const updated = await MockService.getAdditionalCameras(selectedManageHoodId);
+                                                            setCameras(updated);
+                                                        }
+                                                    }}
+                                                    className="p-1.5 hover:bg-red-500/20 rounded text-red-400 transition-colors"
+                                                    title="Excluir"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </form>
                         )}
-                   </Card>
-                   <Card className="lg:col-span-2 overflow-hidden bg-[#0a0a0a]">
-                        <div className="p-4 border-b border-white/5 font-black uppercase text-[10px] tracking-widest text-gray-500">Dispositivos do Bairro</div>
-                        <div className="max-h-[400px] overflow-y-auto">
-                            <table className="w-full text-sm">
-                                <tbody className="divide-y divide-white/5">
-                                    {cameras.map(c => (
-                                        <tr key={c.id} className="hover:bg-white/5">
-                                            <td className="p-4 font-bold text-white">{c.name}</td>
-                                            <td className="p-4 text-right">
-                                                <button onClick={async () => { if(confirm('Remover?')) { await MockService.deleteCamera(c.id); MockService.getAdditionalCameras(selectedManageHoodId).then(setCameras); } }} className="p-2 text-red-500"><Trash2 size={18} /></button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                   </Card>
-              </div>
+                    </div>
+                </Card>
+            )}
           </div>
-      )}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {isSupportModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSupportModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md bg-zinc-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-atalaia-neon/10 to-transparent">
+                <div className="flex items-center gap-2">
+                    <AlertTriangle className="text-atalaia-neon" size={18} />
+                    <h2 className="text-white font-black italic tracking-tighter">SUPORTE TÉCNICO</h2>
+                </div>
+                <button 
+                  onClick={() => setIsSupportModalOpen(false)}
+                  className="p-1 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSendSupport} className="p-6 space-y-4">
+                <p className="text-xs text-gray-400 font-medium">
+                  Descreva o problema que está ocorrendo com seus equipamentos ou sistema. Um técnico certificado Atalaia será designado para ajudar.
+                </p>
+                
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest pl-1">Sua Mensagem</label>
+                    <textarea 
+                        required
+                        value={supportMessage}
+                        onChange={(e) => setSupportMessage(e.target.value)}
+                        placeholder="Ex: Câmera da Rua X está com imagem travada..."
+                        className="w-full min-h-[120px] bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-atalaia-neon/50 transition-all resize-none"
+                    />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                    <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="flex-1"
+                        onClick={() => setIsSupportModalOpen(false)}
+                    >
+                        CANCELAR
+                    </Button>
+                    <Button 
+                        type="submit" 
+                        className="flex-1 bg-atalaia-neon text-black hover:bg-atalaia-neon/90"
+                        disabled={sendingSupport}
+                    >
+                        {sendingSupport ? <Loader2 className="animate-spin mx-auto" size={18} /> : 'ENVIAR CHAMADO'}
+                    </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </Layout>
   );
 };

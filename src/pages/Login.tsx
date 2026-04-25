@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
-import { UserRole, Neighborhood } from '../types';
-import { Button, Input, Card } from '../components/UI';
+import { useAuth } from '@/auth/context';
+import { UserRole, Neighborhood } from '@/types';
+import { Button, Input, Card } from '@/components/UI';
 import { ShieldCheck, ArrowLeft, AlertCircle, MapPin, CheckCircle, RefreshCw, Loader2 } from 'lucide-react';
-import { MockService } from '../services/mockService';
-import { PaymentService } from '../services/paymentService';
+import { MockService } from '@/services/mockService';
+import { PaymentService } from '@/services/paymentService';
 
 const Login: React.FC = () => {
   const { login, isAuthenticated, user, loading: authLoading } = useAuth();

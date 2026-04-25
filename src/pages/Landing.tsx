@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Zap, MessageSquare, Users, MapPin, Bell, Clock, BarChart3, MessageCircle, Menu, X, Lock, CreditCard, Smartphone, Download, Printer, Video, Check, Wifi, XCircle, FileText, Scan, AlertTriangle, Star, Shield, Heart, Eye } from 'lucide-react';
-import { Button, Modal } from '../components/UI';
+import { Button, Modal } from '@/components/UI';
 
 const Landing: React.FC = () => {
   const navigate = useNavigate();
@@ -12,14 +12,6 @@ const Landing: React.FC = () => {
   // State for WhatsApp Animation
   const [startWaAnimation, setStartWaAnimation] = useState(false);
   const waSectionRef = useRef<HTMLDivElement>(null);
-
-  // Lógica para pular a Landing Page se estiver rodando dentro do App (Capacitor)
-  useEffect(() => {
-    const isApp = (window as any).Capacitor?.isNativePlatform();
-    if (isApp) {
-      navigate('/login');
-    }
-  }, [navigate]);
 
   // Trigger animation when section is in view
   useEffect(() => {

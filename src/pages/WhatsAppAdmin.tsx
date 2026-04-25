@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/auth/context';
 import { UserRole, Neighborhood } from '../types';
 import { MockService } from '../services/mockService';
 import { supabase } from '../lib/supabaseClient';

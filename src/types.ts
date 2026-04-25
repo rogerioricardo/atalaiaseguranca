@@ -44,6 +44,17 @@ export interface Camera {
   iframeCode: string;
   lat?: number;
   lng?: number;
+  locationPhotoUrl?: string;
+}
+
+export interface SupportTicket {
+    id: string;
+    userId: string;
+    userName: string;
+    neighborhoodId: string | null;
+    message: string;
+    status: 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
+    createdAt: Date;
 }
 
 export interface IoTDevice {

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Layout';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/auth/context';
 import { Card, Input, Button } from '../components/UI';
 import { MessageCircle, Send, AlertTriangle, ShieldAlert, CheckCircle, Eye, ImageIcon, MapPin, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { MockService } from '../services/mockService';

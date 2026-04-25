@@ -50,18 +50,52 @@ CREATE TABLE IF NOT EXISTS cameras (
     iframe_code TEXT NOT NULL,
     lat DOUBLE PRECISION,
     lng DOUBLE PRECISION,
+    location_photo_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 6. POLÍTICAS DE SEGURANÇA (RLS)
+-- 6. TABELA DE TICKETS DE SUPORTE
+CREATE TABLE IF NOT EXISTS support_tickets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    neighborhood_id UUID REFERENCES neighborhoods(id) ON DELETE SET NULL,
+    user_name TEXT,
+    message TEXT NOT NULL,
+    status TEXT DEFAULT 'OPEN',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 7. TABELA DE PAGAMENTOS / MENSALIDADES
+CREATE TABLE IF NOT EXISTS payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    amount DECIMAL(10,2) NOT NULL,
+    due_date DATE NOT NULL,
+    payment_date TIMESTAMP WITH TIME ZONE,
+    status TEXT DEFAULT 'PENDING', -- 'PAID', 'PENDING', 'OVERDUE'
+    reference_month TEXT, -- e.g. '04/2025'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 8. POLÍTICAS DE SEGURANÇA (RLS)
 ALTER TABLE neighborhoods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cameras ENABLE ROW LEVEL SECURITY;
+ALTER TABLE support_tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
 -- Grant permissions to roles
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+
+-- Políticas para support_tickets
+DROP POLICY IF EXISTS "Tudo em support_tickets" ON support_tickets;
+CREATE POLICY "Tudo em support_tickets" ON support_tickets FOR ALL USING (true) WITH CHECK (true);
+
+-- Políticas para payments
+DROP POLICY IF EXISTS "Tudo em payments" ON payments;
+CREATE POLICY "Tudo em payments" ON payments FOR ALL USING (true) WITH CHECK (true);
 
 -- Políticas para system_settings
 DROP POLICY IF EXISTS "Leitura pública" ON system_settings;

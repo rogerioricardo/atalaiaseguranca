@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { MockService } from '../services/mockService';
 import { User, Neighborhood, UserRole, Camera } from '../types';
 import L from 'leaflet';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/auth/context';
 import { Video, MapPin, Globe } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
@@ -64,6 +64,72 @@ const MapResizer = () => {
         return () => clearTimeout(timer);
     }, [map]);
     return null;
+};
+
+const CameraPopupContent: React.FC<{ cam: Camera }> = ({ cam }) => {
+  const [showLive, setShowLive] = useState(false);
+
+  return (
+    <div className="min-w-[280px]">
+      <div className="flex items-center gap-2 mb-1">
+          <Video size={16} />
+          <strong className="text-sm">Câmera: {cam.name}</strong>
+      </div>
+      <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] text-green-600 font-bold animate-pulse">● EM OPERAÇÃO</span>
+          <span className="text-[9px] text-gray-400 font-mono">{cam.lat?.toFixed(4)}, {cam.lng?.toFixed(4)}</span>
+      </div>
+      
+      <div className="w-full aspect-video bg-black rounded-lg overflow-hidden border border-gray-200 shadow-inner mt-1 relative">
+          {showLive ? (
+              cam.iframeCode.trim().startsWith('<') ? (
+                  <iframe 
+                      srcDoc={`
+                          <html>
+                              <head>
+                                  <style>
+                                      body { margin: 0; padding: 0; background: black; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
+                                      video, iframe { width: 100%; height: 100%; object-fit: contain; border: none; }
+                                  </style>
+                              </head>
+                              <body>${cam.iframeCode}</body>
+                          </html>
+                      `}
+                      className="w-full h-full border-0"
+                      allowFullScreen
+                  />
+              ) : (
+                  <iframe 
+                      src={cam.iframeCode} 
+                      className="w-full h-full border-0" 
+                      allowFullScreen 
+                  />
+              )
+          ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                  {cam.locationPhotoUrl ? (
+                      <img src={cam.locationPhotoUrl} className="w-full h-full object-cover" alt="Local do Poste" />
+                  ) : (
+                      <div className="text-center p-4">
+                          <MapPin className="mx-auto text-gray-300 mb-2" size={24} />
+                          <p className="text-gray-400 text-[10px] font-bold uppercase">Foto do poste não disponível</p>
+                      </div>
+                  )}
+              </div>
+          )}
+          
+          <button 
+            onClick={() => setShowLive(!showLive)}
+            className="absolute bottom-2 right-2 bg-black/60 hover:bg-black/80 text-white text-[9px] font-bold px-2 py-1 rounded backdrop-blur-sm border border-white/20 transition-all z-10"
+          >
+            {showLive ? 'Ver Foto do Poste' : 'Ver Câmera ao Vivo'}
+          </button>
+      </div>
+      <div className="mt-2 text-[9px] text-gray-500 italic text-center">
+          {showLive ? 'Monitoramento em tempo real Atalaia' : 'Localização física do poste de monitoramento'}
+      </div>
+    </div>
+  );
 };
 
 const MapPage: React.FC = () => {
@@ -180,44 +246,8 @@ const MapPage: React.FC = () => {
                     cam.lat && cam.lng && (
                         <Marker key={`cam-${cam.id}`} position={[cam.lat, cam.lng]} icon={CameraIcon}>
                              <Popup className="text-black" minWidth={300}>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Video size={16} />
-                                    <strong className="text-sm">Câmera: {cam.name}</strong>
-                                </div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] text-green-600 font-bold animate-pulse">● EM OPERAÇÃO</span>
-                                    <span className="text-[9px] text-gray-400 font-mono">{cam.lat.toFixed(4)}, {cam.lng.toFixed(4)}</span>
-                                </div>
-                                
-                                <div className="w-full aspect-video bg-black rounded-lg overflow-hidden border border-gray-200 shadow-inner mt-1">
-                                    {cam.iframeCode.trim().startsWith('<') ? (
-                                        <iframe 
-                                            srcDoc={`
-                                                <html>
-                                                    <head>
-                                                        <style>
-                                                            body { margin: 0; padding: 0; background: black; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
-                                                            video, iframe { width: 100%; height: 100%; object-fit: contain; border: none; }
-                                                        </style>
-                                                    </head>
-                                                    <body>${cam.iframeCode}</body>
-                                                </html>
-                                            `}
-                                            className="w-full h-full border-0"
-                                            allowFullScreen
-                                        />
-                                    ) : (
-                                        <iframe 
-                                            src={cam.iframeCode} 
-                                            className="w-full h-full border-0" 
-                                            allowFullScreen 
-                                        />
-                                    )}
-                                </div>
-                                <div className="mt-2 text-[9px] text-gray-500 italic text-center">
-                                    Monitoramento em tempo real Atalaia
-                                </div>
-                            </Popup>
+                                <CameraPopupContent cam={cam} />
+                             </Popup>
                         </Marker>
                     )
                 ))}

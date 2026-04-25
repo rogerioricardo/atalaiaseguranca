@@ -1,18 +1,19 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import Layout from '../components/Layout';
-import { useAuth } from '@/context/AuthContext';
-import { UserRole, Alert, Neighborhood, Notification, User, ServiceRequest } from '../types';
-import { Card, Badge, Button, Modal, Input } from '../components/UI';
-import { MockService } from '../services/mockService';
-import { supabase } from '../lib/supabaseClient';
+import Layout from '@/components/Layout';
+import { useAuth } from '@/auth/context';
+import { UserRole, Alert, Neighborhood, Notification, User, ServiceRequest, SupportTicket } from '@/types';
+import { Card, Badge, Button, Modal, Input } from '@/components/UI';
+import { MockService } from '@/services/mockService';
+import { supabase } from '@/lib/supabaseClient';
 import { 
     AlertTriangle, Video, Users, Activity, MapPin, Inbox, Copy, Trash2, 
     Heart, DollarSign, Loader2, Navigation, FileText, 
-    Shield, Star, Lock, Send, Search, CheckCircle, UserCheck, XCircle
+    Shield, Star, Lock, Send, Search, CheckCircle, UserCheck, XCircle,
+    Wrench
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { PaymentService } from '../services/paymentService';
+import { PaymentService } from '@/services/paymentService';
 
 // --- SUB-COMPONENT: SCR TACTICAL DASHBOARD ---
 const SCRDashboard = ({ user, neighborhood }: { user: User, neighborhood?: Neighborhood }) => {
@@ -272,6 +273,7 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({ alerts: 0, cameras: 0, users: 0 });
   const [recentAlerts, setRecentAlerts] = useState<Alert[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [myNeighborhood, setMyNeighborhood] = useState<Neighborhood | undefined>();
   
   // Donation State
@@ -305,6 +307,10 @@ const Dashboard: React.FC = () => {
           const notifs = await MockService.getNotifications(); // All notifications for admin
           setNotifications(notifs);
 
+          // Fetch Support Tickets
+          const tickets = await MockService.getSupportTickets();
+          setSupportTickets(tickets.filter(t => t.status !== 'CLOSED'));
+
         } else if (user?.neighborhoodId) {
           const hood = await MockService.getNeighborhoodById(user.neighborhoodId);
           setMyNeighborhood(hood);
@@ -331,11 +337,13 @@ const Dashboard: React.FC = () => {
     const subAlerts = MockService.subscribeToTable('alerts', fetchData);
     const subNotifs = MockService.subscribeToTable('notifications', fetchData);
     const subHoods = MockService.subscribeToTable('neighborhoods', fetchData);
+    const subTickets = MockService.subscribeToTable('support_tickets', fetchData);
 
     return () => {
         supabase.removeChannel(subAlerts);
         supabase.removeChannel(subNotifs);
         supabase.removeChannel(subHoods);
+        supabase.removeChannel(subTickets);
     };
   }, [user, fetchData]);
 
@@ -532,6 +540,54 @@ const Dashboard: React.FC = () => {
                  </Button>
             </div>
         </Card>
+      )}
+
+      {/* SUPPORT TICKETS FEED (Admins only) */}
+      {user?.role === UserRole.ADMIN && supportTickets.length > 0 && (
+          <Card className="p-6 mb-8 border-atalaia-neon/30 bg-atalaia-neon/5">
+              <h2 className="text-xl font-bold flex items-center gap-2 mb-4 text-white uppercase italic tracking-tighter">
+                  <Wrench className="text-atalaia-neon" size={20} />
+                  Chamados de Suporte Técnico
+                  <Badge color="blue">{supportTickets.length}</Badge>
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {supportTickets.map(ticket => (
+                      <div key={ticket.id} className="bg-black/60 p-4 rounded-2xl border border-white/10 flex flex-col justify-between">
+                          <div>
+                              <div className="flex justify-between items-start mb-2">
+                                  <Badge color={ticket.status === 'OPEN' ? 'red' : 'yellow'}>
+                                      {ticket.status === 'OPEN' ? 'ABERTO' : 'EM ATENDIMENTO'}
+                                  </Badge>
+                                  <span className="text-[10px] text-gray-500">{new Date(ticket.createdAt).toLocaleDateString()}</span>
+                              </div>
+                              <p className="text-sm text-white font-bold mb-1">{ticket.userName}</p>
+                              <p className="text-xs text-gray-400 line-clamp-3 mb-4 italic">"{ticket.message}"</p>
+                          </div>
+                          <div className="flex gap-2">
+                              <Button 
+                                onClick={async () => {
+                                    await MockService.updateSupportTicketStatus(ticket.id, 'IN_PROGRESS');
+                                    fetchData();
+                                }}
+                                disabled={ticket.status === 'IN_PROGRESS'}
+                                className="flex-1 text-[10px] h-8 bg-blue-600 hover:bg-blue-500"
+                              >
+                                ATENDER
+                              </Button>
+                              <Button 
+                                onClick={async () => {
+                                    await MockService.updateSupportTicketStatus(ticket.id, 'CLOSED');
+                                    fetchData();
+                                }}
+                                className="flex-1 text-[10px] h-8 bg-black border border-white/20 hover:bg-white/5"
+                              >
+                                CONCLUIR
+                              </Button>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </Card>
       )}
 
       {/* NOTIFICATIONS FEED */}

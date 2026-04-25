@@ -1,6 +1,6 @@
 
 import { supabase } from '../lib/supabaseClient';
-import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, ServiceRequest, Camera } from '../types';
+import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, ServiceRequest, Camera, SupportTicket } from '../types';
 
 const sanitizeUUID = (id?: string): string | null => {
     if (!id || id === 'unknown' || id === 'undefined' || id.trim() === '') return null;
@@ -108,7 +108,15 @@ export const MockService = {
             console.error("[MockService] Erro de permissão ou banco ao buscar câmeras:", error.message);
             throw error;
         }
-        return (data || []).map(c => ({ id: c.id, neighborhoodId: c.neighborhood_id, name: c.name, iframeCode: c.iframe_code, lat: c.lat, lng: c.lng }));
+        return (data || []).map(c => ({ 
+            id: c.id, 
+            neighborhoodId: c.neighborhood_id, 
+            name: c.name, 
+            iframeCode: c.iframe_code, 
+            lat: c.lat, 
+            lng: c.lng,
+            locationPhotoUrl: c.location_photo_url
+        }));
     } catch (e) {
         console.error("[MockService] Falha crítica em getAdditionalCameras:", e);
         return [];
@@ -119,23 +127,49 @@ export const MockService = {
     try {
         const { data, error } = await supabase.from('cameras').select('*');
         if (error) throw error;
-        return (data || []).map(c => ({ id: c.id, neighborhoodId: c.neighborhood_id, name: c.name, iframeCode: c.iframe_code, lat: c.lat, lng: c.lng }));
+        return (data || []).map(c => ({ 
+            id: c.id, 
+            neighborhoodId: c.neighborhood_id, 
+            name: c.name, 
+            iframeCode: c.iframe_code, 
+            lat: c.lat, 
+            lng: c.lng,
+            locationPhotoUrl: c.location_photo_url
+        }));
     } catch (e) {
         console.error("[MockService] Error in getAllSystemCameras:", e);
         return [];
     }
   },
 
-  addCamera: async (neighborhoodId: string, name: string, iframeCode: string, lat?: number, lng?: number): Promise<void> => {
+  addCamera: async (neighborhoodId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string): Promise<void> => {
     const { error } = await supabase.from('cameras').insert([{ 
         neighborhood_id: sanitizeUUID(neighborhoodId), 
         name, 
         iframe_code: iframeCode,
         lat,
-        lng
+        lng,
+        location_photo_url: locationPhotoUrl
     }]);
     if (error) {
         console.error("[MockService] Error adding camera:", error);
+        throw error;
+    }
+  },
+
+  updateCamera: async (cameraId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string): Promise<void> => {
+    const { error } = await supabase.from('cameras')
+        .update({ 
+            name, 
+            iframe_code: iframeCode,
+            lat,
+            lng,
+            location_photo_url: locationPhotoUrl
+        })
+        .eq('id', cameraId);
+    
+    if (error) {
+        console.error("[MockService] Error updating camera:", error);
         throw error;
     }
   },
@@ -406,6 +440,111 @@ export const MockService = {
       } catch (e) {
           return null;
       }
+  },
+
+  // --- SUPORTE TÉCNICO ---
+  getSupportTickets: async (): Promise<SupportTicket[]> => {
+    try {
+        const { data, error } = await supabase
+            .from('support_tickets')
+            .select('*')
+            .order('created_at', { ascending: false });
+            
+        if (error) throw error;
+        return (data || []).map(t => ({
+            id: t.id,
+            userId: t.user_id,
+            userName: t.user_name,
+            neighborhoodId: t.neighborhood_id,
+            message: t.message,
+            status: t.status as any,
+            createdAt: new Date(t.created_at)
+        }));
+    } catch (e) {
+        console.error("[MockService] Error in getSupportTickets:", e);
+        return [];
+    }
+  },
+
+  createSupportTicket: async (userId: string, userName: string, message: string, neighborhoodId?: string) => {
+    const { error } = await supabase
+        .from('support_tickets')
+        .insert([{ 
+            user_id: userId, 
+            user_name: userName, 
+            message, 
+            neighborhood_id: sanitizeUUID(neighborhoodId),
+            status: 'OPEN'
+        }]);
+    
+    if (error) {
+        console.error("[MockService] Error in createSupportTicket:", error);
+        throw error;
+    }
+  },
+
+  updateSupportTicketStatus: async (ticketId: string, status: string) => {
+    const { error } = await supabase
+        .from('support_tickets')
+        .update({ status })
+        .eq('id', ticketId);
+    
+    if (error) {
+        console.error("[MockService] Error in updateSupportTicketStatus:", error);
+        throw error;
+    }
+  },
+
+  // --- FINANCEIRO / PAGAMENTOS ---
+  getPayments: async (): Promise<any[]> => {
+    try {
+        const { data, error } = await supabase
+            .from('payments')
+            .select('*, profiles(name, neighborhood_id)')
+            .order('due_date', { ascending: false });
+            
+        if (error) throw error;
+        return data || [];
+    } catch (e) {
+        console.error("[MockService] Error in getPayments:", e);
+        return [];
+    }
+  },
+
+  createPayment: async (userId: string, amount: number, dueDate: string, referenceMonth: string) => {
+    const { error } = await supabase
+        .from('payments')
+        .insert([{ 
+            user_id: userId, 
+            amount, 
+            due_date: dueDate,
+            reference_month: referenceMonth,
+            status: 'PENDING'
+        }]);
+    
+    if (error) {
+        console.error("[MockService] Error in createPayment:", error);
+        throw error;
+    }
+  },
+
+  updatePaymentStatus: async (paymentId: string, status: 'PAID' | 'PENDING' | 'OVERDUE', paymentDate?: string) => {
+    const updateData: any = { status };
+    if (status === 'PAID') {
+        updateData.payment_date = paymentDate || new Date().toISOString();
+    } else {
+        updateData.payment_date = null;
+    }
+
+    const { error } = await supabase
+        .from('payments')
+        .update(updateData)
+        .eq('id', paymentId);
+    
+    if (error) {
+        console.error("[MockService] Error in updatePaymentStatus:", error);
+        throw error;
+    }
   },
 
   // --- REAL-TIME HELPER ---

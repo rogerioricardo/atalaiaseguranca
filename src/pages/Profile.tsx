@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/auth/context';
 import { Card, Input, Button } from '../components/UI';
 import { MockService } from '../services/mockService';
 import { Save, User as UserIcon, Camera, Home, MapPin, CheckCircle, Loader2, AlertCircle } from 'lucide-react';

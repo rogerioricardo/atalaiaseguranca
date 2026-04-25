@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import Layout from '../components/Layout';
-import { Card, Button, Badge, Input } from '../components/UI';
-import { MockService } from '../services/mockService';
+import Layout from '@/components/Layout';
+import { Card, Button, Badge, Input } from '@/components/UI';
+import { MockService } from '@/services/mockService';
 import { 
   DollarSign, 
   Search, 
@@ -16,6 +16,7 @@ import {
   User,
   MapPin
 } from 'lucide-react';
+import { UserRole } from '@/types';
 
 interface Payment {
   id: string;
@@ -33,23 +34,46 @@ const FinancialAdmin: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'PAID' | 'PENDING' | 'OVERDUE'>('ALL');
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      // Simulando busca de dados financeiros
-      // Em um cenário real, isso viria de uma tabela 'subscriptions' ou 'payments' no Supabase
-      const mockPayments: Payment[] = [
-        { id: '1', userName: 'João Silva', neighborhoodName: 'Centro', amount: 49.90, dueDate: '2025-04-10', status: 'PAID', plan: 'PREMIUM' },
-        { id: '2', userName: 'Maria Oliveira', neighborhoodName: 'Jardins', amount: 29.90, dueDate: '2025-04-15', status: 'PENDING', plan: 'FAMILY' },
-        { id: '3', userName: 'Carlos Souza', neighborhoodName: 'Centro', amount: 49.90, dueDate: '2025-04-05', status: 'OVERDUE', plan: 'PREMIUM' },
-        { id: '4', userName: 'Ana Costa', neighborhoodName: 'Bela Vista', amount: 29.90, dueDate: '2025-04-20', status: 'PENDING', plan: 'FAMILY' },
-        { id: '5', userName: 'Roberto Lima', neighborhoodName: 'Jardins', amount: 49.90, dueDate: '2025-03-28', status: 'OVERDUE', plan: 'PREMIUM' },
-        { id: '6', userName: 'Juliana Farias', neighborhoodName: 'Centro', amount: 29.90, dueDate: '2025-04-01', status: 'PAID', plan: 'FAMILY' },
-      ];
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const neighborhoods = await MockService.getNeighborhoods();
+      const hoodMap = new Map(neighborhoods.map(h => [h.id, h.name]));
       
-      setPayments(mockPayments);
+      const realPayments = await MockService.getPayments();
+      
+      if (realPayments.length === 0) {
+        // Se não houver pagamentos no banco ainda, podemos sugerir criar ou mostrar vazio
+        setPayments([]);
+      } else {
+        const formattedPayments: Payment[] = realPayments.map(p => ({
+          id: p.id,
+          userName: p.profiles?.name || 'Desconhecido',
+          neighborhoodName: hoodMap.get(p.profiles?.neighborhood_id || '') || 'Geral',
+          amount: Number(p.amount),
+          dueDate: p.due_date,
+          status: p.status,
+          plan: '-' // Opcional: buscar do perfil se necessário
+        }));
+        setPayments(formattedPayments);
+      }
+    } catch (error) {
+      console.error("Error loading financial data:", error);
+    } finally {
       setLoading(false);
-    };
+    }
+  };
+
+  const handleUpdateStatus = async (paymentId: string, newStatus: 'PAID' | 'PENDING' | 'OVERDUE') => {
+    try {
+      await MockService.updatePaymentStatus(paymentId, newStatus);
+      loadData();
+    } catch (error) {
+      alert("Erro ao atualizar status do pagamento.");
+    }
+  };
+
+  useEffect(() => {
     loadData();
   }, []);
 
@@ -68,6 +92,36 @@ const FinancialAdmin: React.FC = () => {
     revenue: payments.filter(p => p.status === 'PAID').reduce((acc, p) => acc + p.amount, 0)
   };
 
+  const handleGenerateInvoices = async () => {
+    if (!confirm("Deseja gerar as mensalidades do mês atual para todos os moradores ativos?")) return;
+    
+    setLoading(true);
+    try {
+      const users = await MockService.getUsers();
+      const residents = users.filter(u => u.role === UserRole.RESIDENT && u.approved);
+      const now = new Date();
+      const refMonth = `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
+      const dueDate = new Date(now.getFullYear(), now.getMonth(), 10).toISOString().split('T')[0];
+
+      for (const resident of residents) {
+        let amount = 0;
+        if (resident.plan === 'FAMILY') amount = 29.90;
+        else if (resident.plan === 'PREMIUM') amount = 49.90;
+        else amount = 39.90;
+
+        await MockService.createPayment(resident.id, amount, dueDate, refMonth);
+      }
+
+      alert(`${residents.length} mensalidades geradas com sucesso!`);
+      loadData();
+    } catch (error) {
+      console.error("Error generating invoices:", error);
+      alert("Erro ao gerar mensalidades.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="max-w-7xl mx-auto pb-20">
@@ -76,9 +130,19 @@ const FinancialAdmin: React.FC = () => {
             <h1 className="text-3xl font-bold text-white mb-2">Painel Financeiro</h1>
             <p className="text-gray-400">Controle de mensalidades, vencimentos e inadimplência.</p>
           </div>
-          <Button className="bg-atalaia-neon text-black hover:bg-atalaia-neon/80">
-            <Download size={18} className="mr-2" /> Exportar Relatório
-          </Button>
+          <div className="flex gap-3">
+            <Button 
+              variant="outline" 
+              className="border-atalaia-neon/30 text-atalaia-neon hover:bg-atalaia-neon/10"
+              onClick={handleGenerateInvoices}
+              disabled={loading}
+            >
+              <DollarSign size={18} className="mr-2" /> Gerar Mensalidades
+            </Button>
+            <Button className="bg-atalaia-neon text-black hover:bg-atalaia-neon/80">
+              <Download size={18} className="mr-2" /> Exportar Relatório
+            </Button>
+          </div>
         </div>
 
         {/* Stats Grid */}
@@ -220,9 +284,28 @@ const FinancialAdmin: React.FC = () => {
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
-                        <button className="p-2 text-gray-500 hover:text-atalaia-neon transition-colors">
-                          <ChevronRight size={18} />
-                        </button>
+                        <div className="flex gap-2">
+                           {payment.status !== 'PAID' && (
+                             <Button 
+                               className="bg-green-600 hover:bg-green-500 text-[10px] h-7 px-2"
+                               onClick={() => handleUpdateStatus(payment.id, 'PAID')}
+                             >
+                               MARCAR PAGO
+                             </Button>
+                           )}
+                           {payment.status === 'PAID' && (
+                             <Button 
+                               variant="outline"
+                               className="text-[10px] h-7 px-2 border-yellow-500/50 text-yellow-500"
+                               onClick={() => handleUpdateStatus(payment.id, 'PENDING')}
+                             >
+                               ESTORNAR
+                             </Button>
+                           )}
+                           <button className="p-2 text-gray-500 hover:text-atalaia-neon transition-colors">
+                             <ChevronRight size={18} />
+                           </button>
+                        </div>
                       </td>
                     </tr>
                   ))

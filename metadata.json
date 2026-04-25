@@ -1,5 +1,5 @@
 {
   "name": "Remix: AtalaiaSeguranca",
   "description": "SaaS de monitoramento comunitário com atmosfera cósmica, gestão de câmeras e alertas de emergência.",
-  "requestFramePermissions": []
+  "requestFramePermissions": ["geolocation"]
 }
