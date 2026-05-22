@@ -1,5 +1,5 @@
 {
-  "name": "Remix: AtalaiaSeguranca",
-  "description": "SaaS de monitoramento comunitário com atmosfera cósmica, gestão de câmeras e alertas de emergência.",
+  "name": "Atalaia Segurança Colaborativa",
+  "description": "Sistema avançado de segurança comunitária com monitoramento de câmeras em tempo real, alertas de pânico e integração com WhatsApp.",
   "requestFramePermissions": ["geolocation"]
 }

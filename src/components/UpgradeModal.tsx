@@ -22,7 +22,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
         planId,
         user.email,
         user.name,
-        user.phone
+        user.phone || ''
       );
       window.location.href = checkoutUrl;
     } catch (error) {

@@ -6,7 +6,7 @@ import { MockService } from '../services/mockService';
 import { User, Neighborhood, UserRole, Camera } from '../types';
 import L from 'leaflet';
 import { useAuth } from '@/auth/context';
-import { Video, MapPin, Globe, Lock } from 'lucide-react';
+import { Video, MapPin, Globe, Lock, AlertTriangle } from 'lucide-react';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { supabase } from '../lib/supabaseClient';
 
@@ -123,12 +123,49 @@ const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ 
                       className="w-full h-full border-0"
                       allowFullScreen
                   />
+              ) : (cam.iframeCode.trim().toLowerCase().startsWith('http://') || (cam.iframeCode.trim().startsWith('<') && cam.iframeCode.toLowerCase().includes('src="http://'))) ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 border border-amber-500/20 px-4 text-center">
+                    <AlertTriangle className="text-amber-500 mb-1" size={20} />
+                    <h4 className="text-white font-bold text-[9px] uppercase mb-1">Conteúdo Inseguro</h4>
+                    <p className="text-[7px] text-gray-500 leading-tight mb-2">
+                        O navegador bloqueia esse link <code className="text-amber-500">http</code> por segurança dentro do mapa.
+                    </p>
+                    <button 
+                        onClick={() => {
+                            const url = cam.iframeCode.trim().startsWith('<') 
+                                ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
+                                : cam.iframeCode;
+                            window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+                        }}
+                        className="px-2 py-1 bg-atalaia-neon border border-black rounded-md text-[8px] font-black text-black hover:scale-105 transition-transform shadow-[0_0_10px_rgba(0,255,102,0.4)]"
+                    >
+                        ABRIR MONITOR HTTP
+                    </button>
+                </div>
               ) : (
-                  <iframe 
-                      src={cam.iframeCode} 
-                      className="w-full h-full border-0" 
-                      allowFullScreen 
-                  />
+                  <div className="relative w-full h-full group/map-cam">
+                      <iframe 
+                          src={cam.iframeCode} 
+                          title={cam.name}
+                          className="w-full h-full border-0" 
+                          allowFullScreen 
+                          referrerPolicy="no-referrer"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/map-cam:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                          <button 
+                              onClick={() => {
+                                  const url = cam.iframeCode.trim().startsWith('<') 
+                                      ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
+                                      : cam.iframeCode;
+                                  window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+                              }}
+                              className="pointer-events-auto bg-atalaia-neon text-black px-2 py-1 rounded text-[8px] font-black uppercase shadow-lg transform active:scale-95 transition-all"
+                          >
+                              Monitor Externo
+                          </button>
+                      </div>
+                  </div>
               )
           ) : (
               <div className="w-full h-full flex items-center justify-center bg-gray-100">

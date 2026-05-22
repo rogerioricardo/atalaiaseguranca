@@ -1,5 +1,5 @@
 
-import { supabase } from '../lib/supabaseClient';
+import { supabase, isRealSupabase } from '../lib/supabaseClient';
 import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, ServiceRequest, Camera, SupportTicket } from '../types';
 
 const sanitizeUUID = (id?: string): string | null => {
@@ -10,6 +10,7 @@ const sanitizeUUID = (id?: string): string | null => {
 export const MockService = {
   // --- SISTEMA ---
   getSettings: async (forceRefresh = false): Promise<Record<string, string>> => {
+      if (!isRealSupabase) return { 'template_broadcast_prefix': '[DEMO]' };
       try {
           const { data, error } = await supabase.from('system_settings').select('key, value');
           if (error) {
@@ -26,6 +27,7 @@ export const MockService = {
   },
 
   updateSetting: async (key: string, value: string): Promise<void> => {
+      if (!isRealSupabase) return;
       const { error } = await supabase.from('system_settings').upsert({ 
           key: key.trim(), 
           value: value.trim(), 
@@ -38,6 +40,7 @@ export const MockService = {
   },
 
   deleteSetting: async (key: string): Promise<void> => {
+      if (!isRealSupabase) return;
       const { error } = await supabase.from('system_settings').delete().eq('key', key);
       if (error) {
           console.error("[MockService] Error deleting setting:", error);
@@ -47,6 +50,16 @@ export const MockService = {
 
   // --- BAIRROS ---
   getNeighborhoods: async (forceRefresh = false): Promise<Neighborhood[]> => {
+    if (!isRealSupabase) {
+        return [{
+            id: 'hood-demo-1',
+            name: 'Atalaia Central (Demo)',
+            description: 'Bairro modelo para demonstração do sistema.',
+            iframeUrl: 'about:blank',
+            lat: -27.5969,
+            lng: -48.5495
+        }];
+    }
     try {
         const { data, error } = await supabase.from('neighborhoods').select('*').order('name');
         if (error) {
@@ -184,6 +197,7 @@ export const MockService = {
 
   // --- USUÁRIOS (Sincronização Total) ---
   getUsers: async (neighborhoodId?: string): Promise<User[]> => {
+    if (!isRealSupabase) return [];
     let query = supabase.from('profiles').select('*').order('name');
     const safeId = sanitizeUUID(neighborhoodId);
     if (safeId) query = query.eq('neighborhood_id', safeId);
@@ -207,22 +221,27 @@ export const MockService = {
   },
 
   adminUpdateUser: async (userId: string, data: any): Promise<void> => {
+      if (!isRealSupabase) return;
       await supabase.from('profiles').update(data).eq('id', userId);
   },
 
   updateUserPlan: async (userId: string, plan: string): Promise<void> => {
+      if (!isRealSupabase) return;
       await supabase.from('profiles').update({ plan }).eq('id', userId);
   },
 
   approveUser: async (userId: string): Promise<void> => {
+      if (!isRealSupabase) return;
       await supabase.from('profiles').update({ approved: true }).eq('id', userId);
   },
 
   deleteUser: async (id: string): Promise<void> => {
+      if (!isRealSupabase) return;
       await supabase.from('profiles').delete().eq('id', id);
   },
 
   maintenanceFixOrphans: async (): Promise<number> => {
+      if (!isRealSupabase) return 0;
       const { data: hoods } = await supabase.from('neighborhoods').select('id');
       const hoodIds = (hoods || []).map(h => h.id);
       const { data: users } = await supabase.from('profiles').select('id, neighborhood_id');
@@ -240,6 +259,17 @@ export const MockService = {
 
   // --- ALERTAS E CHAT ---
   getAlerts: async (neighborhoodId?: string): Promise<Alert[]> => {
+    if (!isRealSupabase) {
+        return [{
+            id: 'alert-1',
+            type: 'OK' as any,
+            userId: 'demo-user',
+            userName: 'Morador Atalaia',
+            neighborhoodId: 'hood-demo-1',
+            timestamp: new Date(),
+            message: 'Sistema de demonstração ativo.'
+        }];
+    }
     try {
         const safeId = sanitizeUUID(neighborhoodId);
         let query = supabase.from('alerts').select('*').order('timestamp', { ascending: false });
@@ -254,6 +284,7 @@ export const MockService = {
   },
 
   createAlert: async (alertData: any) => {
+    if (!isRealSupabase) { console.log("[DEMO] Alerta criado:", alertData); return; }
     try {
         const safeHoodId = sanitizeUUID(alertData.neighborhoodId);
         const { error: alertErr } = await supabase.from('alerts').insert([{ 
@@ -318,6 +349,17 @@ export const MockService = {
   },
 
   getMessages: async (neighborhoodId: string): Promise<ChatMessage[]> => {
+    if (!isRealSupabase) {
+        return [{
+            id: 'msg-1',
+            neighborhoodId: 'hood-demo-1',
+            userId: 'demo-admin-id',
+            userName: 'Suporte Atalaia',
+            userRole: UserRole.ADMIN,
+            text: 'Bem-vindo ao Chat de Demonstração!',
+            timestamp: new Date(),
+        }];
+    }
     try {
         const safeId = sanitizeUUID(neighborhoodId);
         let query = supabase.from('chat_messages').select('*').order('timestamp', { ascending: true });

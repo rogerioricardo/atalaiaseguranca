@@ -8,11 +8,149 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
     Video, Plus, Trash2, Search, MapPin, 
     AlertTriangle, Shield, CheckCircle, Info, ExternalLink,
-    ChevronRight, Camera as CameraIcon, Loader2, Edit2, X, Lock
+    ChevronRight, Camera as CameraIcon, Loader2, Edit2, X, Lock,
+    Maximize2, Clock
 } from 'lucide-react';
 import { Card, Button, Input, Badge } from '@/components/UI';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { motion, AnimatePresence } from 'motion/react';
+
+// Relógio tático isolado para impedir que todo o painel de câmeras re-renderize a cada 1 segundo
+const TacticalClock: React.FC = () => {
+  const [time, setTime] = useState('');
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      setTime(now.toLocaleTimeString('pt-BR'));
+    };
+    updateClock();
+    const interval = setInterval(updateClock, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-mono text-gray-300">
+      <Clock size={12} className="text-atalaia-neon" />
+      <span>{time}</span>
+    </div>
+  );
+};
+
+interface CameraStreamPlayerProps {
+  iframeCode: string;
+  name: string;
+  id: string;
+  onExpand: () => void;
+  isModal?: boolean;
+}
+
+// Player de streaming memoizado que assegura que o iframe nunca re-renderize a menos que suas propriedades de conexão mudem
+const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ iframeCode, name, id, onExpand, isModal = false }) => {
+  const isHttp = iframeCode.trim().toLowerCase().startsWith('http://') || (iframeCode.trim().startsWith('<') && iframeCode.toLowerCase().includes('src="http://'));
+
+  const handleOpenHttp = () => {
+    const url = iframeCode.trim().startsWith('<') 
+      ? iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
+      : iframeCode;
+    window.open(url, `cam_${id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+  };
+
+  if (iframeCode.trim().startsWith('<') && !iframeCode.toLowerCase().includes('src="http://')) {
+    return (
+      <div className="relative w-full h-full group/video-container">
+        <iframe 
+          srcDoc={`
+            <html>
+              <head>
+                <style>
+                  body { margin: 0; padding: 0; background: black; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
+                  video, iframe { width: 100%; height: 100%; object-fit: contain; border: none; }
+                </style>
+              </head>
+              <body>${iframeCode}</body>
+            </html>
+          `}
+          title={name}
+          className="w-full h-full border-0 absolute inset-0"
+          allowFullScreen
+          scrolling="no"
+        />
+        {!isModal && (
+          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/video-container:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 pointer-events-none z-10">
+            <Button 
+              className="pointer-events-auto bg-atalaia-neon text-black font-black text-[10px] px-3.5 h-8 gap-1.5 shadow-[0_0_20px_rgba(0,255,102,0.4)] hover:scale-105 transition-all text-xs animate-fade-in"
+              onClick={onExpand}
+            >
+              <Maximize2 size={12} strokeWidth={2.5} /> EXPANDIR E MONITORAR
+            </Button>
+            <Button 
+              variant="outline"
+              className="pointer-events-auto bg-black/70 border-white/10 text-[10px] px-3 h-7 gap-1 hover:bg-black text-white hover:text-atalaia-neon transition-all"
+              onClick={handleOpenHttp}
+            >
+              <ExternalLink size={11} /> MONITOR POPUP
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (isHttp) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 border border-amber-500/20 px-6 text-center animate-fade-in">
+        <AlertTriangle className="text-amber-500 mb-2" size={24} />
+        <h4 className="text-white font-bold text-[10px] uppercase mb-1">Link Inseguro (HTTP)</h4>
+        <p className="text-[9px] text-gray-400 leading-tight mb-3">
+          O navegador bloqueia conteúdo <code className="text-amber-500">http://</code> por segurança.
+          <br/>Use o botão do Monitor Externo.
+        </p>
+        <div className="flex flex-col gap-2 w-full max-w-[180px] pointer-events-auto z-10">
+          <Button 
+            onClick={handleOpenHttp}
+            className="flex items-center justify-center gap-1.5 h-8 bg-atalaia-neon text-black text-[10px] font-black shadow-[0_0_15px_rgba(0,255,102,0.3)] hover:scale-105 transition-transform"
+          >
+            <ExternalLink size={12} /> {isModal ? 'ABRIR MONITOR COMPACTO (HTTP)' : 'MONITOR EXTERNO HTTP'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-full group/video-container">
+      <iframe 
+        src={iframeCode} 
+        title={name}
+        className="w-full h-full border-0 absolute inset-0" 
+        allowFullScreen 
+        referrerPolicy="no-referrer"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        loading="eager"
+        scrolling="no"
+      />
+      {!isModal && (
+        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/video-container:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 pointer-events-none z-10">
+          <Button 
+            className="pointer-events-auto bg-atalaia-neon text-black font-black text-[10px] px-3.5 h-8 gap-1.5 shadow-[0_0_20px_rgba(0,255,102,0.4)] hover:scale-105 transition-all text-xs"
+            onClick={onExpand}
+          >
+            <Maximize2 size={12} strokeWidth={2.5} /> EXPANDIR E MONITORAR
+          </Button>
+          <Button 
+            variant="outline"
+            className="pointer-events-auto bg-black/70 border-white/10 text-[10px] px-3 h-7 gap-1 hover:bg-black text-white hover:text-atalaia-neon transition-all"
+            onClick={handleOpenHttp}
+          >
+            <ExternalLink size={11} /> MONITOR POPUP
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+});
+
+CameraStreamPlayer.displayName = 'CameraStreamPlayer';
 
 const Cameras: React.FC = () => {
   const { user } = useAuth();
@@ -35,6 +173,7 @@ const Cameras: React.FC = () => {
   const [supportMessage, setSupportMessage] = useState('');
   const [sendingSupport, setSendingSupport] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [selectedCameraForModal, setSelectedCameraForModal] = useState<Camera | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -254,28 +393,116 @@ const Cameras: React.FC = () => {
                                      </Button>
                                  </div>
                              </div>
-                         ) : cam.iframeCode.trim().startsWith('<') ? (
-                            <iframe 
-                                srcDoc={`
-                                    <html>
-                                        <head>
-                                            <style>
-                                                body { margin: 0; padding: 0; background: black; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
-                                                video, iframe { width: 100%; height: 100%; object-fit: contain; border: none; }
-                                            </style>
-                                        </head>
-                                        <body>${cam.iframeCode}</body>
-                                    </html>
-                                `}
-                                className="w-full h-full border-0"
-                                allowFullScreen
-                            />
                          ) : (
-                            <iframe src={cam.iframeCode} className="w-full h-full border-0" allowFullScreen />
+                             <CameraStreamPlayer
+                                 iframeCode={cam.iframeCode}
+                                 name={cam.name}
+                                 id={cam.id}
+                                 onExpand={() => setSelectedCameraForModal(cam)}
+                             />
                          )}
-                         <div className="absolute top-2 left-2 flex gap-2">
+                         {false && (
+                             <div className="relative w-full h-full group/video-container">
+                                 {cam.iframeCode.trim().startsWith('<') && !cam.iframeCode.toLowerCase().includes('src="http://') ? (
+                                    <iframe 
+                                        srcDoc={`
+                                            <html>
+                                                <head>
+                                                    <style>
+                                                        body { margin: 0; padding: 0; background: black; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
+                                                        video, iframe { width: 100%; height: 100%; object-fit: contain; border: none; }
+                                                    </style>
+                                                </head>
+                                                <body>${cam.iframeCode}</body>
+                                            </html>
+                                        `}
+                                        title={cam.name}
+                                        className="w-full h-full border-0 animate-fade-in"
+                                        allowFullScreen
+                                    />
+                                 ) : (cam.iframeCode.trim().toLowerCase().startsWith('http://') || (cam.iframeCode.trim().startsWith('<') && cam.iframeCode.toLowerCase().includes('src="http://'))) ? (
+                                    <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 border border-amber-500/20 px-6 text-center animate-fade-in">
+                                        <AlertTriangle className="text-amber-500 mb-2" size={24} />
+                                        <h4 className="text-white font-bold text-[10px] uppercase mb-1">Link Inseguro (HTTP)</h4>
+                                        <p className="text-[9px] text-gray-400 leading-tight mb-3">
+                                            O navegador bloqueia conteúdo <code className="text-amber-500">http://</code> por segurança.
+                                            <br/>Use o botão do Monitor Externo.
+                                        </p>
+                                        <div className="flex flex-col gap-2 w-full max-w-[180px] pointer-events-auto z-10">
+                                            <Button 
+                                                onClick={() => {
+                                                    const url = cam.iframeCode.trim().startsWith('<') 
+                                                        ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
+                                                        : cam.iframeCode;
+                                                    window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+                                                }}
+                                                className="flex items-center justify-center gap-1.5 h-8 bg-atalaia-neon text-black text-[10px] font-black shadow-[0_0_15px_rgba(0,255,102,0.3)] hover:scale-105 transition-transform"
+                                            >
+                                                <ExternalLink size={12} /> MONITOR EXTERNO HTTP
+                                            </Button>
+                                        </div>
+                                    </div>
+                                 ) : (
+                                    <iframe 
+                                        src={cam.iframeCode} 
+                                        title={cam.name}
+                                        className="w-full h-full border-0 animate-fade-in" 
+                                        allowFullScreen 
+                                        referrerPolicy="no-referrer"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                        loading="lazy"
+                                    />
+                                 )}
+
+                                 {/* Overlay unificado com botão Expandir e Popup para maior controle tático */}
+                                 {!(cam.iframeCode.trim().toLowerCase().startsWith('http://') || (cam.iframeCode.trim().startsWith('<') && cam.iframeCode.toLowerCase().includes('src="http://'))) && (
+                                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/video-container:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 pointer-events-none z-10">
+                                         <Button 
+                                             className="pointer-events-auto bg-atalaia-neon text-black font-black text-[10px] px-3.5 h-8 gap-1.5 shadow-[0_0_20px_rgba(0,255,102,0.4)] hover:scale-105 transition-all text-xs"
+                                             onClick={() => setSelectedCameraForModal(cam)}
+                                         >
+                                             <Maximize2 size={12} strokeWidth={2.5} /> EXPANDIR E MONITORAR
+                                         </Button>
+                                         <Button 
+                                             variant="outline"
+                                             className="pointer-events-auto bg-black/70 border-white/10 text-[10px] px-3 h-7 gap-1 hover:bg-black text-white hover:text-atalaia-neon transition-all"
+                                             onClick={() => {
+                                                 const url = cam.iframeCode.trim().startsWith('<') 
+                                                     ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
+                                                     : cam.iframeCode;
+                                                 window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+                                             }}
+                                         >
+                                             <ExternalLink size={11} /> MONITOR POPUP
+                                         </Button>
+                                     </div>
+                                 )}
+                             </div>
+                         )}
+                         <div className="absolute top-2 left-2 flex gap-2 z-10">
                              <Badge color="green" className="text-[8px] px-1.5 animate-pulse">LIVE</Badge>
                              <Badge color="blue" className="text-[8px] px-1.5 bg-black/50 backdrop-blur-sm border-white/20">HD</Badge>
+                         </div>
+                         <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all pointer-events-auto z-10">
+                             <button 
+                                onClick={() => setSelectedCameraForModal(cam)}
+                                className="p-1.5 bg-gradient-to-r from-atalaia-neon to-emerald-500 hover:scale-105 text-black rounded-lg shadow-[0_0_15px_rgba(0,255,102,0.4)] transition-all flex items-center justify-center"
+                                title="Expandir Visualização"
+                             >
+                                <Maximize2 size={12} strokeWidth={2.5} />
+                             </button>
+                             <button 
+                                onClick={() => {
+                                    const url = cam.iframeCode.trim().startsWith('<') 
+                                        ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
+                                        : cam.iframeCode;
+                                    window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+                                }}
+                                className="p-1.5 bg-black/75 hover:bg-black text-white hover:text-atalaia-neon border border-white/10 rounded-lg transition-all flex items-center justify-center"
+                                title="Abrir Monitor Externo Compacto"
+                             >
+                                <ExternalLink size={12} />
+                             </button>
                          </div>
                       </div>
                       <div className="p-4 bg-gradient-to-b from-transparent to-black/20">
@@ -390,7 +617,12 @@ const Cameras: React.FC = () => {
                                     )}
                                 </div>
                                 <Input label="Nome da Câmera" value={newCameraName} onChange={e => setNewCameraName(e.target.value)} placeholder="Ex: Câmera Rua X" required />
-                                <Input label="Código Iframe (Link Youtube ou RTMP)" value={newCameraCode} onChange={e => setNewCameraCode(e.target.value)} placeholder="<iframe... />" required />
+                                <div className="space-y-1">
+                                    <Input label="Código Iframe ou Link" value={newCameraCode} onChange={e => setNewCameraCode(e.target.value)} placeholder="https://... ou <iframe... />" required />
+                                    <p className="text-[9px] text-amber-500/80 px-1 leading-tight">
+                                        💡 <strong>Atenção MisterServer / Servidores Locais:</strong> Browsers modernos bloqueiam links <code className="bg-black/40 px-1">http://</code> por segurança em sites seguros. Se sua câmera não aparecer, use o botão de <strong>Monitor Externo</strong> que aparecerá no card, ou configure SSL (HTTPS) no seu servidor.
+                                    </p>
+                                </div>
                                 
                                 <div className="grid grid-cols-2 gap-3">
                                     <Input label="Latitude (Opcional)" value={newCameraLat} onChange={e => setNewCameraLat(e.target.value)} placeholder="-23.5505" />
@@ -522,6 +754,93 @@ const Cameras: React.FC = () => {
                     </Button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+
+        {selectedCameraForModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedCameraForModal(null)}
+              className="absolute inset-0 bg-black/90 backdrop-blur-md"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative w-full max-w-5xl bg-zinc-950 border border-atalaia-neon/20 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,255,102,0.15)] flex flex-col md:h-[80vh] z-10"
+            >
+              {/* Header do Monitor */}
+              <div className="p-5 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-atalaia-neon/10 to-transparent">
+                <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 bg-atalaia-neon rounded-full animate-ping" />
+                    <div>
+                        <h2 className="text-white font-extrabold text-base md:text-lg uppercase tracking-tight flex items-center gap-2">
+                            {selectedCameraForModal.name}
+                            <span className="text-[10px] text-atalaia-neon font-mono bg-atalaia-neon/10 border border-atalaia-neon/20 px-2 py-0.5 rounded">ONLINE</span>
+                        </h2>
+                        <p className="text-[10px] text-gray-400 mt-0.5 animate-pulse">
+                            Bairro: <span className="text-atalaia-neon font-semibold uppercase">{neighborhoods.find(h => h.id === selectedCameraForModal.neighborhoodId)?.name || 'Atalaia'}</span>
+                        </p>
+                    </div>
+                </div>
+                
+                <div className="flex items-center gap-4">
+                    {/* Relógio Tático do Transmissor */}
+                    <TacticalClock />
+
+                    <button 
+                      onClick={() => setSelectedCameraForModal(null)}
+                      className="p-2 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl transition-all hover:rotate-90 duration-300"
+                    >
+                      <X size={20} />
+                    </button>
+                </div>
+              </div>
+
+              {/* Feed de Vídeo Ampliado */}
+              <div className="flex-1 min-h-[300px] bg-black relative flex items-center justify-center">
+                 <CameraStreamPlayer
+                     iframeCode={selectedCameraForModal.iframeCode}
+                     name={selectedCameraForModal.name}
+                     id={selectedCameraForModal.id}
+                     onExpand={() => {}}
+                     isModal={true}
+                 />
+                 
+                 {/* Visual Tático em hover */}
+                 <div className="absolute bottom-4 left-4 z-10 px-3 py-1.5 bg-black/70 backdrop-blur-md border border-white/10 rounded-xl flex items-center gap-4 text-[10px] font-mono text-gray-400">
+                    <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> 1080p stream</span>
+                    {selectedCameraForModal.lat && (
+                        <span>GPS: {selectedCameraForModal.lat.toFixed(4)}, {selectedCameraForModal.lng?.toFixed(4)}</span>
+                    )}
+                 </div>
+              </div>
+
+              {/* Rodapé Tático */}
+              <div className="p-4 bg-zinc-900/60 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400 font-medium">
+                <div>
+                    Transmissão comunitária monitorada e criptografada cooperativamente.
+                </div>
+                <div className="flex gap-2">
+                    <Button 
+                        variant="outline"
+                        className="text-[10px] h-8 font-black gap-1.5 text-white"
+                        onClick={() => {
+                            const url = selectedCameraForModal.iframeCode.trim().startsWith('<') 
+                                ? selectedCameraForModal.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
+                                : selectedCameraForModal.iframeCode;
+                            window.open(url, `cam_${selectedCameraForModal.id}`, '_blank');
+                        }}
+                    >
+                        ABRIR EM NOVA ABA INTEIRA
+                    </Button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

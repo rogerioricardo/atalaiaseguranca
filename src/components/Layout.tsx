@@ -96,12 +96,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           
           <NavItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
           
-          {user?.role !== UserRole.ADMIN && (
-             <>
-               <NavItem to="/alerts" icon={Bell} label="Central de Alertas" />
-               <NavItem to="/chat" icon={MessageCircle} label="Chat da Comunidade" />
-             </>
-          )}
+          <NavItem to="/alerts" icon={Bell} label="Central de Alertas" />
+          <NavItem to="/chat" icon={MessageCircle} label="Chat da Comunidade" />
 
           <div className="mt-8 mb-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
             Monitoramento

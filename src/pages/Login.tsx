@@ -129,9 +129,18 @@ const Login: React.FC = () => {
         </div>
 
         {error && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-3 text-red-500 text-sm animate-in fade-in duration-300">
-                <AlertCircle size={20} className="shrink-0" />
-                <span>{error}</span>
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex flex-col gap-2 text-red-500 text-sm animate-in fade-in duration-300">
+                <div className="flex items-center gap-3">
+                    <AlertCircle size={20} className="shrink-0" />
+                    <span>{error}</span>
+                </div>
+                {error.includes('fetch') && (
+                    <div className="mt-2 p-2 bg-black/40 rounded text-xs text-amber-500 border border-amber-500/20">
+                        <strong>Dica:</strong> Se você não configurou o Supabase, use o login de demonstração:<br/>
+                        Email: <code className="bg-white/10 px-1 rounded text-white">admin@atalaia.com</code><br/>
+                        Senha: <code className="bg-white/10 px-1 rounded text-white">admin123</code>
+                    </div>
+                )}
             </div>
         )}
 
@@ -153,6 +162,23 @@ const Login: React.FC = () => {
                 <>
                     <Input label="Nome Completo" placeholder="Seu Nome" value={name} onChange={(e) => setName(e.target.value)} required />
                     <Input label="WhatsApp" placeholder="+55 48 99999-9999" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+                    
+                    <div className="space-y-2 mb-4">
+                        <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                            <ShieldCheck size={12} /> Tipo de Acesso
+                        </label>
+                        <select 
+                            className="w-full bg-black/50 border border-atalaia-border rounded-lg px-4 py-2.5 text-white focus:border-atalaia-neon focus:outline-none"
+                            value={role}
+                            onChange={(e) => setRole(e.target.value as UserRole)}
+                            required
+                        >
+                            <option value={UserRole.RESIDENT}>Morador (Residencial)</option>
+                            <option value={UserRole.ADMIN}>Administrador (Gestão Global)</option>
+                            <option value={UserRole.INTEGRATOR}>Integrador (Gestor de Bairro)</option>
+                            <option value={UserRole.SCR}>SCR (Equipe de Apoio)</option>
+                        </select>
+                    </div>
                 </>
             )}
 

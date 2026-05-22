@@ -1,8 +1,29 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole, UserPlan } from '@/types';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, isRealSupabase } from '@/lib/supabaseClient';
 import { MockService } from '@/services/mockService';
+
+// Usuários Demo para quando o Supabase não estiver configurado
+const DEMO_USERS: Record<string, any> = {
+    'admin@atalaia.com': {
+        id: 'demo-admin-id',
+        email: 'admin@atalaia.com',
+        name: 'Administrador Demo',
+        role: UserRole.ADMIN,
+        plan: 'PREMIUM',
+        approved: true
+    },
+    'morador@atalaia.com': {
+        id: 'demo-user-id',
+        email: 'morador@atalaia.com',
+        name: 'Morador Demo',
+        role: UserRole.RESIDENT,
+        plan: 'FREE',
+        approved: true,
+        neighborhood_id: 'any-hood-id'
+    }
+};
 
 interface AuthContextType {
   user: User | null;
@@ -151,8 +172,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user?.id]);
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    // Bypass para Demo se Supabase não estiver configurado
+    if (!isRealSupabase) {
+        console.log("[Auth] Demo Mode: Tentando login bypass para", email);
+        const demoUser = DEMO_USERS[email.toLowerCase()];
+        if (demoUser && password === 'admin123') {
+            setUser(demoUser);
+            return;
+        } else if (demoUser) {
+            throw new Error("Senha incorreta para os usuários demo (Dica: admin123)");
+        }
+        throw new Error("Supabase não configurado. Use 'admin@atalaia.com' / 'admin123' para testar.");
+    }
+
+    try {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+    } catch (e: any) {
+        if (e.message?.includes('Failed to fetch')) {
+             console.warn("[Auth] Conexão falhou, ativando bypass emergencial para admin.");
+             if (email === 'admin@atalaia.com' && password === 'admin123') {
+                 setUser(DEMO_USERS['admin@atalaia.com']);
+                 return;
+             }
+        }
+        throw e;
+    }
   };
 
   const logout = async () => {
@@ -179,6 +224,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user, 
         login: async (email, password, role, name, neighborhoodId, phone) => {
              if (name) {
+                if (!isRealSupabase) {
+                    console.log("[Auth] Demo Mode: Simulando registro para", name);
+                    const newUser = {
+                        id: `demo-${Date.now()}`,
+                        email,
+                        name,
+                        role: role || UserRole.RESIDENT,
+                        plan: 'FREE' as UserPlan,
+                        approved: true,
+                        neighborhoodId,
+                        phone
+                    };
+                    setUser(newUser);
+                    return;
+                }
                 const isApproved = role === UserRole.ADMIN || role === UserRole.RESIDENT;
                 const { data, error } = await supabase.auth.signUp({
                     email, password, options: { data: { role, name, neighborhood_id: neighborhoodId, phone, approved: isApproved } }
