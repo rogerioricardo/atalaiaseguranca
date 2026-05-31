@@ -153,3 +153,34 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 10. TABELA DE CONTROLE DE SESSÕES (ANTI-COMPARTILHAMENTO DE CONTAS)
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    ip_address TEXT,
+    browser TEXT,
+    os TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_active TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Tudo em user_sessions" ON user_sessions;
+CREATE POLICY "Tudo em user_sessions" ON user_sessions FOR ALL USING (true) WITH CHECK (true);
+
+-- 11. TABELA DE BIOMETRIA FACIAL (TENSORFLOW.JS / BLAZEFACE)
+CREATE TABLE IF NOT EXISTS user_facial_biometrics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
+    descriptor TEXT NOT NULL, -- Vetor biométrico serializado em JSON
+    photo_base64 TEXT, -- Snapshot visual opcional do rosto
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE user_facial_biometrics ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Tudo em user_facial_biometrics" ON user_facial_biometrics;
+CREATE POLICY "Tudo em user_facial_biometrics" ON user_facial_biometrics FOR ALL USING (true) WITH CHECK (true);
+
+

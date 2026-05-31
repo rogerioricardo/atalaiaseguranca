@@ -139,3 +139,16 @@ export interface ServiceRequest {
     status: 'PENDING' | 'ACKNOWLEDGED' | 'COMPLETED';
     createdAt: Date;
 }
+
+export interface UserSession {
+    id: string;
+    userId: string;
+    token: string;
+    ipAddress: string;
+    browser: string;
+    os: string;
+    createdAt: Date;
+    lastActive: Date;
+    isCurrent?: boolean;
+}
+

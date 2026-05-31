@@ -68,9 +68,44 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 const AppRoutes = () => {
+  const { sessionTerminatedReason, clearSessionTerminatedReason } = useAuth();
+
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
+    <>
+      {sessionTerminatedReason && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="w-full max-w-md bg-zinc-950 border border-red-500/30 rounded-2xl p-6 md:p-8 shadow-[0_0_50px_rgba(239,68,68,0.15)] flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+            <div className="relative mb-6">
+               <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-500 mb-1 animate-pulse">
+                  <ShieldCheck size={32} />
+               </div>
+               <div className="absolute inset-x-0 -bottom-2 flex justify-center">
+                  <span className="px-2 py-0.5 bg-red-500 text-[9px] font-black uppercase text-black tracking-widest rounded-sm">BLOQUEADO</span>
+               </div>
+            </div>
+
+            <h3 className="text-xl font-bold text-white uppercase tracking-tight mb-3 font-sans">Sessão Interrompida</h3>
+            
+            <p className="text-xs text-zinc-400 leading-relaxed mb-6">
+              {sessionTerminatedReason}
+            </p>
+
+            <div className="p-3.5 bg-red-500/5 border border-red-500/10 rounded-xl mb-6 text-left w-full text-[10px] text-zinc-500 leading-normal font-mono">
+              💡 <strong>Controle de Compartilhamento Atalaia:</strong> Para preservar a privacidade das imagens das câmeras táticas e sensores de segurança comunitários, o uso de sessões simultâneas é desativado por padrão.
+            </div>
+
+            <button
+              onClick={clearSessionTerminatedReason}
+              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-[0_0_25px_rgba(220,38,38,0.25)] hover:scale-[1.01]"
+            >
+              Entendido, Fazer Login Novamente
+            </button>
+          </div>
+        </div>
+      )}
+
+      <Routes>
+        <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/docs" element={<Documentation />} />
       <Route path="/terms" element={<Terms />} />
@@ -144,6 +179,7 @@ const AppRoutes = () => {
       
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 };
 

@@ -4,7 +4,10 @@ import Layout from '../components/Layout';
 import { useAuth } from '@/auth/context';
 import { Card, Input, Button } from '../components/UI';
 import { MockService } from '../services/mockService';
-import { Save, User as UserIcon, Camera, Home, MapPin, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { Save, User as UserIcon, Camera, Home, MapPin, CheckCircle, Loader2, AlertCircle, Smartphone, Laptop, Monitor, Trash2, LogOut, Scan, UserCheck, ShieldAlert } from 'lucide-react';
+import { SessionService } from '../services/sessionService';
+import { FacialScannerModal } from '@/components/FacialScannerModal';
+import { FacialBiometricService, FacialBiometric } from '@/services/facialBiometricService';
 
 const Profile: React.FC = () => {
   const { user, updateProfile } = useAuth();
@@ -13,6 +16,102 @@ const Profile: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Active user sessions states
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [sessionActionLoading, setSessionActionLoading] = useState<string | null>(null);
+
+  const loadSessions = async () => {
+    if (!user?.id) return;
+    setLoadingSessions(true);
+    try {
+      const activeSessions = await SessionService.getSessions(user.id);
+      setSessions(activeSessions);
+    } catch (e) {
+      console.error("Erro ao carregar sessões:", e);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSessions();
+  }, [user?.id]);
+
+  // Face biometrics states
+  const [userBiometrics, setUserBiometrics] = useState<any | null>(null);
+  const [loadingBiometrics, setLoadingBiometrics] = useState(true);
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [deletingBiometrics, setDeletingBiometrics] = useState(false);
+
+  const loadUserBiometrics = async () => {
+    if (!user?.id) return;
+    setLoadingBiometrics(true);
+    try {
+      const bio = await FacialBiometricService.getBiometricsForUser(user.id);
+      setUserBiometrics(bio);
+    } catch (e) {
+      console.error("Erro ao carregar biometria facial:", e);
+    } finally {
+      setLoadingBiometrics(false);
+    }
+  };
+
+  const handleRemoveBiometrics = async () => {
+    if (!user?.id) return;
+    if (!window.confirm("Deseja realmente excluir seu cadastro facial? Você precisará cadastrar novamente para entrar com rosto.")) return;
+    
+    setDeletingBiometrics(true);
+    try {
+      await FacialBiometricService.deleteBiometrics(user.id);
+      setUserBiometrics(null);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
+    } catch (e) {
+      console.error("Erro ao remover biometria:", e);
+      setErrorMsg("Falha ao remover cadastro facial.");
+    } finally {
+      setDeletingBiometrics(false);
+    }
+  };
+
+  const handleEnrollSuccess = async (data: any) => {
+    console.log("[Profile] Cadastro facial realizado com sucesso:", data);
+    setUserBiometrics(data);
+    setShowEnrollModal(false);
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
+  };
+
+  useEffect(() => {
+    loadUserBiometrics();
+  }, [user?.id]);
+
+  const handleTerminateSession = async (id: string) => {
+    setSessionActionLoading(id);
+    try {
+      await SessionService.terminateSession(id);
+      await loadSessions();
+    } catch (e) {
+      console.error("Erro ao encerrar sessão:", e);
+    } finally {
+      setSessionActionLoading(null);
+    }
+  };
+
+  const handleTerminateOthers = async () => {
+    if (!user?.id) return;
+    setSessionActionLoading('others');
+    try {
+      await SessionService.terminateAllOtherSessions(user.id);
+      await loadSessions();
+    } catch (e) {
+      console.error("Erro ao encerrar outras sessões:", e);
+    } finally {
+      setSessionActionLoading(null);
+    }
+  };
   
   const [formData, setFormData] = useState({
     name: '',
@@ -300,7 +399,210 @@ const Profile: React.FC = () => {
                 </Card>
             </div>
         </form>
+
+        {/* RECONHECIMENTO FACIAL - CADASTRO BIOMÉTRICO */}
+        <div className="pb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <Card className="p-6 md:p-8 border border-white/5 bg-[#0a0a0a]/90 backdrop-blur-md relative overflow-hidden">
+                <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-atalaia-neon/30 to-transparent" />
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/5">
+                    <div>
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                            <Scan className="text-atalaia-neon" size={18} />
+                            Reconhecimento Facial (Acesso Seguro)
+                        </h3>
+                        <p className="text-[11px] text-zinc-500 mt-1">
+                            Cadastre seu rosto para conseguir acessar o Atalaia instantaneamente pelo navegador, de forma 100% segura usando inteligência artificial biométrica local. Nenhum serviço pago de terceiros é utilizado.
+                        </p>
+                    </div>
+                </div>
+
+                {loadingBiometrics ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-zinc-400">
+                        <Loader2 className="text-atalaia-neon animate-spin mb-3" size={24} />
+                        <span className="text-[11px] font-mono tracking-wider text-zinc-500">Verificando banco de dados biométrico...</span>
+                    </div>
+                ) : userBiometrics ? (
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-16 h-16 rounded-xl border border-green-500/30 p-0.5 bg-black overflow-hidden relative group">
+                                {userBiometrics.photoBase64 ? (
+                                    <img src={userBiometrics.photoBase64} alt="Cadastrado" className="w-full h-full rounded-lg object-cover animate-pulse" />
+                                ) : (
+                                    <div className="w-full h-full rounded-lg bg-green-500/10 flex items-center justify-center text-green-500">
+                                        <UserCheck size={28} />
+                                    </div>
+                                )}
+                                <div className="absolute inset-0 bg-[#0ffa9c]/10 animate-pulse rounded-lg pointer-events-none" />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-white">Biometria Facial Ativa</span>
+                                    <span className="px-2 py-0.5 bg-green-500/10 border border-green-500/20 text-[8px] font-bold text-green-400 tracking-widest rounded-md uppercase font-mono">
+                                        CADASTRADA
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-zinc-500 mt-1 font-mono">
+                                    Identificação Segura Local &bull; Registro: Ativo & Autenticado
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowEnrollModal(true)}
+                                className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-850 text-xs font-bold uppercase py-2.5 px-4 rounded-xl transition-all"
+                            >
+                                Recadastrar Rosto
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleRemoveBiometrics}
+                                disabled={deletingBiometrics}
+                                className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold uppercase py-2.5 px-4 rounded-xl transition-all flex items-center gap-2"
+                            >
+                                {deletingBiometrics ? <Loader2 className="animate-spin" size={12} /> : <Trash2 size={12} />}
+                                <span>Remover Biometria</span>
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pt-6">
+                        <div className="flex items-start gap-3">
+                            <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-xl mt-1">
+                                <ShieldAlert size={20} />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-zinc-200 font-sans">Acesso Biométrico Desabilitado</h4>
+                                <p className="text-[11px] text-zinc-500 mt-0.5">
+                                    Você ainda não possui um rosto cadastrado nesta conta tática. Registre sua biometria para realizar autenticações rápidas sem senha.
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setShowEnrollModal(true)}
+                            className="bg-atalaia-neon text-black font-black hover:bg-atalaia-neon/90 hover:shadow-[0_0_20px_rgba(15,250,156,0.25)] text-xs uppercase tracking-wider py-3 px-6 rounded-xl transition-all flex items-center gap-2 self-start sm:self-center"
+                        >
+                            <Scan size={14} />
+                            <span>Cadastrar Meu Rosto</span>
+                        </button>
+                    </div>
+                )}
+            </Card>
+        </div>
+
+        {/* CONTROLE DE SESSÕES ATIVAS - ANTI-COMPARTILHAMENTO */}
+        <div className="pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <Card className="p-6 md:p-8 border border-white/5 bg-[#0a0a0a]/90 backdrop-blur-md relative overflow-hidden">
+                {/* Visual accent top line */}
+                <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-atalaia-neon/30 to-transparent" />
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-white/5">
+                    <div>
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                            <Monitor className="text-atalaia-neon" size={18} />
+                            Dispositivos Conectados
+                        </h3>
+                        <p className="text-[11px] text-zinc-500 mt-1">
+                            Monitore e encerre as sessões táticas ativas no Atalaia. Uso compartilhado é bloqueado automaticamente para auditar a integridade das câmeras.
+                        </p>
+                    </div>
+                    {sessions.length > 1 && (
+                        <button
+                            onClick={handleTerminateOthers}
+                            disabled={sessionActionLoading !== null}
+                            className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 hover:border-red-500/30 text-[10px] font-bold uppercase py-2 px-4 rounded-xl transition-all flex items-center gap-2 self-start sm:self-center"
+                        >
+                            {sessionActionLoading === 'others' ? (
+                                <><Loader2 className="animate-spin" size={12} /> Desconectando Outros...</>
+                            ) : (
+                                <><LogOut size={12} /> Desconectar Outros Dispositivos</>
+                            )}
+                        </button>
+                    )}
+                </div>
+
+                {loadingSessions ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-zinc-400">
+                        <Loader2 className="text-atalaia-neon animate-spin mb-3" size={24} />
+                        <span className="text-[11px] font-mono tracking-wider text-zinc-500">Sincronizando sessões ativas com o servidor...</span>
+                    </div>
+                ) : sessions.length === 0 ? (
+                    <div className="text-center py-10 text-zinc-500 text-xs">
+                         Nenhuma sessão tática localizada.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 gap-4">
+                         {sessions.map((sess) => {
+                             const isMobile = sess.os === 'Android' || sess.os === 'iOS';
+                             
+                             return (
+                                 <div 
+                                     key={sess.id}
+                                     className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                                         sess.isCurrent 
+                                             ? 'bg-[#0f1c19] border-[#0ffa9c]/20' 
+                                             : 'bg-[#121212] border-white/5 hover:border-white/10'
+                                     }`}
+                                 >
+                                     <div className="flex items-start gap-4">
+                                         <div className={`p-3 rounded-xl flex items-center justify-center ${
+                                             sess.isCurrent ? 'bg-[#0ffa9c]/10 text-[#0ffa9c]' : 'bg-white/5 text-zinc-500'
+                                         }`}>
+                                             {isMobile ? <Smartphone size={18} /> : sess.os === 'Windows' || sess.os === 'macOS' || sess.os === 'Linux' ? <Laptop size={18} /> : <Monitor size={18} />}
+                                         </div>
+                                         <div>
+                                             <div className="flex flex-wrap items-center gap-2">
+                                                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                                                      {sess.os} <span className="w-1 h-1 bg-zinc-650 rounded-full" /> {sess.browser}
+                                                  </span>
+                                                  {sess.isCurrent && (
+                                                      <span className="px-2 py-0.5 bg-[#0ffa9c]/10 border border-[#0ffa9c]/20 text-[8px] font-bold text-[#0ffa9c] tracking-widest rounded-md uppercase font-mono">
+                                                          Conexão Atual
+                                                      </span>
+                                                  )}
+                                             </div>
+                                             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 font-mono text-[9px] text-zinc-500">
+                                                  <span><strong className="text-zinc-650 font-normal">IP:</strong> {sess.ipAddress}</span>
+                                                  <span><strong className="text-zinc-650 font-normal">Acesso em:</strong> {sess.createdAt.toLocaleString('pt-BR')}</span>
+                                             </div>
+                                         </div>
+                                     </div>
+
+                                     {!sess.isCurrent && (
+                                         <button
+                                             onClick={() => handleTerminateSession(sess.id)}
+                                             disabled={sessionActionLoading !== null}
+                                             className="flex items-center gap-1.5 px-3.5 py-2 bg-red-500/5 hover:bg-red-500/15 border border-red-500/10 hover:border-red-500/20 rounded-xl text-[10px] font-bold tracking-wider text-red-500/80 hover:text-red-500 transition-all self-end md:self-center uppercase"
+                                         >
+                                             {sessionActionLoading === sess.id ? (
+                                                 <Loader2 className="animate-spin" size={12} />
+                                             ) : (
+                                                 <Trash2 size={12} />
+                                             )}
+                                             <span>Desconectar Sessão</span>
+                                         </button>
+                                     )}
+                                 </div>
+                             );
+                         })}
+                    </div>
+                )}
+            </Card>
+        </div>
       </div>
+
+      {/* MODAL DE CADASTRO BIOMÉTRICO (TENSORFLOW / BLAZEFACE) */}
+      <FacialScannerModal
+          isOpen={showEnrollModal}
+          onClose={() => setShowEnrollModal(false)}
+          mode="enroll"
+          userId={user?.id}
+          onSuccess={handleEnrollSuccess}
+      />
     </Layout>
   );
 };
