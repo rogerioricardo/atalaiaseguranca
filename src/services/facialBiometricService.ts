@@ -91,7 +91,9 @@ export const FacialBiometricService = {
   saveBiometrics: async (userId: string, descriptor: number[], photoBase64?: string): Promise<boolean> => {
     const serializedDescriptor = JSON.stringify(descriptor);
 
-    if (!isRealSupabase) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+
+    if (!isRealSupabase || !isUuid) {
       console.log("[FacialBiometricService] Demo Mode: Saving biometrics to localStorage for user", userId);
       const simulated: Record<string, any> = JSON.parse(localStorage.getItem(SIMULATED_BIOMETRICS_KEY) || '{}');
       simulated[userId] = {
@@ -128,7 +130,9 @@ export const FacialBiometricService = {
    * Retrieves registered facial biometric data for a single user
    */
   getBiometricsForUser: async (userId: string): Promise<FacialBiometric | null> => {
-    if (!isRealSupabase) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+
+    if (!isRealSupabase || !isUuid) {
       const simulated: Record<string, any> = JSON.parse(localStorage.getItem(SIMULATED_BIOMETRICS_KEY) || '{}');
       const found = simulated[userId];
       return found ? {
@@ -164,7 +168,9 @@ export const FacialBiometricService = {
    * Deletes the registered facial biometrics for a single user
    */
   deleteBiometrics: async (userId: string): Promise<boolean> => {
-    if (!isRealSupabase) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+
+    if (!isRealSupabase || !isUuid) {
       const simulated: Record<string, any> = JSON.parse(localStorage.getItem(SIMULATED_BIOMETRICS_KEY) || '{}');
       if (simulated[userId]) {
         delete simulated[userId];
@@ -195,13 +201,14 @@ export const FacialBiometricService = {
    * enabling local real-time identification comparisons.
    */
   getAllBiometrics: async (): Promise<{ userId: string; descriptor: number[]; email: string; name: string; photoBase64?: string }[]> => {
-    if (!isRealSupabase) {
+    const list: { userId: string; descriptor: number[]; email: string; name: string; photoBase64?: string }[] = [];
+
+    // 1. Always check local simulated biometrics first so they're always supported
+    try {
       const simulated: Record<string, any> = JSON.parse(localStorage.getItem(SIMULATED_BIOMETRICS_KEY) || '{}');
-      // Read simulated sessions or demo profiles
-      const list = [];
       const demoAccounts = [
-         { id: 'demo-admin-id', email: 'admin@atalaia.com', name: 'Administrador Demo' },
-         { id: 'demo-user-id', email: 'morador@atalaia.com', name: 'Morador Demo' }
+         { id: 'demo-admin-id', email: 'admin@atalaia.com', name: 'Carlos Silva' },
+         { id: 'demo-user-id', email: 'morador@atalaia.com', name: 'Mariana Costa' }
       ];
 
       for (const entry of demoAccounts) {
@@ -216,42 +223,67 @@ export const FacialBiometricService = {
           });
         }
       }
-      return list;
-    }
 
-    try {
-      // Join active biometric sets with user profiles
-      const { data: bData, error: bError } = await supabase
-        .from('user_facial_biometrics')
-        .select('user_id, descriptor, photo_base64');
-
-      if (bError || !bData) return [];
-
-      const { data: pData, error: pError } = await supabase
-        .from('profiles')
-        .select('id, email, name');
-
-      if (pError || !pData) return [];
-
-      const profilesMap = new Map(pData.map(p => [p.id, p]));
-
-      return bData
-        .map(b => {
-          const profile = profilesMap.get(b.user_id);
-          if (!profile) return null;
-          return {
-            userId: b.user_id,
-            descriptor: JSON.parse(b.descriptor) as number[],
-            email: profile.email,
-            name: profile.name || profile.email.split('@')[0],
-            photoBase64: b.photo_base64 || undefined
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null);
+      // Also dynamically collect other customized non-uuid biometrics saved locally
+      for (const key of Object.keys(simulated)) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
+        if (!isUuid && !list.some(item => item.userId === key)) {
+          const entry = simulated[key];
+          list.push({
+            userId: key,
+            descriptor: entry.descriptor,
+            email: entry.email || `${key}@atalaia.com`,
+            name: entry.name || `Usuário Registrado`,
+            photoBase64: entry.photoBase64
+          });
+        }
+      }
     } catch (e) {
-      console.error("[FacialBiometricService] Exception compiling biometric list:", e);
-      return [];
+      console.warn("[FacialBiometricService] Error parsing simulated biometrics:", e);
     }
+
+    // 2. Fetch real Supabase biometrics if configured
+    if (isRealSupabase) {
+      try {
+        // Join active biometric sets with user profiles
+        const { data: bData, error: bError } = await supabase
+          .from('user_facial_biometrics')
+          .select('user_id, descriptor, photo_base64');
+
+        if (!bError && bData && bData.length > 0) {
+          const { data: pData, error: pError } = await supabase
+            .from('profiles')
+            .select('id, email, name');
+
+          if (!pError && pData) {
+            const profilesMap = new Map(pData.map(p => [p.id, p]));
+
+            bData.forEach(b => {
+              const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(b.user_id);
+              if (isUuid) {
+                const profile = profilesMap.get(b.user_id);
+                if (profile) {
+                  // Ensure no duplicates
+                  if (!list.some(item => item.userId === b.user_id)) {
+                    list.push({
+                      userId: b.user_id,
+                      descriptor: JSON.parse(b.descriptor) as number[],
+                      email: profile.email,
+                      name: profile.name || profile.email.split('@')[0],
+                      photoBase64: b.photo_base64 || undefined
+                    });
+                  }
+                }
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.error("[FacialBiometricService] Exception compiling database biometric list:", e);
+      }
+    }
+
+    return list;
   },
 
   /**

@@ -45,6 +45,8 @@ export const getIpAddress = async (): Promise<string> => {
 const SESSION_TOKEN_KEY = 'atalaia_session_token';
 const SIMULATED_SESSIONS_KEY = 'atalaia_simulated_sessions';
 
+const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
 export const SessionService = {
   /**
    * Generates a new unique session token
@@ -63,7 +65,8 @@ export const SessionService = {
 
     sessionStorage.setItem(SESSION_TOKEN_KEY, token);
 
-    if (!isRealSupabase) {
+    const isIdUuid = isUuid(userId);
+    if (!isRealSupabase || !isIdUuid) {
       // Simulate database transaction under localStorage
       const simulatedSess: UserSession[] = JSON.parse(localStorage.getItem(SIMULATED_SESSIONS_KEY) || '[]');
       
@@ -156,7 +159,8 @@ export const SessionService = {
   getSessions: async (userId: string): Promise<UserSession[]> => {
     const currentToken = sessionStorage.getItem(SESSION_TOKEN_KEY) || '';
 
-    if (!isRealSupabase) {
+    const isIdUuid = isUuid(userId);
+    if (!isRealSupabase || !isIdUuid) {
       const simulatedSess: UserSession[] = JSON.parse(localStorage.getItem(SIMULATED_SESSIONS_KEY) || '[]');
       return simulatedSess
         .filter(s => s.userId === userId)
@@ -218,7 +222,8 @@ export const SessionService = {
   terminateAllOtherSessions: async (userId: string): Promise<void> => {
     const currentToken = sessionStorage.getItem(SESSION_TOKEN_KEY) || '';
 
-    if (!isRealSupabase) {
+    const isIdUuid = isUuid(userId);
+    if (!isRealSupabase || !isIdUuid) {
       const simulatedSess: UserSession[] = JSON.parse(localStorage.getItem(SIMULATED_SESSIONS_KEY) || '[]');
       const filtered = simulatedSess.filter(s => s.userId !== userId || s.token === currentToken);
       localStorage.setItem(SIMULATED_SESSIONS_KEY, JSON.stringify(filtered));
@@ -244,7 +249,8 @@ export const SessionService = {
     const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
     if (!token) return false;
 
-    if (!isRealSupabase) {
+    const isIdUuid = isUuid(userId);
+    if (!isRealSupabase || !isIdUuid) {
       const simulatedSess: UserSession[] = JSON.parse(localStorage.getItem(SIMULATED_SESSIONS_KEY) || '[]');
       const foundSession = simulatedSess.find(s => s.token === token && s.userId === userId);
       return !!foundSession;

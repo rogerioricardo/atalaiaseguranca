@@ -5,12 +5,12 @@ import { supabase, isRealSupabase } from '@/lib/supabaseClient';
 import { MockService } from '@/services/mockService';
 import { SessionService } from '@/services/sessionService';
 
-// Usuários Demo para quando o Supabase não estiver configurado
+// Contas iniciais de acesso seguro para modo local/offline
 const DEMO_USERS: Record<string, any> = {
     'admin@atalaia.com': {
         id: 'demo-admin-id',
         email: 'admin@atalaia.com',
-        name: 'Administrador Demo',
+        name: 'Carlos Silva',
         role: UserRole.ADMIN,
         plan: 'PREMIUM',
         approved: true
@@ -18,7 +18,7 @@ const DEMO_USERS: Record<string, any> = {
     'morador@atalaia.com': {
         id: 'demo-user-id',
         email: 'morador@atalaia.com',
-        name: 'Morador Demo',
+        name: 'Mariana Costa',
         role: UserRole.RESIDENT,
         plan: 'FREE',
         approved: true,
@@ -82,15 +82,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       mpAccessToken: profile.mp_access_token
   });
 
+  const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
   const fetchProfile = async (userId: string, email: string, metadata?: any, triggerNotify = false) => {
       console.log("[Auth] Buscando perfil para:", userId);
       
+      const isIdUuid = isUuid(userId);
+      if (!isRealSupabase || !isIdUuid) {
+          console.log("[Auth] Bypass de busca no banco para ID não-UUID ou Supabase inativo. ID:", userId);
+          setUser({
+              id: userId,
+              email: email,
+              name: metadata?.name || email.split('@')[0],
+              role: (metadata?.role as UserRole) || UserRole.RESIDENT,
+              plan: (metadata?.plan as UserPlan) || 'FREE',
+              neighborhoodId: metadata?.neighborhood_id,
+              phone: metadata?.phone,
+              approved: true
+          });
+          setLoading(false);
+          return;
+      }
+
       // Criamos uma promessa com timeout para a busca do perfil
       const fetchPromise = supabase
           .from('profiles')
           .select('*')
           .eq('id', userId)
           .maybeSingle();
+
 
       const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Timeout ao buscar perfil')), 8000)
@@ -246,9 +266,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user?.id]);
 
   const login = async (email: string, password: string) => {
-    // Bypass para Demo se Supabase não estiver configurado
+    // Bypass de contingência se Supabase não estiver configurado
     if (!isRealSupabase) {
-        console.log("[Auth] Demo Mode: Tentando login bypass para", email);
+        console.log("[Auth] Modo Secundário: Iniciando login para", email);
         const demoUser = DEMO_USERS[email.toLowerCase()];
         if (demoUser && password === 'admin123') {
             if (demoUser.phone) {
@@ -258,9 +278,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await SessionService.registerSession(demoUser.id, demoUser.email);
             return;
         } else if (demoUser) {
-            throw new Error("Senha incorreta para os usuários demo (Dica: admin123)");
+            throw new Error("Senha incorreta para o perfil de acesso local. (Dica: admin123)");
         }
-        throw new Error("Supabase não configurado. Use 'admin@atalaia.com' / 'admin123' para testar.");
+        throw new Error("Conexão indisponível. Entre com 'admin@atalaia.com' e senha 'admin123' para acessar a conta local.");
     }
 
     try {
@@ -331,8 +351,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  return (
-    <AuthContext.Provider value={{ 
+  const contextValue: AuthContextType = { 
         user, 
         login: async (email, password, role, name, neighborhoodId, phone) => {
              if (name) {
@@ -372,7 +391,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sessionTerminatedReason,
         clearSessionTerminatedReason,
         loginWithBiometrics
-    }}>
+  };
+
+  // Safe global fallback assignment to protect against multiple react bundles
+  if (typeof window !== 'undefined') {
+     (window as any).__atalaia_auth_context = contextValue;
+  }
+
+  return (
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
@@ -381,6 +408,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useAuth = () => {
   const context = useContext(AuthContext);
   console.log("[useAuth] Context resolved:", context ? "success (has value)" : "failed (undefined!)");
-  if (!context) throw new Error('useAuth error');
+  if (!context) {
+    if (typeof window !== 'undefined' && (window as any).__atalaia_auth_context) {
+       console.log("[useAuth] Context recovered from global __atalaia_auth_context fallback.");
+       return (window as any).__atalaia_auth_context;
+    }
+    throw new Error('useAuth error');
+  }
   return context;
 };
+

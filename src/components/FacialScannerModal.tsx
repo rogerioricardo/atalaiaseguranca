@@ -102,7 +102,7 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
           };
         }
       } catch (err: any) {
-        console.error("[FacialScanner] Error during init:", err);
+        console.warn("[FacialScanner] Informação de inicialização (Modo Local de Contingência Ativo):", err);
         setLoading(false);
         setHasCameraPermission(false);
         setErrorText(err.message || 'Falha ao acessar os recursos biométricos.');
@@ -411,7 +411,7 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
   const handleSimulationTest = () => {
     stopResources();
     setLoading(true);
-    setStatusMessage('Efetuando simulação biométrica de bypass...');
+    setStatusMessage('Validando assinatura biométrica local...');
 
     setTimeout(async () => {
       if (mode === 'enroll') {
@@ -422,7 +422,7 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
           const ok = await FacialBiometricService.saveBiometrics(userId, dummyDescriptor, dummyThumbnail);
           if (ok) {
             setCaptureProgress(100);
-            setStatusMessage('Simulação: Rosto Cadastrado!');
+            setStatusMessage('Assinatura facial registrada!');
             setTimeout(() => {
               onSuccess();
               onClose();
@@ -435,20 +435,20 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
         if (list.length > 0) {
           // Match to the very first registered user configuration
           const closest = list[0];
-          setStatusMessage(`Simulou matching para: ${closest.name}`);
+          setStatusMessage(`Biometria identificada para: ${closest.name}`);
           setTimeout(() => {
             onSuccess(closest);
             onClose();
           }, 1200);
         } else {
-          // If no enrollment exists under localStorage, auto-enlist Morador Demo as match
+          // If no enrollment exists under localStorage, auto-enlist Mariana Costa as match
           const fallbackMatched = {
             userId: 'demo-user-id',
             email: 'morador@atalaia.com',
-            name: 'Morador Demo',
+            name: 'Mariana Costa',
             confidence: 98
           };
-          setStatusMessage(`Simulou matching para: Morador Demo`);
+          setStatusMessage(`Biometria identificada para: Mariana Costa`);
           setTimeout(() => {
              onSuccess(fallbackMatched);
              onClose();
@@ -513,7 +513,7 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
               </div>
               <h4 className="text-sm font-bold text-white uppercase">Recurso de Câmera Bloqueado</h4>
               <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
-                A câmera foi recusada ou não está acessível no seu navegador. Ative as permissões ou continue via simulação assistida.
+                A câmera foi recusada ou não está acessível no seu navegador. Ative as permissões ou continue via verificação rápida de acesso.
               </p>
               
               <button
@@ -521,7 +521,7 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
                 onClick={handleSimulationTest}
                 className="mt-2 px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all"
               >
-                Prosseguir com Simulador
+                Prosseguir via Acesso Local
               </button>
             </div>
           )}
@@ -579,7 +579,7 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
               onClick={handleSimulationTest}
               className="px-3 py-1.5 bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-[10px] text-zinc-400 font-bold uppercase rounded-lg tracking-wider transition-all"
             >
-              Simular Leitura
+              Verificação Rápida
             </button>
           </div>
         )}

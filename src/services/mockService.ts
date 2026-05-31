@@ -4,6 +4,8 @@ import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, Service
 
 const sanitizeUUID = (id?: string): string | null => {
     if (!id || id === 'unknown' || id === 'undefined' || id.trim() === '') return null;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (isRealSupabase && !isUuid) return null;
     return id;
 };
 
@@ -53,8 +55,8 @@ export const MockService = {
     if (!isRealSupabase) {
         return [{
             id: 'hood-demo-1',
-            name: 'Atalaia Central (Demo)',
-            description: 'Bairro modelo para demonstração do sistema.',
+            name: 'Atalaia Central',
+            description: 'Bairro central sob monitoramento integrado Atalaia.',
             iframeUrl: 'about:blank',
             lat: -27.5969,
             lng: -48.5495
@@ -221,23 +223,27 @@ export const MockService = {
   },
 
   adminUpdateUser: async (userId: string, data: any): Promise<void> => {
-      if (!isRealSupabase) return;
-      await supabase.from('profiles').update(data).eq('id', userId);
+      const safeId = sanitizeUUID(userId);
+      if (!isRealSupabase || !safeId) return;
+      await supabase.from('profiles').update(data).eq('id', safeId);
   },
 
   updateUserPlan: async (userId: string, plan: string): Promise<void> => {
-      if (!isRealSupabase) return;
-      await supabase.from('profiles').update({ plan }).eq('id', userId);
+      const safeId = sanitizeUUID(userId);
+      if (!isRealSupabase || !safeId) return;
+      await supabase.from('profiles').update({ plan }).eq('id', safeId);
   },
 
   approveUser: async (userId: string): Promise<void> => {
-      if (!isRealSupabase) return;
-      await supabase.from('profiles').update({ approved: true }).eq('id', userId);
+      const safeId = sanitizeUUID(userId);
+      if (!isRealSupabase || !safeId) return;
+      await supabase.from('profiles').update({ approved: true }).eq('id', safeId);
   },
 
   deleteUser: async (id: string): Promise<void> => {
-      if (!isRealSupabase) return;
-      await supabase.from('profiles').delete().eq('id', id);
+      const safeId = sanitizeUUID(id);
+      if (!isRealSupabase || !safeId) return;
+      await supabase.from('profiles').delete().eq('id', safeId);
   },
 
   maintenanceFixOrphans: async (): Promise<number> => {
@@ -267,7 +273,7 @@ export const MockService = {
             userName: 'Morador Atalaia',
             neighborhoodId: 'hood-demo-1',
             timestamp: new Date(),
-            message: 'Sistema de demonstração ativo.'
+            message: 'Ronda preventiva de segurança ativa.'
         }];
     }
     try {
@@ -287,9 +293,10 @@ export const MockService = {
     if (!isRealSupabase) { console.log("[DEMO] Alerta criado:", alertData); return; }
     try {
         const safeHoodId = sanitizeUUID(alertData.neighborhoodId);
+        const safeUserId = sanitizeUUID(alertData.userId);
         const { error: alertErr } = await supabase.from('alerts').insert([{ 
             type: alertData.type, 
-            user_id: alertData.userId, 
+            user_id: safeUserId, 
             user_name: alertData.userName, 
             neighborhood_id: safeHoodId, 
             message: alertData.message, 
@@ -299,7 +306,7 @@ export const MockService = {
         
         const { error: chatErr } = await supabase.from('chat_messages').insert([{ 
             neighborhood_id: safeHoodId, 
-            user_id: alertData.userId, 
+            user_id: safeUserId, 
             user_name: alertData.userName, 
             user_role: alertData.userRole, 
             text: alertData.message || (alertData.type === 'PANIC' ? '🚨 PÂNICO ACIONADO!' : alertData.type), 
@@ -356,7 +363,7 @@ export const MockService = {
             userId: 'demo-admin-id',
             userName: 'Suporte Atalaia',
             userRole: UserRole.ADMIN,
-            text: 'Bem-vindo ao Chat de Demonstração!',
+            text: 'Bem-vindo ao canal integrado de segurança comunitária!',
             timestamp: new Date(),
         }];
     }
@@ -374,7 +381,7 @@ export const MockService = {
   },
 
   sendMessage: async (msgData: any) => {
-    const { error } = await supabase.from('chat_messages').insert([{ neighborhood_id: sanitizeUUID(msgData.neighborhoodId), user_id: msgData.userId, user_name: msgData.userName, user_role: msgData.userRole, text: msgData.text, image: msgData.image }]);
+    const { error } = await supabase.from('chat_messages').insert([{ neighborhood_id: sanitizeUUID(msgData.neighborhoodId), user_id: sanitizeUUID(msgData.userId), user_name: msgData.userName, user_role: msgData.userRole, text: msgData.text, image: msgData.image }]);
     if (error) {
         console.error("[MockService] Error in sendMessage:", error);
         throw error;
@@ -458,7 +465,7 @@ export const MockService = {
   },
 
   createServiceRequest: async (userId: string, userName: string, neighborhoodId: string, requestType: string) => {
-    const { error } = await supabase.from('service_requests').insert([{ user_id: userId, user_name: userName, neighborhood_id: sanitizeUUID(neighborhoodId), request_type: requestType, status: 'PENDING' }]);
+    const { error } = await supabase.from('service_requests').insert([{ user_id: sanitizeUUID(userId), user_name: userName, neighborhood_id: sanitizeUUID(neighborhoodId), request_type: requestType, status: 'PENDING' }]);
     
     if (!error) {
         const integrator = await MockService.getNeighborhoodIntegrator(neighborhoodId);
@@ -482,7 +489,7 @@ export const MockService = {
   },
 
   registerPatrol: async (userId: string, neighborhoodId: string, note: string, lat?: number, lng?: number, targetUserId?: string) => {
-    const { error } = await supabase.from('patrol_logs').insert([{ user_id: userId, neighborhood_id: sanitizeUUID(neighborhoodId), note, lat, lng, target_user_id: targetUserId }]);
+    const { error } = await supabase.from('patrol_logs').insert([{ user_id: sanitizeUUID(userId), neighborhood_id: sanitizeUUID(neighborhoodId), note, lat, lng, target_user_id: sanitizeUUID(targetUserId) || undefined }]);
     if (error) {
         console.error("[MockService] Error in registerPatrol:", error);
         throw error;
@@ -492,7 +499,14 @@ export const MockService = {
   getNotifications: async (userId?: string): Promise<Notification[]> => {
     try {
         let query = supabase.from('notifications').select('*').order('timestamp', { ascending: false });
-        if (userId) query = query.eq('user_id', userId);
+        if (userId) {
+            const safeUserId = sanitizeUUID(userId);
+            if (!safeUserId) {
+                // If ID is not a valid UUID on real Supabase, return empty array to prevent PostgreSQL error
+                return [];
+            }
+            query = query.eq('user_id', safeUserId);
+        }
         const { data, error } = await query;
         if (error) throw error;
         return (data || []).map(n => ({ id: n.id, userId: n.user_id, type: n.type as any, title: n.title, message: n.message, data: n.data, fromUserName: n.from_user_name, timestamp: new Date(n.timestamp), read: n.read }));
@@ -548,7 +562,7 @@ export const MockService = {
     const { error } = await supabase
         .from('support_tickets')
         .insert([{ 
-            user_id: userId, 
+            user_id: sanitizeUUID(userId), 
             user_name: userName, 
             message, 
             neighborhood_id: sanitizeUUID(neighborhoodId),
@@ -606,7 +620,7 @@ export const MockService = {
     const { error } = await supabase
         .from('payments')
         .insert([{ 
-            user_id: userId, 
+            user_id: sanitizeUUID(userId), 
             amount, 
             due_date: dueDate,
             reference_month: referenceMonth,

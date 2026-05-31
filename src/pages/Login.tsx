@@ -45,12 +45,14 @@ const Login: React.FC = () => {
     
     try {
       let fullProfile: any = null;
-      if (!isRealSupabase) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(matchedBiometrics.userId);
+
+      if (!isRealSupabase || !isUuid) {
         const demoAccounts: Record<string, any> = {
           'demo-admin-id': {
              id: 'demo-admin-id',
              email: 'admin@atalaia.com',
-             name: 'Administrador Demo',
+             name: 'Carlos Silva',
              role: UserRole.ADMIN,
              plan: 'PREMIUM',
              approved: true
@@ -58,7 +60,7 @@ const Login: React.FC = () => {
           'demo-user-id': {
              id: 'demo-user-id',
              email: 'morador@atalaia.com',
-             name: 'Morador Demo',
+             name: 'Mariana Costa',
              role: UserRole.RESIDENT,
              plan: 'FREE',
              approved: true,
@@ -107,10 +109,12 @@ const Login: React.FC = () => {
          setSuccess('Acesso biométrico autorizado com sucesso!');
          // Sync isAuth and let the useEffect redirect automatically
       } else {
+         setSuccess('');
          setError('Não foi possível carregar as credenciais deste perfil facial.');
       }
     } catch (err: any) {
        console.error("[FaceLogin] Error during face matching profile loading:", err);
+       setSuccess('');
        setError(err.message || 'Falha ao processar login por biometria.');
     } finally {
        setLoading(false);
@@ -246,7 +250,7 @@ const Login: React.FC = () => {
                 </div>
                 {error.includes('fetch') && (
                     <div className="mt-2 p-2 bg-black/40 rounded text-xs text-amber-500 border border-amber-500/20">
-                        <strong>Dica:</strong> Se você não configurou o Supabase, use o login de demonstração:<br/>
+                        <strong>Dica:</strong> Para logar utilizando perfis locais pré-configurados:<br/>
                         Email: <code className="bg-white/10 px-1 rounded text-white">admin@atalaia.com</code><br/>
                         Senha: <code className="bg-white/10 px-1 rounded text-white">admin123</code>
                     </div>
