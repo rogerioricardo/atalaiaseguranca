@@ -6,11 +6,16 @@ export const PaymentService = {
    */
   createPreference: async (planId: string, email: string, name: string, phone: string) => {
     try {
+        // Determinar dinamicamente o redirecionamento com base no domínio de execução do front-end
+        const currentOrigin = window.location.origin + window.location.pathname;
+        const cleanOrigin = currentOrigin.endsWith('/') ? currentOrigin.slice(0, -1) : currentOrigin;
+
         // Chamada à Edge Function que interage com a API do Mercado Pago
         const { data, error } = await supabase.functions.invoke('create-preference', {
             body: { 
                 planId, 
                 payer: { email, name, phone },
+                redirectUrl: cleanOrigin,
                 // Adicionalmente podemos passar metadados
                 metadata: {
                     source: 'web-app',

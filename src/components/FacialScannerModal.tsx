@@ -8,6 +8,7 @@ interface FacialScannerProps {
   onClose: () => void;
   mode: 'enroll' | 'login';
   userId?: string; // and/or email, useful for registering who to save to
+  typedEmail?: string;
   onSuccess: (matchedUser?: any) => void;
 }
 
@@ -16,6 +17,7 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
   onClose,
   mode,
   userId,
+  typedEmail,
   onSuccess
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -30,6 +32,7 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [activeModel, setActiveModel] = useState<any>(null);
   const [scannedProfile, setScannedProfile] = useState<any>(null);
+  const [showUserSelector, setShowUserSelector] = useState(false);
   
   // List of all registered biometric descriptors for real-time login matching
   const [enrolledList, setEnrolledList] = useState<any[]>([]);
@@ -59,6 +62,7 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
     setErrorText(null);
     setCaptureProgress(0);
     setScannedProfile(null);
+    setShowUserSelector(false);
     enrollmentDescriptorsRef.current = [];
 
     const initialize = async () => {
@@ -404,17 +408,27 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
     ctx.fillText(name.toUpperCase(), start[0] + boxWidth / 2, start[1] - 6);
   };
 
+  const handleSelectUser = (profile: any) => {
+    stopResources();
+    setLoading(true);
+    setStatusMessage(`Assinatura confirmada para: ${profile.name}`);
+    setTimeout(() => {
+      onSuccess(profile);
+      onClose();
+    }, 1200);
+  };
+
   /**
    * Action Simulation Endpoint
    * Crucial helper allowing direct offline verification and fast diagnostics in standard browser iframes!
    */
-  const handleSimulationTest = () => {
-    stopResources();
-    setLoading(true);
-    setStatusMessage('Validando assinatura biométrica local...');
+  const handleSimulationTest = async () => {
+    if (mode === 'enroll') {
+      stopResources();
+      setLoading(true);
+      setStatusMessage('Validando assinatura biométrica local...');
 
-    setTimeout(async () => {
-      if (mode === 'enroll') {
+      setTimeout(async () => {
         const dummyDescriptor = Array.from({ length: 15 }, () => 0.4 + Math.random() * 1.8);
         const dummyThumbnail = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 100 100"><circle cx="50" cy="55" r="30" fill="%231e1e1e" stroke="%233b82f6" stroke-width="2"/><circle cx="40" cy="45" r="4" fill="%233b82f6"/><circle cx="60" cy="45" r="4" fill="%233b82f6"/><path d="M 40 70 Q 50 60 60 70" stroke="%233b82f6" stroke-width="2" fill="none"/></svg>`;
         
@@ -429,33 +443,39 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
             }, 1000);
           }
         }
-      } else {
-        // Log in
-        const list = await FacialBiometricService.getAllBiometrics();
-        if (list.length > 0) {
-          // Match to the very first registered user configuration
-          const closest = list[0];
-          setStatusMessage(`Biometria identificada para: ${closest.name}`);
-          setTimeout(() => {
-            onSuccess(closest);
-            onClose();
-          }, 1200);
-        } else {
-          // If no enrollment exists under localStorage, auto-enlist Mariana Costa as match
-          const fallbackMatched = {
-            userId: 'demo-user-id',
-            email: 'morador@atalaia.com',
-            name: 'Mariana Costa',
-            confidence: 98
-          };
-          setStatusMessage(`Biometria identificada para: Mariana Costa`);
-          setTimeout(() => {
-             onSuccess(fallbackMatched);
-             onClose();
-          }, 1200);
+      }, 1200);
+    } else {
+      // Log in
+      setStatusMessage('Carregando perfis biométricos para verificação...');
+      const list = enrolledList.length > 0 ? enrolledList : await FacialBiometricService.getAllBiometrics();
+
+      // Check if we have a typed email and can auto-match
+      if (typedEmail) {
+        const cleanEmail = typedEmail.trim().toLowerCase();
+        const matched = list.find(item => item.email.trim().toLowerCase() === cleanEmail);
+        if (matched) {
+          handleSelectUser(matched);
+          return;
         }
       }
-    }, 1500);
+
+      // If we couldn't auto-match, show manual selector
+      if (list.length > 0) {
+        stopResources();
+        setLoading(false);
+        setShowUserSelector(true);
+        setStatusMessage('Escolha o seu perfil cadastrado na lista.');
+      } else {
+        // Fallback matched
+        const fallbackMatched = {
+          userId: 'demo-user-id',
+          email: 'morador@atalaia.com',
+          name: 'Mariana Costa',
+          confidence: 98
+        };
+        handleSelectUser(fallbackMatched);
+      }
+    }
   };
 
   if (!isOpen) return null;
@@ -499,58 +519,90 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
         {/* Video feed monitor workspace */}
         <div className="relative w-full aspect-[4/3] max-h-[340px] bg-black rounded-2xl overflow-hidden border border-zinc-800/60 shadow-[inset_0_0_40px_rgba(0,0,0,0.9)] flex items-center justify-center mb-5">
           
-          {loading && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center space-y-4 bg-zinc-950/80">
-              <RefreshCw className="text-zinc-500 animate-spin" size={28} />
-              <p className="text-xs text-zinc-400 font-mono">{statusMessage}</p>
-            </div>
-          )}
-
-          {errorText && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 space-y-4 bg-zinc-950 text-center">
-              <div className="p-3 bg-red-500/10 rounded-full border border-red-500/20 text-red-500">
-                <AlertTriangle size={28} />
+          {showUserSelector ? (
+            <div className="absolute inset-0 z-30 flex flex-col justify-start text-left bg-zinc-950 p-6 overflow-y-auto">
+              <div className="border-b border-zinc-800 pb-2.5 mb-3">
+                <h4 className="text-xs font-bold text-amber-500 font-mono uppercase tracking-wider">Simulação / Acesso Sem Câmera</h4>
+                <p className="text-[10px] text-zinc-400 mt-0.5">Selecione o seu perfil biométrico cadastrado abaixo para validar o acesso rápido:</p>
               </div>
-              <h4 className="text-sm font-bold text-white uppercase">Recurso de Câmera Bloqueado</h4>
-              <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
-                A câmera foi recusada ou não está acessível no seu navegador. Ative as permissões ou continue via verificação rápida de acesso.
-              </p>
-              
-              <button
-                type="button"
-                onClick={handleSimulationTest}
-                className="mt-2 px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all"
-              >
-                Prosseguir via Acesso Local
-              </button>
-            </div>
-          )}
-
-          {/* Core Webcam stream node */}
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            playsInline
-            muted
-          />
-
-          {/* Dynamic tracking overlays rendering plane */}
-          <canvas
-            ref={canvasRef}
-            className="absolute inset-0 w-full h-full pointer-events-none object-cover"
-          />
-
-          {/* Multi-scan progress bar in enrollment */}
-          {mode === 'enroll' && !loading && !errorText && (
-            <div className="absolute bottom-4 inset-x-4 bg-black/60 border border-white/5 p-2 rounded-xl backdrop-blur-md flex items-center space-x-3">
-              <span className="text-[9px] font-mono font-bold text-zinc-400 text-right w-12">{captureProgress}%</span>
-              <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-blue-500 transition-all duration-200"
-                  style={{ width: `${captureProgress}%` }}
-                />
+              <div className="flex-1 overflow-y-auto space-y-2 max-h-[200px] pr-1">
+                {enrolledList.map((item) => (
+                  <button
+                    key={item.userId}
+                    type="button"
+                    onClick={() => handleSelectUser(item)}
+                    className="w-full p-2.5 bg-zinc-900/40 hover:bg-zinc-900 border border-zinc-850 hover:border-amber-500/30 rounded-xl transition-all flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 text-xs font-bold font-mono">
+                        {item.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <h5 className="text-xs font-bold text-white truncate font-sans">{item.name}</h5>
+                        <p className="text-[9px] text-zinc-300 truncate font-mono">{item.email}</p>
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-mono text-zinc-500 group-hover:text-amber-500 transition-colors shrink-0">Bypass &rarr;</span>
+                  </button>
+                ))}
               </div>
             </div>
+          ) : (
+            <>
+              {loading && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center space-y-4 bg-zinc-950/80">
+                  <RefreshCw className="text-zinc-500 animate-spin" size={28} />
+                  <p className="text-xs text-zinc-400 font-mono">{statusMessage}</p>
+                </div>
+              )}
+
+              {errorText && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 space-y-4 bg-zinc-950 text-center">
+                  <div className="p-3 bg-red-500/10 rounded-full border border-red-500/20 text-red-500">
+                    <AlertTriangle size={28} />
+                  </div>
+                  <h4 className="text-sm font-bold text-white uppercase">Recurso de Câmera Bloqueado</h4>
+                  <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
+                    A câmera foi recusada ou não está acessível no seu navegador. Ative as permissões ou continue via verificação rápida de acesso.
+                  </p>
+                  
+                  <button
+                    type="button"
+                    onClick={handleSimulationTest}
+                    className="mt-2 px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all"
+                  >
+                    Prosseguir via Acesso Local
+                  </button>
+                </div>
+              )}
+
+              {/* Core Webcam stream node */}
+              <video
+                ref={videoRef}
+                className="w-full h-full object-cover"
+                playsInline
+                muted
+              />
+
+              {/* Dynamic tracking overlays rendering plane */}
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 w-full h-full pointer-events-none object-cover"
+              />
+
+              {/* Multi-scan progress bar in enrollment */}
+              {mode === 'enroll' && !loading && !errorText && (
+                <div className="absolute bottom-4 inset-x-4 bg-black/60 border border-white/5 p-2 rounded-xl backdrop-blur-md flex items-center space-x-3">
+                  <span className="text-[9px] font-mono font-bold text-zinc-400 text-right w-12">{captureProgress}%</span>
+                  <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 transition-all duration-200"
+                      style={{ width: `${captureProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 

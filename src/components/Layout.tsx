@@ -17,7 +17,9 @@ import {
   MessageCircle,
   MessageSquare,
   FileText,
-  DollarSign
+  DollarSign,
+  Smartphone,
+  Download
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -90,6 +92,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
+          {/* BOTÃO DE DESTAQUE DO APLICATIVO */}
+          <div className="mb-6 px-2">
+            <a 
+              href="/atalaia-seguranca.apk" 
+              download="atalaia-seguranca.apk"
+              className="flex items-center justify-between gap-2.5 w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-atalaia-neon/15 to-atalaia-neon/5 hover:from-atalaia-neon/30 hover:to-blue-500/10 border border-atalaia-neon/30 hover:border-atalaia-neon text-white font-bold text-sm tracking-wide shadow-[0_0_15px_rgba(0,255,102,0.05)] hover:shadow-[0_0_25px_rgba(0,255,102,0.2)] transition-all duration-300 transform hover:-translate-y-0.5 group"
+            >
+              <div className="flex items-center gap-2">
+                <Smartphone size={16} className="text-atalaia-neon animate-bounce" />
+                <span className="font-sans font-bold">Instalar Aplicativo</span>
+              </div>
+              <Download size={14} className="text-zinc-500 group-hover:text-atalaia-neon transition-colors group-hover:translate-y-0.5" />
+            </a>
+          </div>
+
           <div className="mb-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
             Principal
           </div>
@@ -172,9 +189,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
              <ShieldCheck className="text-atalaia-neon" size={24} />
              <span className="font-bold">ATALAIA</span>
           </Link>
-          <button onClick={() => setSidebarOpen(true)} className="p-2 text-gray-400 hover:text-white">
-            {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+          <div className="flex items-center gap-2">
+            <a 
+              href="/atalaia-seguranca.apk" 
+              download="atalaia-seguranca.apk"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-atalaia-neon/10 border border-atalaia-neon/30 text-atalaia-neon text-xs font-bold transition-all shadow-[0_0_10px_rgba(0,255,102,0.1)] active:scale-95"
+              title="Baixar APK"
+            >
+              <Smartphone size={13} className="animate-pulse" />
+              <span>Baixar App</span>
+            </a>
+            <button onClick={() => setSidebarOpen(true)} className="p-2 text-gray-400 hover:text-white">
+              {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
         </header>
 
         {/* Content Body */}

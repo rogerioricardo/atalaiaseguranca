@@ -31,7 +31,10 @@ const IntegratorUsers: React.FC = () => {
     setLoading(true);
     try {
         const hoods = await MockService.getNeighborhoods(true);
-        setNeighborhoods(hoods);
+        const filteredHoods = user?.role === UserRole.ADMIN 
+          ? hoods 
+          : hoods.filter(h => h.id === user?.neighborhoodId);
+        setNeighborhoods(filteredHoods);
         
         // Se Admin, traz tudo. Se Integrador, traz só o bairro dele.
         const targetHoodId = user?.role === UserRole.INTEGRATOR ? user.neighborhoodId : undefined;
@@ -143,9 +146,9 @@ const IntegratorUsers: React.FC = () => {
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={() => { setEditingUser(resident); setEditName(resident.name); setEditPhone(resident.phone || ''); setEditHoodId(resident.neighborhoodId || ''); setEditPlan(resident.plan); setEditRole(resident.role); setIsEditModalOpen(true); }} className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg"><Edit2 size={18}/></button>
+                                <button onClick={() => { setEditingUser(resident); setEditName(resident.name); setEditPhone(resident.phone || ''); setEditHoodId(resident.neighborhoodId || ''); setEditPlan(resident.plan); setEditRole(resident.role); setIsEditModalOpen(true); }} className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg"><Edit2 size={18} className="pointer-events-none" /></button>
                                 {user?.id !== resident.id && (
-                                    <button onClick={async () => { if(confirm('Excluir usuário do banco?')) { await MockService.deleteUser(resident.id); fetchData(); } }} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={18}/></button>
+                                    <button onClick={async () => { if(confirm('Excluir usuário do banco?')) { await MockService.deleteUser(resident.id); fetchData(); } }} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={18} className="pointer-events-none" /></button>
                                 )}
                             </div>
                         </div>

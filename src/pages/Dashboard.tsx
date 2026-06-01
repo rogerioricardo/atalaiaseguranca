@@ -643,7 +643,7 @@ const Dashboard: React.FC = () => {
                                     className="p-1 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
                                     title="Excluir notificação"
                                 >
-                                    <Trash2 size={16} />
+                                    <Trash2 size={16} className="pointer-events-none" />
                                 </button>
                               </div>
                           </div>

@@ -135,7 +135,17 @@ const Landing: React.FC = () => {
               </button>
             </div>
             
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-3">
+               <a 
+                 href="/atalaia-seguranca.apk" 
+                 download="atalaia-seguranca.apk"
+                 className="flex items-center gap-2 bg-gradient-to-r from-atalaia-neon/20 to-atalaia-neon hover:from-atalaia-neon hover:to-emerald-400 text-white hover:text-black font-extrabold text-sm px-4.5 py-2 border border-atalaia-neon/50 hover:border-atalaia-neon rounded-full transition-all duration-300 shadow-[0_0_15px_rgba(0,255,102,0.15)] hover:shadow-[0_0_25px_rgba(0,255,102,0.4)] transform hover:-translate-y-0.5 group"
+                 title="Baixar o Aplicativo APK"
+               >
+                 <Smartphone size={16} className="text-atalaia-neon group-hover:text-black animate-pulse" />
+                 <span>Aplicativo</span>
+                 <Download size={14} className="text-zinc-400 group-hover:text-black group-hover:translate-y-0.5 transition-transform" />
+               </a>
                <Button onClick={handleLogin} variant="primary" className="px-6 py-2 text-sm font-bold">
                  Login
                </Button>
@@ -161,7 +171,20 @@ const Landing: React.FC = () => {
              <button onClick={() => { setPlateModalOpen(true); setMobileMenuOpen(false); }} className="text-left text-base font-medium text-atalaia-neon py-2 flex items-center gap-2">
                  <Printer size={18} /> Imprimir Placa de Segurança
              </button>
-             <hr className="border-white/5 my-2" />
+
+             {/* BOTÃO DE DESTAQUE MOBILE DO APLICATIVO */}
+             <a 
+               href="/atalaia-seguranca.apk" 
+               download="atalaia-seguranca.apk"
+               onClick={() => setMobileMenuOpen(false)}
+               className="flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-xl bg-gradient-to-r from-atalaia-neon/20 to-atalaia-neon text-white font-extrabold text-sm border border-atalaia-neon/40 shadow-[0_0_15px_rgba(0,255,102,0.15)] transition-all"
+             >
+               <Smartphone size={18} className="text-atalaia-neon animate-pulse" />
+               <span>Baixar Aplicativo (APK)</span>
+               <Download size={14} className="text-white/80" />
+             </a>
+
+             <hr className="border-white/5 my-1" />
              <Button onClick={handleLogin} variant="primary" className="w-full justify-center py-3 font-bold">
                  Login
              </Button>
@@ -423,7 +446,7 @@ const Landing: React.FC = () => {
           <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-medium opacity-50">
             <p>© 2025 ALIEN MONITORAMENTO ELETRONICO LTDA. TODOS OS DIREITOS RESERVADOS.</p>
             <div className="flex gap-8">
-              <span>CNPJ: 00.000.000/0001-00</span>
+              <span>CNPJ: 51.482.661/0001-31</span>
               <span>BRASIL</span>
             </div>
           </div>

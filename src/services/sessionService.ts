@@ -287,16 +287,16 @@ export const SessionService = {
    */
   checkSessionsByEmail: async (email: string): Promise<UserSession[]> => {
     const cleanEmail = email.trim().toLowerCase();
+    const demoUsers: Record<string, string> = {
+      'admin@atalaia.com': 'demo-admin-id',
+      'morador@atalaia.com': 'demo-user-id',
+      'integrador@atalaia.com': 'demo-integrator-id',
+      'scr@atalaia.com': 'demo-scr-id'
+    };
+    const isDemoEmail = !!demoUsers[cleanEmail];
     
-    if (!isRealSupabase) {
+    if (!isRealSupabase || isDemoEmail) {
       // Simulate by matching demo credentials
-      const demoUsers: Record<string, string> = {
-        'admin@atalaia.com': 'demo-admin-id',
-        'morador@atalaia.com': 'demo-user-id',
-        'integrador@atalaia.com': 'demo-integrator-id',
-        'scr@atalaia.com': 'demo-scr-id'
-      };
-      
       const userId = demoUsers[cleanEmail];
       if (!userId) return [];
       

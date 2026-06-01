@@ -200,11 +200,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  // Synchronize the currently active user ID to localStorage for cross-tab session guarding
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem('atalaia_active_user_id', user.id);
+    } else {
+      localStorage.removeItem('atalaia_active_user_id');
+    }
+  }, [user?.id]);
+
+  // Instantly detect if another user account logs in inside another tab of the same browser
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const handleStorageChange = async (e: StorageEvent) => {
+      if (e.key === 'atalaia_active_user_id') {
+        const newValue = e.newValue;
+        if (newValue && newValue !== user.id) {
+          console.warn("[Auth] Outro usuário fez login neste navegador!");
+          setSessionTerminatedReason("Sua sessão foi encerrada de maneira automática porque outro usuário acessou esta conta neste navegador.");
+          await logoutNoCheck();
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [user?.id]);
+
   // Periodic session validation check (Heartbeat/Activity middle-man check to log out other simultaneous logged in accounts)
   useEffect(() => {
     if (!user?.id) return;
 
     const intervalId = setInterval(async () => {
+      // Check cross-tab session collision on the same browser first
+      if (typeof window !== 'undefined') {
+        const activeUserId = localStorage.getItem('atalaia_active_user_id');
+        if (activeUserId && activeUserId !== user.id) {
+          console.warn("[Auth] Outro login detectado localmente!");
+          setSessionTerminatedReason("Sua sessão foi encerrada de maneira automática porque outro usuário acessou esta conta neste navegador.");
+          await logoutNoCheck();
+          return;
+        }
+      }
+
       const isValid = await SessionService.checkSessionValidity(user.id);
       if (!isValid) {
         console.warn("[Auth] Sessão invalidada por outro dispositivo!");

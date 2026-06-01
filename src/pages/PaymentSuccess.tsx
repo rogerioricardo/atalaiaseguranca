@@ -5,6 +5,7 @@ import { useAuth } from '@/auth/context';
 import { MockService } from '../services/mockService';
 import { Card, Button } from '../components/UI';
 import { CheckCircle, ShieldCheck, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 
 const PaymentSuccess: React.FC = () => {
   const { user } = useAuth();
@@ -12,19 +13,48 @@ const PaymentSuccess: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [success, setSuccess] = useState(false);
-  const planId = searchParams.get('plan');
+  const rawPlanId = searchParams.get('plan');
+  const planId = (rawPlanId || 'FAMILY').toUpperCase();
 
   useEffect(() => {
       const processPayment = async () => {
-          if (!user || !planId) {
+          if (!user) {
               setLoading(false);
               return;
           }
 
           try {
-              // Em produção, isso seria verificado no backend via Webhook do Mercado Pago
-              // Aqui, confiamos no retorno para atualizar o banco
+              // 1. Atualizar o plano do usuário na tabela de profiles
               await MockService.updateUserPlan(user.id, planId);
+
+              // 2. Determinar o preço do plano contratado
+              const amount = planId === 'PREMIUM' ? 79.90 : 39.90;
+              const payDate = new Date();
+              const refMonth = `${(payDate.getMonth() + 1).toString().padStart(2, '0')}/${payDate.getFullYear()}`;
+
+              // 3. Registrar o pagamento na tabela 'payments' do Supabase para atualizar o Painel Financeiro
+              // Evita duplicatas se o usuário recarregar a tela de sucesso
+              const { data: existingPayments } = await supabase
+                  .from('payments')
+                  .select('id')
+                  .eq('user_id', user.id)
+                  .eq('reference_month', refMonth)
+                  .eq('status', 'PAID')
+                  .limit(1);
+
+              if (!existingPayments || existingPayments.length === 0) {
+                  await supabase
+                      .from('payments')
+                      .insert([{
+                          user_id: user.id,
+                          amount,
+                          due_date: payDate.toISOString().split('T')[0],
+                          payment_date: payDate.toISOString(),
+                          status: 'PAID',
+                          reference_month: refMonth
+                      }]);
+              }
+
               setSuccess(true);
               
               // Recarregar a página após 3 segundos para atualizar o AuthContext

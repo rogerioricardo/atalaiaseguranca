@@ -261,7 +261,7 @@ const Cameras: React.FC = () => {
           setNeighborhoods(hoods);
           
           if (hoods.length > 0) {
-              if (user?.role === UserRole.INTEGRATOR && user?.neighborhoodId) {
+              if (user?.role !== UserRole.ADMIN && user?.neighborhoodId) {
                   setSelectedNeighborhoodId(user.neighborhoodId);
                   setSelectedManageHoodId(user.neighborhoodId);
               } else {
@@ -296,7 +296,8 @@ const Cameras: React.FC = () => {
 
   const filteredCameras = cameras.filter(cam => {
     const matchesSearch = cam.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesNeighborhood = selectedNeighborhoodId ? cam.neighborhoodId === selectedNeighborhoodId : true;
+    const userNeighborhoodId = user?.role === UserRole.ADMIN ? selectedNeighborhoodId : user?.neighborhoodId;
+    const matchesNeighborhood = userNeighborhoodId ? cam.neighborhoodId === userNeighborhoodId : true;
     return matchesSearch && matchesNeighborhood;
   });
 
@@ -661,7 +662,7 @@ const Cameras: React.FC = () => {
                                                     className="p-1.5 hover:bg-atalaia-neon/20 rounded text-atalaia-neon transition-colors"
                                                     title="Editar"
                                                 >
-                                                    <Edit2 size={14} />
+                                                    <Edit2 size={14} className="pointer-events-none" />
                                                 </button>
                                                 <button 
                                                     type="button"
@@ -675,7 +676,7 @@ const Cameras: React.FC = () => {
                                                     className="p-1.5 hover:bg-red-500/20 rounded text-red-400 transition-colors"
                                                     title="Excluir"
                                                 >
-                                                    <Trash2 size={14} />
+                                                    <Trash2 size={14} className="pointer-events-none" />
                                                 </button>
                                             </div>
                                         </div>

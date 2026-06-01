@@ -206,8 +206,8 @@ const Alerts: React.FC = () => {
                                             {isDirty && <Badge color="yellow">ALTERADO</Badge>}
                                             {isAdmin && (
                                                 <div className="flex gap-1">
-                                                    <button onClick={() => setActiveEditKey(isEditing ? null : key)} className={`p-1.5 rounded transition-colors ${isEditing ? 'text-atalaia-neon bg-atalaia-neon/10' : 'text-gray-500 hover:text-white'}`}><Edit2 size={16}/></button>
-                                                    <button onClick={async () => { if(confirm('Excluir?')) { await MockService.deleteSetting(key); loadTemplates(); } }} className="p-1.5 text-gray-500 hover:text-red-500 rounded transition-colors"><Trash2 size={16}/></button>
+                                                    <button onClick={() => setActiveEditKey(isEditing ? null : key)} className={`p-1.5 rounded transition-colors ${isEditing ? 'text-atalaia-neon bg-atalaia-neon/10' : 'text-gray-500 hover:text-white'}`}><Edit2 size={16} className="pointer-events-none" /></button>
+                                                    <button onClick={async () => { if(confirm('Excluir?')) { await MockService.deleteSetting(key); loadTemplates(); } }} className="p-1.5 text-gray-500 hover:text-red-500 rounded transition-colors"><Trash2 size={16} className="pointer-events-none" /></button>
                                                 </div>
                                             )}
                                         </div>
@@ -271,9 +271,9 @@ const Alerts: React.FC = () => {
                         <div className="p-3 rounded-full bg-orange-500/10 text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-colors"><Flame size={28} /></div>
                         <div><span className="block font-bold text-white uppercase tracking-wide">Bombeiros</span><span className="text-gray-400 font-mono text-2xl group-hover:text-white transition-colors">193</span></div>
                     </a>
-                    <a href="tel:08009999999" className="flex items-center gap-4 p-5 bg-atalaia-neon/5 rounded-xl hover:bg-atalaia-neon/10 transition-colors border border-atalaia-neon/30 group">
+                    <a href="tel:48992067665" className="flex items-center gap-4 p-5 bg-atalaia-neon/5 rounded-xl hover:bg-atalaia-neon/10 transition-colors border border-atalaia-neon/30 group">
                         <div className="p-3 rounded-full bg-atalaia-neon/20 text-atalaia-neon group-hover:bg-atalaia-neon group-hover:text-black transition-colors"><Headset size={28} /></div>
-                        <div><span className="block font-bold text-white uppercase tracking-wide">Central 24h</span><span className="text-atalaia-neon font-mono text-2xl">0800 999 9999</span></div>
+                        <div><span className="block font-bold text-white uppercase tracking-wide">Central 24h</span><span className="text-atalaia-neon font-mono text-2xl">(48) 9 9206-7665</span></div>
                     </a>
                 </div>
             </Card>

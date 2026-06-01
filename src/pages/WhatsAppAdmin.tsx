@@ -265,10 +265,10 @@ const WhatsAppAdmin: React.FC = () => {
                                                         className={`p-2 rounded-lg transition-colors ${isEditing ? 'text-atalaia-neon bg-atalaia-neon/10' : 'text-blue-500 hover:bg-blue-500/10'}`} 
                                                         title="Editar"
                                                     >
-                                                        <Edit2 size={18}/>
+                                                        <Edit2 size={18} className="pointer-events-none" />
                                                     </button>
-                                                    <button onClick={() => handleSaveTemplate(key, val)} disabled={!isDirty || isSaving} className={`p-2 rounded-lg ${isDirty ? 'text-atalaia-neon' : 'text-gray-700'}`}><Save size={18}/></button>
-                                                    <button onClick={async () => { if(confirm('Remover do banco?')) { await MockService.deleteSetting(key); loadData(); } }} className="p-2 text-red-700"><Trash2 size={18}/></button>
+                                                    <button onClick={() => handleSaveTemplate(key, val)} disabled={!isDirty || isSaving} className={`p-2 rounded-lg ${isDirty ? 'text-atalaia-neon' : 'text-gray-700'}`}><Save size={18} className="pointer-events-none" /></button>
+                                                    <button onClick={async () => { if(confirm('Remover do banco?')) { await MockService.deleteSetting(key); loadData(); } }} className="p-2 text-red-700"><Trash2 size={18} className="pointer-events-none" /></button>
                                                 </div>
                                             </div>
                                         </div>

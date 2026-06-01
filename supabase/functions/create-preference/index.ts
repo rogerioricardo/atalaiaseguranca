@@ -15,13 +15,41 @@ serve(async (req) => {
   }
 
   try {
-    const MERCADO_PAGO_ACCESS_TOKEN = Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN");
+    let MERCADO_PAGO_ACCESS_TOKEN = Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN");
 
+    // Tentar carregar o token dinamicamente a partir das configurações do painel se o Env Secret não estiver setado
     if (!MERCADO_PAGO_ACCESS_TOKEN) {
-      console.warn("MERCADO_PAGO_ACCESS_TOKEN não configurado nos Secrets do Supabase. Usando modo de simulação.");
+      console.log("[create-preference] BUSCANDO Token do Mercado Pago em system_settings...");
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL");
+        const supabaseAnonKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY");
+        if (supabaseUrl && supabaseAnonKey) {
+          const fetchUrl = `${supabaseUrl}/rest/v1/system_settings?key=eq.mercado_pago_access_token&select=value`;
+          const dbResponse = await fetch(fetchUrl, {
+            headers: {
+              "apikey": supabaseAnonKey,
+              "Authorization": `Bearer ${supabaseAnonKey}`,
+              "Content-Type": "application/json"
+            }
+          });
+          if (dbResponse.ok) {
+            const rows = await dbResponse.json();
+            if (rows && rows.length > 0 && rows[0].value) {
+              MERCADO_PAGO_ACCESS_TOKEN = rows[0].value.trim();
+              console.log("[create-preference] Token do Mercado Pago carregado com sucesso do Banco de Dados.");
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.error("[create-preference] Erro ao buscar token no banco:", dbErr);
+      }
     }
 
-    const { planId, payer, metadata } = await req.json();
+    if (!MERCADO_PAGO_ACCESS_TOKEN) {
+      console.warn("MERCADO_PAGO_ACCESS_TOKEN não configurado nos Secrets do Supabase e nem no sistema. Usando modo de simulação.");
+    }
+
+    const { planId, payer, metadata, redirectUrl } = await req.json();
 
     if (!planId) {
       return new Response(JSON.stringify({ error: "Parâmetro planId é obrigatório" }), {
@@ -47,12 +75,17 @@ serve(async (req) => {
 
     // Se não houver token do Mercado Pago, geramos um fallback imediato
     if (!MERCADO_PAGO_ACCESS_TOKEN) {
-      const simulatedUrl = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=simulated_${planId}_${Date.now()}`;
+      const baseRedirect = redirectUrl || "https://atalaia-app.pages.dev";
+      const simulatedUrl = `${baseRedirect}/#/payment-success?plan=${planId}&simulated=true`;
+      console.warn("[create-preference] Sem credencial MP: Redirecionando para sucesso simulado.", simulatedUrl);
       return new Response(JSON.stringify({ init_point: simulatedUrl, info: "Simulado localmente por falta de credenciais." }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       });
     }
+
+    // Determinar URL base de retorno de forma dinâmica
+    const baseRedirect = redirectUrl || "https://atalaia-app.pages.dev";
 
     // Corpo de requisição da preferência do Mercado Pago v1 API
     const mpPayload = {
@@ -71,9 +104,9 @@ serve(async (req) => {
       },
       back_urls: {
         // Redireciona de volta para a rota de sucesso do applet
-        success: `https://atalaia-app.pages.dev/#/payment-success?plan=${planId}`,
-        failure: `https://atalaia-app.pages.dev/#/dashboard`,
-        pending: `https://atalaia-app.pages.dev/#/dashboard`
+        success: `${baseRedirect}/#/payment-success?plan=${planId}`,
+        failure: `${baseRedirect}/#/dashboard`,
+        pending: `${baseRedirect}/#/dashboard`
       },
       auto_return: "approved",
       metadata: {

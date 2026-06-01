@@ -217,11 +217,17 @@ const MapPage: React.FC = () => {
       setUsers(usersData);
       
       const hoodsData = await MockService.getNeighborhoods();
-      setNeighborhoods(hoodsData);
+      const filteredHoods = user?.role === UserRole.ADMIN 
+        ? hoodsData 
+        : hoodsData.filter(h => h.id === user?.neighborhoodId);
+      setNeighborhoods(filteredHoods);
 
-      // Fetch All System Cameras (Nova Configuração)
+      // Fetch All System Cameras
       const allCameras = await MockService.getAllSystemCameras();
-      setCameras(allCameras);
+      const filteredCameras = user?.role === UserRole.ADMIN
+        ? allCameras
+        : allCameras.filter(c => c.neighborhoodId === user?.neighborhoodId);
+      setCameras(filteredCameras);
   }, [user]);
 
   useEffect(() => {

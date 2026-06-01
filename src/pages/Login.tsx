@@ -442,6 +442,7 @@ const Login: React.FC = () => {
           isOpen={showFaceModal}
           onClose={() => setShowFaceModal(false)}
           mode="login"
+          typedEmail={email}
           onSuccess={handleFaceLoginSuccess}
       />
     </div>

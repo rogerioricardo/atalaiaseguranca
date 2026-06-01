@@ -175,6 +175,7 @@ const AppRoutes = () => {
       <Route path="/admin/bairros" element={<ProtectedRoute><Cameras /></ProtectedRoute>} />
       
       {/* Payment Routes */}
+      <Route path="/payment-success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
       <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
       
       <Route path="*" element={<Navigate to="/" replace />} />
