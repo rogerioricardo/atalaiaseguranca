@@ -78,10 +78,24 @@ const Profile: React.FC = () => {
 
   const handleEnrollSuccess = async (data: any) => {
     console.log("[Profile] Cadastro facial realizado com sucesso:", data);
-    setUserBiometrics(data);
+    // Set immediately in local state for instantaneous feedback and visible image
+    if (data) {
+      setUserBiometrics(data);
+    }
+    
+    if (user?.id) {
+      try {
+        const bio = await FacialBiometricService.getBiometricsForUser(user.id);
+        if (bio) {
+          setUserBiometrics(bio);
+        }
+      } catch (e) {
+        console.error("Erro ao sincronizar biometria recém-cadastrada da nuvem:", e);
+      }
+    }
     setShowEnrollModal(false);
     setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+    setTimeout(() => setShowSuccess(false), 4000);
   };
 
   useEffect(() => {

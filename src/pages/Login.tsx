@@ -176,10 +176,14 @@ const Login: React.FC = () => {
           setSuccess('Cadastro realizado com sucesso!');
           setTimeout(() => navigate('/welcome'), 1000);
       } else {
-          // Pre-emptively check for active concurrent sessions
+          // Pre-emptively check for active concurrent sessions with a safety timeout
           if (!actualBypass) {
               try {
-                  const existingSess = await SessionService.checkSessionsByEmail(email);
+                  const checkPromise = SessionService.checkSessionsByEmail(email);
+                  const raceTimeout = new Promise<any[]>((_, reject) => 
+                      setTimeout(() => reject(new Error('timeout')), 3500)
+                  );
+                  const existingSess = await Promise.race([checkPromise, raceTimeout]);
                   if (existingSess && existingSess.length > 0) {
                       setActiveSessions(existingSess);
                       setShowActiveSessionModal(true);
@@ -187,7 +191,7 @@ const Login: React.FC = () => {
                       return; // interrupt the login to display confirmation prompt
                   }
               } catch (sessError) {
-                  console.warn("[Login] Could not pre-screen active sessions safely", sessError);
+                  console.warn("[Login] Could not pre-screen active sessions safely or timeout hit", sessError);
               }
           }
 

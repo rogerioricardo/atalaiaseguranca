@@ -55,7 +55,48 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ ifra
     window.open(url, `cam_${id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
   };
 
+  // Garante autoplay nos formatos de link padrão e oculta barra de controles (play/stop/progress)
+  let enhancedSrc = iframeCode.trim();
+  if (!enhancedSrc.startsWith('<')) {
+    try {
+      const url = new URL(enhancedSrc);
+      if (url.hostname.includes('youtube.com') || url.hostname.includes('youtu.be')) {
+        url.searchParams.set('autoplay', '1');
+        url.searchParams.set('mute', '1');
+        url.searchParams.set('muted', '1');
+        url.searchParams.set('playsinline', '1');
+        url.searchParams.set('loop', '1');
+        url.searchParams.set('controls', '0'); // Oculta botões de play/pause/progresso do YouTube
+        url.searchParams.set('showinfo', '0');
+        url.searchParams.set('rel', '0');
+        const videoId = url.pathname.split('/').pop();
+        if (videoId) {
+          url.searchParams.set('playlist', videoId);
+        }
+      } else {
+        url.searchParams.set('autoplay', '1');
+        url.searchParams.set('mute', '1');
+        url.searchParams.set('muted', '1');
+        url.searchParams.set('playsinline', '1');
+        url.searchParams.set('loop', '1');
+        url.searchParams.set('controls', '0'); // Desativa controles em outras plataformas (como Vimeo)
+        url.searchParams.set('background', '1'); // Oculta chrome de player em Vimeo
+      }
+      enhancedSrc = url.toString();
+    } catch (e) {
+      const separator = enhancedSrc.includes('?') ? '&' : '?';
+      enhancedSrc = `${enhancedSrc}${separator}autoplay=1&mute=1&muted=1&playsinline=1&loop=1&controls=0`;
+    }
+  }
+
   if (iframeCode.trim().startsWith('<') && !iframeCode.toLowerCase().includes('src="http://')) {
+    // Tenta injetar atributos de autoplay/muted/loop/playsinline diretamente e remove "controls" caso presente
+    let processedIframeCode = iframeCode;
+    processedIframeCode = processedIframeCode.replace(/<video([^>]*)>/gi, (match, attrs) => {
+      let cleanAttrs = attrs.replace(/\b(autoplay|muted|playsinline|loop|controls)\b/gi, '');
+      return `<video ${cleanAttrs} autoplay="true" muted="true" playsinline="true" loop="true">`;
+    });
+
     return (
       <div className="relative w-full h-full group/video-container">
         <iframe 
@@ -65,15 +106,71 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ ifra
                 <style>
                   body { margin: 0; padding: 0; background: black; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
                   video, iframe { width: 100%; height: 100%; object-fit: contain; border: none; }
+                  /* Css para forçar a ocultação de botões nativos de vídeo (play/stop/barra) */
+                  video::-webkit-media-controls { display: none !important; }
+                  video::-webkit-media-controls-panel { display: none !important; }
+                  video::-webkit-media-controls-play-button { display: none !important; }
+                  video::-webkit-media-controls-start-playback-button { display: none !important; }
                 </style>
               </head>
-              <body>${iframeCode}</body>
+              <body>
+                ${processedIframeCode}
+                <script>
+                  window.addEventListener('load', function() {
+                    function forcePlay() {
+                      var videos = document.querySelectorAll('video');
+                      videos.forEach(function(vid) {
+                        vid.muted = true;
+                        vid.playsInline = true;
+                        vid.loop = true;
+                        vid.controls = false; // Desativa controles via código
+                        vid.removeAttribute('controls');
+                        vid.setAttribute('autoplay', 'autoplay');
+                        vid.setAttribute('muted', 'muted');
+                        vid.setAttribute('playsinline', 'playsinline');
+                        vid.setAttribute('loop', 'loop');
+                        
+                        var p = vid.play();
+                        if (p !== undefined) {
+                          p.catch(function(e) {
+                            console.log('Autoplay deferred:', e);
+                          });
+                        }
+                      });
+
+                      var iframes = document.querySelectorAll('iframe');
+                      iframes.forEach(function(ifr) {
+                        try {
+                          var src = ifr.getAttribute('src') || '';
+                          if (src && !src.includes('autoplay=')) {
+                            var sep = src.includes('?') ? '&' : '?';
+                            ifr.setAttribute('src', src + sep + 'autoplay=1&mute=1&muted=1&playsinline=1&loop=1&controls=0');
+                          }
+                        } catch(err) {}
+                      });
+                    }
+
+                    forcePlay();
+                    setTimeout(forcePlay, 1000);
+                    setTimeout(forcePlay, 3000);
+
+                    var clickTrigger = function() {
+                      forcePlay();
+                      document.removeEventListener('click', clickTrigger);
+                      document.removeEventListener('touchstart', clickTrigger);
+                    };
+                    document.addEventListener('click', clickTrigger);
+                    document.addEventListener('touchstart', clickTrigger);
+                  });
+                </script>
+              </body>
             </html>
           `}
           title={name}
           className="w-full h-full border-0 absolute inset-0"
           allowFullScreen
           scrolling="no"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         />
         {!isModal && (
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/video-container:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 pointer-events-none z-10">
@@ -120,7 +217,7 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ ifra
   return (
     <div className="relative w-full h-full group/video-container">
       <iframe 
-        src={iframeCode} 
+        src={enhancedSrc} 
         title={name}
         className="w-full h-full border-0 absolute inset-0" 
         allowFullScreen 

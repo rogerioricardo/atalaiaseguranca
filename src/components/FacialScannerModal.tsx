@@ -40,6 +40,10 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
   // Array to collect sequential descriptor readings for multi-match noise cancelation during enrollment
   const enrollmentDescriptorsRef = useRef<number[][]>([]);
 
+  const [isScanning, setIsScanning] = useState(false);
+  const isScanningRef = useRef(false);
+  const timeoutIdRef = useRef<any>(null);
+
   // Cleanup helper
   const stopResources = () => {
     if (rafIdRef.current) {
@@ -49,6 +53,41 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
+    }
+    if (timeoutIdRef.current) {
+      clearTimeout(timeoutIdRef.current);
+      timeoutIdRef.current = null;
+    }
+    isScanningRef.current = false;
+    setIsScanning(false);
+  };
+
+  const handleTriggerScan = () => {
+    if (loading || errorText) return;
+    
+    if (timeoutIdRef.current) {
+      clearTimeout(timeoutIdRef.current);
+    }
+    
+    setCaptureProgress(0);
+    enrollmentDescriptorsRef.current = [];
+    isScanningRef.current = true;
+    setIsScanning(true);
+    setScannedProfile(null);
+    
+    if (mode === 'enroll') {
+      setStatusMessage('Iniciando mapeamento facial... Olhe para a câmera.');
+    } else {
+      setStatusMessage('Autenticando... Analisando perfil biométrico.');
+      
+      // Set a safety timeout for login mismatch or search
+      timeoutIdRef.current = setTimeout(() => {
+        if (isScanningRef.current) {
+          isScanningRef.current = false;
+          setIsScanning(false);
+          setStatusMessage('Rosto não reconhecido. Centralize o rosto e tente novamente.');
+        }
+      }, 4500);
     }
   };
 
@@ -64,6 +103,8 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
     setScannedProfile(null);
     setShowUserSelector(false);
     enrollmentDescriptorsRef.current = [];
+    setIsScanning(false);
+    isScanningRef.current = false;
 
     const initialize = async () => {
       try {
@@ -164,65 +205,82 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
             const liveDescriptor = FacialBiometricService.calculateBiometricDescriptor(landmarks);
 
             if (mode === 'enroll') {
-              if (captureProgress < 100) {
-                // Collect sequential scans to get clean averaged vectors
-                enrollmentDescriptorsRef.current.push(liveDescriptor);
-                const nextProgress = Math.min(100, enrollmentDescriptorsRef.current.length * 4);
-                setCaptureProgress(nextProgress);
-                setStatusMessage(`Mantenha sua pose... Escaneando: ${nextProgress}%`);
+              if (isScanningRef.current) {
+                if (captureProgress < 100) {
+                  // Collect sequential scans to get clean averaged vectors
+                  enrollmentDescriptorsRef.current.push(liveDescriptor);
+                  const nextProgress = Math.min(100, enrollmentDescriptorsRef.current.length * 4);
+                  setCaptureProgress(nextProgress);
+                  setStatusMessage(`Mantenha sua pose... Escaneando: ${nextProgress}%`);
 
-                if (nextProgress >= 100) {
-                  // Capture final thumbnail and persist biometrics
-                  stopResources();
-                  setStatusMessage('Analisando consistência biométrica...');
-                  
-                  // Take averages of landmarks to produce pristine anti-noise signature
-                  const avgDescriptor = computeAverageDescriptor(enrollmentDescriptorsRef.current);
-                  const thumbnail = captureCanvasBase64(video);
+                  if (nextProgress >= 100) {
+                    // Take averages of landmarks to produce pristine anti-noise signature
+                    const avgDescriptor = computeAverageDescriptor(enrollmentDescriptorsRef.current);
+                    // Capture thumbnail while the video stream is still active
+                    const thumbnail = captureCanvasBase64(video);
 
-                  if (userId) {
-                    const saveOk = await FacialBiometricService.saveBiometrics(userId, avgDescriptor, thumbnail);
-                    if (saveOk) {
-                      setCaptureProgress(100);
-                      setStatusMessage('Sucesso! Sensores biométricos configurados.');
-                      setTimeout(() => {
-                        onSuccess();
-                        onClose();
-                      }, 1800);
+                    // Now we can safely stop resources
+                    stopResources();
+                    setStatusMessage('Analisando consistência biométrica...');
+
+                    if (userId) {
+                      const saveOk = await FacialBiometricService.saveBiometrics(userId, avgDescriptor, thumbnail);
+                      if (saveOk) {
+                        setCaptureProgress(100);
+                        setStatusMessage('Sucesso! Sensores biométricos configurados.');
+                        setTimeout(() => {
+                          onSuccess({ userId, descriptor: avgDescriptor, photoBase64: thumbnail });
+                          onClose();
+                        }, 1800);
+                      } else {
+                        setErrorText('Ocorreu um erro ao salvar o descriptor biométrico facial.');
+                      }
                     } else {
-                      setErrorText('Ocorreu um erro ao salvar o descriptor biométrico facial.');
+                       setErrorText('ID de usuário ausente para cadastro.');
                     }
-                  } else {
-                     setErrorText('ID de usuário ausente para cadastro.');
                   }
                 }
+              } else {
+                setStatusMessage('Rosto alinhado! Clique no botão abaixo para escanear.');
               }
             } else if (mode === 'login') {
-              // Compare live vector against all enrolled members
-              const match = FacialBiometricService.matchFace(liveDescriptor, enrolledList);
-              if (match) {
-                // Match confirmed! Freeze capture and fire success
-                stopResources();
-                setScannedProfile(match);
-                setStatusMessage(`BIOMETRIA CONFIRMADA: ${match.name}`);
-                
-                // Overlay matching success state 
-                drawMatchedCrown(ctx, prediction, match.name);
-                
-                setTimeout(() => {
-                   onSuccess(match);
-                   onClose();
-                }, 1800);
-                return;
+              if (isScanningRef.current) {
+                // Compare live vector against all enrolled members
+                const match = FacialBiometricService.matchFace(liveDescriptor, enrolledList);
+                if (match) {
+                  // Match confirmed! Freeze capture and fire success
+                  stopResources();
+                  setScannedProfile(match);
+                  setStatusMessage(`BIOMETRIA CONFIRMADA: ${match.name}`);
+                  
+                  // Overlay matching success state 
+                  drawMatchedCrown(ctx, prediction, match.name);
+                  
+                  setTimeout(() => {
+                     onSuccess(match);
+                     onClose();
+                  }, 1800);
+                  return;
+                } else {
+                  setStatusMessage('Analisando perfil facial... Procurando correspondência...');
+                }
               } else {
-                setStatusMessage('Escaneando... Rosto não registrado ou desconhecido.');
+                setStatusMessage('Rosto alinhado! Clique no botão abaixo para escanear.');
               }
             }
           } else {
-            setStatusMessage('Centralize melhor o rosto e evite movimentos bruscos.');
+            if (isScanningRef.current) {
+              setStatusMessage('Centralize melhor o rosto e evite movimentos bruscos.');
+            } else {
+              setStatusMessage('Centralize melhor o rosto e evite movimentos bruscos.');
+            }
           }
         } else {
-          setStatusMessage('Centralize seu rosto no visor e olhe fixamente para a tela.');
+          if (isScanningRef.current) {
+            setStatusMessage('Centralize seu rosto no visor e olhe fixamente para a tela.');
+          } else {
+            setStatusMessage('Centralize seu rosto no visor e olhe fixamente para a tela.');
+          }
         }
       } catch (loopErr) {
         console.warn("[FacialScanner] Frame evaluation warning:", loopErr);
@@ -438,7 +496,7 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
             setCaptureProgress(100);
             setStatusMessage('Assinatura facial registrada!');
             setTimeout(() => {
-              onSuccess();
+              onSuccess({ userId, descriptor: dummyDescriptor, photoBase64: dummyThumbnail });
               onClose();
             }, 1000);
           }
@@ -563,16 +621,8 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
                   </div>
                   <h4 className="text-sm font-bold text-white uppercase">Recurso de Câmera Bloqueado</h4>
                   <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
-                    A câmera foi recusada ou não está acessível no seu navegador. Ative as permissões ou continue via verificação rápida de acesso.
+                    A câmera foi recusada ou não está acessível no seu navegador. Ative as permissões nas configurações para que o escaneamento biométrico facial funcione de modo 100% seguro.
                   </p>
-                  
-                  <button
-                    type="button"
-                    onClick={handleSimulationTest}
-                    className="mt-2 px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all"
-                  >
-                    Prosseguir via Acesso Local
-                  </button>
                 </div>
               )}
 
@@ -606,6 +656,23 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
           )}
         </div>
 
+        {/* Manual Scan Trigger Action Button */}
+        {!showUserSelector && !errorText && !loading && !scannedProfile && (
+          <button
+            type="button"
+            onClick={handleTriggerScan}
+            disabled={isScanning}
+            className={`w-full py-4 px-6 mb-5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2.5 shadow-lg border ${
+              isScanning
+                ? 'bg-zinc-900 border-zinc-850 text-zinc-500 cursor-not-allowed'
+                : 'bg-[#0ffa9c]/10 hover:bg-[#0ffa9c]/25 hover:border-[#0ffa9c]/50 text-[#0ffa9c] border-[#0ffa9c]/20 hover:scale-[1.01] transition-transform duration-150 animate-pulse'
+            }`}
+          >
+            <Scan size={15} className={isScanning ? "animate-spin" : ""} />
+            <span>{isScanning ? 'Escaneando seu rosto...' : 'Clique aqui para escanear seu rosto'}</span>
+          </button>
+        )}
+
         {/* Console notification output bar */}
         <div className={`p-3.5 rounded-xl text-xs flex items-center justify-center space-x-2.5 font-mono mb-5 border ${
           scannedProfile 
@@ -620,19 +687,11 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
 
         {/* Secondary controls/manual simulation triggers */}
         {!errorText && (
-          <div className="flex justify-between items-center text-left pt-2 border-t border-zinc-900 text-xs">
-            <span className="text-zinc-500 text-[10px] font-mono leading-none flex items-center">
+          <div className="flex justify-center items-center text-center pt-2 border-t border-zinc-900 text-xs w-full">
+            <span className="text-zinc-500 text-[10px] font-mono leading-none flex items-center justify-center">
               <HelpCircle size={12} className="mr-1.5" />
               Sua foto e dados biométricos não são compartilhados com terceiros.
             </span>
-            
-            <button
-              type="button"
-              onClick={handleSimulationTest}
-              className="px-3 py-1.5 bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-[10px] text-zinc-400 font-bold uppercase rounded-lg tracking-wider transition-all"
-            >
-              Verificação Rápida
-            </button>
           </div>
         )}
 

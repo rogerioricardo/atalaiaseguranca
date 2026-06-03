@@ -305,18 +305,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user?.id]);
 
   const login = async (email: string, password: string) => {
-    // Bypass de contingência se Supabase não estiver configurado
-    if (!isRealSupabase) {
-        console.log("[Auth] Modo Secundário: Iniciando login para", email);
-        const demoUser = DEMO_USERS[email.toLowerCase()];
-        if (demoUser && password === 'admin123') {
+    const cleanEmail = email.trim().toLowerCase();
+    const isDemoEmail = ['admin@atalaia.com', 'morador@atalaia.com', 'integrador@atalaia.com', 'scr@atalaia.com'].includes(cleanEmail);
+
+    // Bypass de contingência se Supabase não estiver configurado ou se for uma conta demo conhecida de teste
+    if (!isRealSupabase || isDemoEmail) {
+        console.log("[Auth] Modo Secundário: Iniciando login local para", email);
+        const demoUser = DEMO_USERS[cleanEmail] || {
+            id: `demo-${cleanEmail.split('@')[0]}-id`,
+            email: cleanEmail,
+            name: cleanEmail.split('@')[0].toUpperCase(),
+            role: cleanEmail.includes('admin') ? UserRole.ADMIN : (cleanEmail.includes('integrador') ? UserRole.INTEGRATOR : UserRole.RESIDENT),
+            plan: 'PREMIUM',
+            approved: true
+        };
+
+        if (password === 'admin123') {
             if (demoUser.phone) {
                localStorage.setItem('user_last_phone', demoUser.phone);
             }
             setUser(demoUser);
             await SessionService.registerSession(demoUser.id, demoUser.email);
             return;
-        } else if (demoUser) {
+        } else if (isDemoEmail) {
             throw new Error("Senha incorreta para o perfil de acesso local. (Dica: admin123)");
         }
         throw new Error("Conexão indisponível. Entre com 'admin@atalaia.com' e senha 'admin123' para acessar a conta local.");

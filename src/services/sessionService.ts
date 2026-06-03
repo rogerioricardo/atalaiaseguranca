@@ -31,7 +31,10 @@ export const getBrowserAndOS = () => {
 // Helper to fetch client IP with local/priv list support
 export const getIpAddress = async (): Promise<string> => {
   try {
-    const res = await fetch('https://api.ipify.org?format=json');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (!res.ok) throw new Error();
     const data = await res.json();
     return data.ip || '127.0.0.1';
