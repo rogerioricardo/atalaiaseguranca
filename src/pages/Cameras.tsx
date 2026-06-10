@@ -272,6 +272,13 @@ const Cameras: React.FC = () => {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedCameraForModal, setSelectedCameraForModal] = useState<Camera | null>(null);
 
+  // States for adding a new neighborhood
+  const [showAddHood, setShowAddHood] = useState(false);
+  const [newHoodName, setNewHoodName] = useState('');
+  const [newHoodDescription, setNewHoodDescription] = useState('');
+  const [addingHood, setAddingHood] = useState(false);
+  const [cameraToDelete, setCameraToDelete] = useState<Camera | null>(null);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
@@ -345,6 +352,35 @@ const Cameras: React.FC = () => {
           alert('Erro ao enviar solicitação: ' + (err.message || 'Erro desconhecido.'));
       } finally {
           setSendingSupport(false);
+      }
+  };
+
+  const handleCreateNeighborhood = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newHoodName.trim()) {
+          alert('Por favor, informe o nome do bairro.');
+          return;
+      }
+      setAddingHood(true);
+      try {
+          await MockService.createNeighborhood(
+              newHoodName.trim(),
+              newHoodDescription.trim() || 'Monitoramento integrado Atalaia.',
+              ''
+          );
+          alert('Bairro cadastrado com sucesso!');
+          setNewHoodName('');
+          setNewHoodDescription('');
+          setShowAddHood(false);
+          
+          // Re-carregar os dados imediatamente
+          const hoods = await MockService.getNeighborhoods();
+          setNeighborhoods(hoods);
+      } catch (err: any) {
+          console.error("[Cameras] Error adding neighborhood:", err);
+          alert('Erro ao cadastrar bairro: ' + (err.message || 'Erro desconhecido.'));
+      } finally {
+          setAddingHood(false);
       }
   };
 
@@ -665,12 +701,62 @@ const Cameras: React.FC = () => {
                     
                     <div className="space-y-4">
                         <div>
-                            <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-1.5 block pl-1">Bairro para Gestão</label>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest block pl-1">Bairro para Gestão</label>
+                                {user?.role === UserRole.ADMIN && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowAddHood(!showAddHood)}
+                                        className="text-[10px] font-bold text-atalaia-neon hover:text-atalaia-neon/80 transition-colors uppercase tracking-wider font-mono cursor-pointer"
+                                    >
+                                        {showAddHood ? 'Fechar Cadastro' : '+ Novo Bairro'}
+                                    </button>
+                                )}
+                            </div>
+
+                            {showAddHood && (
+                                <div className="p-3 bg-white/5 border border-white/15 rounded-xl mb-3 space-y-3 animate-fade-in">
+                                    <div className="text-[10px] font-bold text-atalaia-neon uppercase tracking-widest font-mono">Cadastrar Novo Bairro</div>
+                                    <input
+                                        type="text"
+                                        placeholder="Nome do Bairro (ex: Jardim Flora)"
+                                        value={newHoodName}
+                                        onChange={(e) => setNewHoodName(e.target.value)}
+                                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-atalaia-neon/50 placeholder:text-zinc-600 outline-none"
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Descrição (ex: Zona Leste Monitorada)"
+                                        value={newHoodDescription}
+                                        onChange={(e) => setNewHoodDescription(e.target.value)}
+                                        className="w-full bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-atalaia-neon/50 placeholder:text-zinc-600 outline-none"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleCreateNeighborhood}
+                                        disabled={addingHood}
+                                        className="w-full h-8 bg-atalaia-neon text-black font-black text-[10px] uppercase rounded-lg hover:bg-atalaia-neon/90 transition-all flex items-center justify-center cursor-pointer gap-1"
+                                    >
+                                        {addingHood ? (
+                                            <>
+                                                <Loader2 className="animate-spin" size={12} />
+                                                <span>Cadastrando...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Plus size={12} strokeWidth={3} />
+                                                <span>Salvar Bairro</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+
                             <select 
                                 value={selectedManageHoodId}
                                 onChange={(e) => setSelectedManageHoodId(e.target.value)}
                                 disabled={user?.role === UserRole.INTEGRATOR}
-                                className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-atalaia-neon/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-atalaia-neon/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                             >
                                 <option value="">Selecione um bairro</option>
                                 {managedNeighborhoods.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
@@ -763,13 +849,7 @@ const Cameras: React.FC = () => {
                                                 </button>
                                                 <button 
                                                     type="button"
-                                                    onClick={async () => {
-                                                        if(confirm('Excluir câmera?')) {
-                                                            await MockService.deleteCamera(cam.id);
-                                                            const updated = await MockService.getAdditionalCameras(selectedManageHoodId);
-                                                            setCameras(updated);
-                                                        }
-                                                    }}
+                                                    onClick={() => setCameraToDelete(cam)}
                                                     className="p-1.5 hover:bg-red-500/20 rounded text-red-400 transition-colors"
                                                     title="Excluir"
                                                 >
@@ -938,6 +1018,52 @@ const Cameras: React.FC = () => {
                         ABRIR EM NOVA ABA INTEIRA
                     </Button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {cameraToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden text-center"
+            >
+              <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+              <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={24} />
+              </div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-2 font-mono">
+                Confirmar Exclusão
+              </h3>
+              <p className="text-xs text-zinc-400 mb-6 leading-relaxed font-sans">
+                Tem certeza que deseja excluir a câmera tática <span className="text-white font-bold">"{cameraToDelete.name}"</span>? Esta ação removerá a câmera definitivamente.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCameraToDelete(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-zinc-900 text-zinc-300 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer font-sans"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (cameraToDelete) {
+                      await MockService.deleteCamera(cameraToDelete.id);
+                      const updated = await MockService.getAdditionalCameras(selectedManageHoodId);
+                      setCameras(updated);
+                      setCameraToDelete(null);
+                    }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-500/15 cursor-pointer font-sans"
+                >
+                  Excluir
+                </button>
               </div>
             </motion.div>
           </div>

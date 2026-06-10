@@ -32,7 +32,6 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [activeModel, setActiveModel] = useState<any>(null);
   const [scannedProfile, setScannedProfile] = useState<any>(null);
-  const [showUserSelector, setShowUserSelector] = useState(false);
   
   // List of all registered biometric descriptors for real-time login matching
   const [enrolledList, setEnrolledList] = useState<any[]>([]);
@@ -101,7 +100,6 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
     setErrorText(null);
     setCaptureProgress(0);
     setScannedProfile(null);
-    setShowUserSelector(false);
     enrollmentDescriptorsRef.current = [];
     setIsScanning(false);
     isScanningRef.current = false;
@@ -328,61 +326,89 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
     const rx = 120;
     const ry = 140;
 
-    // Outer vignette
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    // 1. Sleek darkened vignette around the scanning scope
+    ctx.fillStyle = 'rgba(9, 9, 11, 0.75)'; // deep zinc-950 background math
     ctx.beginPath();
     ctx.rect(0, 0, w, h);
     ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI, true);
     ctx.fill();
 
-    // Central target ellipse
-    ctx.strokeStyle = mode === 'enroll' ? 'rgba(59, 130, 246, 0.4)' : 'rgba(245, 158, 11, 0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([8, 12]);
+    // 2. High-precision neon scope ring
+    const color = mode === 'enroll' ? '#00f0ff' : '#0ffa9c'; // Electric Cyan / Atalaia Mint Green
+    
+    // Ambient glowing glass ring behind
+    ctx.strokeStyle = mode === 'enroll' ? 'rgba(0, 240, 255, 0.1)' : 'rgba(15, 250, 156, 0.1)';
+    ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
     ctx.stroke();
-    ctx.setLineDash([]); // Reset dash
 
-    // Grid scanner simulation line
-    const scanY = (Date.now() % 3500) / 3500 * (cy + ry - (cy - ry)) + (cy - ry);
-    ctx.strokeStyle = mode === 'enroll' ? 'rgba(59, 130, 246, 0.5)' : 'rgba(245, 158, 11, 0.5)';
-    ctx.lineWidth = 1;
+    // Sharp dotted inner circle
+    ctx.strokeStyle = mode === 'enroll' ? 'rgba(0, 240, 255, 0.5)' : 'rgba(15, 250, 156, 0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 8]);
     ctx.beginPath();
-    ctx.moveTo(cx - rx, scanY);
-    ctx.lineTo(cx + rx, scanY);
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
     ctx.stroke();
+    ctx.setLineDash([]); // clear
 
-    // Side bracket corners
-    ctx.strokeStyle = mode === 'enroll' ? '#3b82f6' : '#f59e0b';
-    ctx.lineWidth = 3.5;
+    // 3. Dynamic sweep scan line
+    const scanPeriod = 2500;
+    const progress = (Date.now() % scanPeriod) / scanPeriod;
+    // Ping-pong travel back and forth for natural scan feel
+    const factor = Math.sin(progress * Math.PI); 
+    const scanY = (cy - ry) + factor * (ry * 2);
+
+    // Glow backing for sweep line
+    const gradient = ctx.createLinearGradient(cx - rx, scanY, cx + rx, scanY);
+    const alpha = 0.4 * (1 - Math.abs(factor - 0.5) * 0.4); // fade near boundaries
+    const pulseColor = mode === 'enroll' ? `rgba(0, 240, 255, ${alpha})` : `rgba(15, 250, 156, ${alpha})`;
+    const solidColor = mode === 'enroll' ? `rgba(0, 240, 255, ${alpha * 2})` : `rgba(15, 250, 156, ${alpha * 2})`;
     
-    // Top-Left target corner
+    gradient.addColorStop(0, 'rgba(0,0,0,0)');
+    gradient.addColorStop(0.2, solidColor);
+    gradient.addColorStop(0.5, pulseColor);
+    gradient.addColorStop(0.8, solidColor);
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(cx - rx, cy - ry + 25);
+    ctx.moveTo(cx - rx + 15, scanY);
+    ctx.lineTo(cx + rx - 15, scanY);
+    ctx.stroke();
+
+    // Sleek bracket corners (cybernetic alignment points)
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    const bracketSize = 20;
+
+    // TL
+    ctx.beginPath();
+    ctx.moveTo(cx - rx, cy - ry + bracketSize);
     ctx.lineTo(cx - rx, cy - ry);
-    ctx.lineTo(cx - rx + 25, cy - ry);
+    ctx.lineTo(cx - rx + bracketSize, cy - ry);
     ctx.stroke();
 
-    // Top-Right target corner
+    // TR
     ctx.beginPath();
-    ctx.moveTo(cx + rx, cy - ry + 25);
+    ctx.moveTo(cx + rx, cy - ry + bracketSize);
     ctx.lineTo(cx + rx, cy - ry);
-    ctx.lineTo(cx + rx - 25, cy - ry);
+    ctx.lineTo(cx + rx - bracketSize, cy - ry);
     ctx.stroke();
 
-    // Bottom-Left target corner
+    // BL
     ctx.beginPath();
-    ctx.moveTo(cx - rx, cy + ry - 25);
+    ctx.moveTo(cx - rx, cy + ry - bracketSize);
     ctx.lineTo(cx - rx, cy + ry);
-    ctx.lineTo(cx - rx + 25, cy + ry);
+    ctx.lineTo(cx - rx + bracketSize, cy + ry);
     ctx.stroke();
 
-    // Bottom-Right target corner
+    // BR
     ctx.beginPath();
-    ctx.moveTo(cx + rx, cy + ry - 25);
+    ctx.moveTo(cx + rx, cy + ry - bracketSize);
     ctx.lineTo(cx + rx, cy + ry);
-    ctx.lineTo(cx + rx - 25, cy + ry);
+    ctx.lineTo(cx + rx - bracketSize, cy + ry);
     ctx.stroke();
   };
 
@@ -394,35 +420,66 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
 
     const boxWidth = end[0] - start[0];
     const boxHeight = end[1] - start[1];
+    const themeColor = mode === 'enroll' ? '#00f0ff' : '#0ffa9c';
 
-    // Face boundary box
-    ctx.strokeStyle = mode === 'enroll' ? '#3b82f6' : '#f59e0b';
-    ctx.lineWidth = 1.5;
+    // Thin elegant face boundary box
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
     ctx.strokeRect(start[0], start[1], boxWidth, boxHeight);
 
-    // Bounding target brackets
-    ctx.fillStyle = mode === 'enroll' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(245, 158, 11, 0.1)';
+    // Smart bracket brackets inside corner of bounding box
+    ctx.strokeStyle = themeColor;
+    ctx.lineWidth = 2;
+    const sz = Math.min(15, boxWidth * 0.15);
+    
+    // Top-left
+    ctx.beginPath();
+    ctx.moveTo(start[0], start[1] + sz);
+    ctx.lineTo(start[0], start[1]);
+    ctx.lineTo(start[0] + sz, start[1]);
+    ctx.stroke();
+    // Top-right
+    ctx.beginPath();
+    ctx.moveTo(start[0] + boxWidth, start[1] + sz);
+    ctx.lineTo(start[0] + boxWidth, start[1]);
+    ctx.lineTo(start[0] + boxWidth - sz, start[1]);
+    ctx.stroke();
+    // Bottom-left
+    ctx.beginPath();
+    ctx.moveTo(start[0], start[1] + boxHeight - sz);
+    ctx.lineTo(start[0], start[1] + boxHeight);
+    ctx.lineTo(start[0] + sz, start[1] + boxHeight);
+    ctx.stroke();
+    // Bottom-right
+    ctx.beginPath();
+    ctx.moveTo(start[0] + boxWidth, start[1] + boxHeight - sz);
+    ctx.lineTo(start[0] + boxWidth, start[1] + boxHeight);
+    ctx.lineTo(start[0] + boxWidth - sz, start[1] + boxHeight);
+    ctx.stroke();
+
+    // Subtly highlight the face card inside
+    ctx.fillStyle = mode === 'enroll' ? 'rgba(0, 240, 255, 0.03)' : 'rgba(15, 250, 156, 0.03)';
     ctx.fillRect(start[0], start[1], boxWidth, boxHeight);
 
-    // Glowing coordinate targets
-    landmarks.forEach((pt, index) => {
-      // Glow circle
-      ctx.fillStyle = mode === 'enroll' ? 'rgba(59, 130, 246, 0.8)' : 'rgba(245, 158, 11, 0.8)';
+    // Glowing coordinate targets (face landmarks: eyes, nose, mouth, ears)
+    landmarks.forEach((pt) => {
+      // Small core solid dot
+      ctx.fillStyle = themeColor;
       ctx.beginPath();
-      ctx.arc(pt[0], pt[1], 4, 0, 2 * Math.PI);
+      ctx.arc(pt[0], pt[1], 3, 0, 2 * Math.PI);
       ctx.fill();
 
-      // Outer rings
-      ctx.strokeStyle = mode === 'enroll' ? 'rgba(59, 130, 246, 0.4)' : 'rgba(245, 158, 11, 0.4)';
-      ctx.lineWidth = 1;
+      // Delicate outer boundary target
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 0.5;
       ctx.beginPath();
-      ctx.arc(pt[0], pt[1], 8, 0, 2 * Math.PI);
+      ctx.arc(pt[0], pt[1], 6, 0, 2 * Math.PI);
       ctx.stroke();
     });
 
-    // Draw connection facial frame webs
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 0.8;
+    // Draw connection facial frame webs (very high-tech but minimalist and crisp)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 0.7;
     ctx.beginPath();
     // Eye to eye connection
     ctx.moveTo(landmarks[0][0], landmarks[0][1]);
@@ -438,6 +495,11 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
     ctx.lineTo(landmarks[4][0], landmarks[4][1]);
     ctx.moveTo(landmarks[1][0], landmarks[1][1]);
     ctx.lineTo(landmarks[5][0], landmarks[5][1]);
+
+    // Cross-links for beautiful facial topology representation
+    ctx.moveTo(landmarks[4][0], landmarks[4][1]); // right ear
+    ctx.lineTo(landmarks[3][0], landmarks[3][1]); // mouth
+    ctx.lineTo(landmarks[5][0], landmarks[5][1]); // left ear
     ctx.stroke();
   };
 
@@ -445,24 +507,27 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
     const start = prediction.topLeft as [number, number];
     const end = prediction.bottomRight as [number, number];
     const boxWidth = end[0] - start[0];
+    const boxHeight = end[1] - start[1];
 
-    // Highlight green match state
-    ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(start[0], start[1], boxWidth, end[1] - start[1]);
+    // Highlight brilliant green match state
+    ctx.strokeStyle = '#0ffa9c';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(start[0], start[1], boxWidth, boxHeight);
     
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
-    ctx.fillRect(start[0], start[1], boxWidth, end[1] - start[1]);
+    ctx.fillStyle = 'rgba(15, 250, 156, 0.08)';
+    ctx.fillRect(start[0], start[1], boxWidth, boxHeight);
 
     // Draw badge header with name
-    ctx.fillStyle = '#10b981';
-    ctx.fillRect(start[0] - 2, start[1] - 30, boxWidth + 4, 30);
+    ctx.fillStyle = '#0ffa9c';
+    ctx.fillRect(start[0] - 1, start[1] - 32, boxWidth + 2, 32);
 
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = '#18181b'; // dark zinc-900 background contrast
+    ctx.font = 'black 10px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('BIOMETRIA VÁLIDA', start[0] + boxWidth / 2, start[1] - 18);
-    ctx.font = 'bold 10px sans-serif';
+    
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText('IDENTIDADE CONFIRMADA', start[0] + boxWidth / 2, start[1] - 18);
+    ctx.font = 'black 11px sans-serif';
     ctx.fillText(name.toUpperCase(), start[0] + boxWidth / 2, start[1] - 6);
   };
 
@@ -476,88 +541,35 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
     }, 1200);
   };
 
-  /**
-   * Action Simulation Endpoint
-   * Crucial helper allowing direct offline verification and fast diagnostics in standard browser iframes!
-   */
-  const handleSimulationTest = async () => {
-    if (mode === 'enroll') {
-      stopResources();
-      setLoading(true);
-      setStatusMessage('Validando assinatura biométrica local...');
 
-      setTimeout(async () => {
-        const dummyDescriptor = Array.from({ length: 15 }, () => 0.4 + Math.random() * 1.8);
-        const dummyThumbnail = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 100 100"><circle cx="50" cy="55" r="30" fill="%231e1e1e" stroke="%233b82f6" stroke-width="2"/><circle cx="40" cy="45" r="4" fill="%233b82f6"/><circle cx="60" cy="45" r="4" fill="%233b82f6"/><path d="M 40 70 Q 50 60 60 70" stroke="%233b82f6" stroke-width="2" fill="none"/></svg>`;
-        
-        if (userId) {
-          const ok = await FacialBiometricService.saveBiometrics(userId, dummyDescriptor, dummyThumbnail);
-          if (ok) {
-            setCaptureProgress(100);
-            setStatusMessage('Assinatura facial registrada!');
-            setTimeout(() => {
-              onSuccess({ userId, descriptor: dummyDescriptor, photoBase64: dummyThumbnail });
-              onClose();
-            }, 1000);
-          }
-        }
-      }, 1200);
-    } else {
-      // Log in
-      setStatusMessage('Carregando perfis biométricos para verificação...');
-      const list = enrolledList.length > 0 ? enrolledList : await FacialBiometricService.getAllBiometrics();
-
-      // Check if we have a typed email and can auto-match
-      if (typedEmail) {
-        const cleanEmail = typedEmail.trim().toLowerCase();
-        const matched = list.find(item => item.email.trim().toLowerCase() === cleanEmail);
-        if (matched) {
-          handleSelectUser(matched);
-          return;
-        }
-      }
-
-      // If we couldn't auto-match, show manual selector
-      if (list.length > 0) {
-        stopResources();
-        setLoading(false);
-        setShowUserSelector(true);
-        setStatusMessage('Escolha o seu perfil cadastrado na lista.');
-      } else {
-        // Fallback matched
-        const fallbackMatched = {
-          userId: 'demo-user-id',
-          email: 'morador@atalaia.com',
-          name: 'Mariana Costa',
-          confidence: 98
-        };
-        handleSelectUser(fallbackMatched);
-      }
-    }
-  };
 
   if (!isOpen) return null;
 
+  const primaryAccentColor = mode === 'enroll' ? '#00f0ff' : '#0ffa9c';
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="w-full max-w-xl bg-zinc-950 border border-zinc-800 rounded-3xl p-6 md:p-8 shadow-[0_0_60px_rgba(0,0,0,0.8)] relative overflow-hidden flex flex-col text-center">
+      <div className="w-full max-w-xl bg-zinc-950 border border-zinc-800/80 rounded-3xl p-6 md:p-8 shadow-[0_0_80px_rgba(15,250,156,0.06)] relative overflow-hidden flex flex-col text-center">
         
         {/* Glow corner effects */}
-        <div className={`absolute top-0 right-0 w-32 h-32 blur-[100px] rounded-full opacity-30 ${mode === 'enroll' ? 'bg-blue-500' : 'bg-amber-500'}`} />
-        <div className={`absolute bottom-0 left-0 w-32 h-32 blur-[100px] rounded-full opacity-10 ${mode === 'enroll' ? 'bg-blue-500' : 'bg-amber-500'}`} />
+        <div className={`absolute top-0 right-0 w-32 h-32 blur-[100px] rounded-full opacity-20 ${mode === 'enroll' ? 'bg-[#00f0ff]' : 'bg-[#0ffa9c]'}`} />
+        <div className={`absolute bottom-0 left-0 w-32 h-32 blur-[100px] rounded-full opacity-10 ${mode === 'enroll' ? 'bg-[#00f0ff]' : 'bg-[#0ffa9c]'}`} />
 
         {/* Modal Header */}
         <div className="flex justify-between items-center mb-6 relative">
           <div className="flex items-center space-x-3 text-left">
-            <div className={`p-2.5 rounded-xl border ${mode === 'enroll' ? 'bg-blue-500/10 border-blue-500/20 text-blue-500' : 'bg-amber-500/10 border-amber-500/20 text-amber-500'}`}>
-              <Scan size={20} className="animate-pulse" />
+            <div 
+              style={{ borderColor: `${primaryAccentColor}20` }}
+              className="p-2.5 rounded-xl border bg-zinc-900/50"
+            >
+              <Scan size={20} style={{ color: primaryAccentColor }} className="animate-pulse" />
             </div>
             <div>
               <h3 className="text-lg font-bold text-white uppercase tracking-wider font-sans">
                 {mode === 'enroll' ? 'Mapeamento Facial' : 'Autenticação Biométrica'}
               </h3>
-              <p className="text-[10px] text-zinc-500 font-mono">
-                TensorFlow BlazeFace Active Engine
+              <p className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">
+                Mecanismo de Verificação Biométrica Ativo
               </p>
             </div>
           </div>
@@ -568,130 +580,113 @@ export const FacialScannerModal: React.FC<FacialScannerProps> = ({
               stopResources();
               onClose();
             }}
-            className="p-1 px-2.5 bg-zinc-900 border border-white/5 hover:bg-zinc-800 text-zinc-400 rounded-lg text-xs tracking-wider uppercase transition-all duration-150"
+            className="p-1 px-3 bg-zinc-900/60 border border-white/5 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs tracking-wider uppercase transition-all duration-150 font-mono"
           >
             Sair
           </button>
         </div>
 
         {/* Video feed monitor workspace */}
-        <div className="relative w-full aspect-[4/3] max-h-[340px] bg-black rounded-2xl overflow-hidden border border-zinc-800/60 shadow-[inset_0_0_40px_rgba(0,0,0,0.9)] flex items-center justify-center mb-5">
+        <div className="relative w-full aspect-[4/3] max-h-[340px] bg-black rounded-2xl overflow-hidden border border-zinc-800/80 ring-1 ring-white/5 shadow-2xl flex items-center justify-center mb-5">
           
-          {showUserSelector ? (
-            <div className="absolute inset-0 z-30 flex flex-col justify-start text-left bg-zinc-950 p-6 overflow-y-auto">
-              <div className="border-b border-zinc-800 pb-2.5 mb-3">
-                <h4 className="text-xs font-bold text-amber-500 font-mono uppercase tracking-wider">Simulação / Acesso Sem Câmera</h4>
-                <p className="text-[10px] text-zinc-400 mt-0.5">Selecione o seu perfil biométrico cadastrado abaixo para validar o acesso rápido:</p>
+          {loading && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center space-y-4 bg-zinc-950/90 backdrop-blur-md">
+              <RefreshCw className="text-[#0ffa9c] animate-spin" size={28} />
+              <p className="text-xs text-zinc-400 font-mono tracking-wider">{statusMessage}</p>
+            </div>
+          )}
+
+          {errorText && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 space-y-4 bg-zinc-950 text-center">
+              <div className="p-3 bg-red-500/10 rounded-full border border-red-500/20 text-red-500">
+                <AlertTriangle size={28} />
               </div>
-              <div className="flex-1 overflow-y-auto space-y-2 max-h-[200px] pr-1">
-                {enrolledList.map((item) => (
-                  <button
-                    key={item.userId}
-                    type="button"
-                    onClick={() => handleSelectUser(item)}
-                    className="w-full p-2.5 bg-zinc-900/40 hover:bg-zinc-900 border border-zinc-850 hover:border-amber-500/30 rounded-xl transition-all flex items-center justify-between group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 text-xs font-bold font-mono">
-                        {item.name.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <h5 className="text-xs font-bold text-white truncate font-sans">{item.name}</h5>
-                        <p className="text-[9px] text-zinc-300 truncate font-mono">{item.email}</p>
-                      </div>
-                    </div>
-                    <span className="text-[9px] font-mono text-zinc-500 group-hover:text-amber-500 transition-colors shrink-0">Bypass &rarr;</span>
-                  </button>
-                ))}
+              <h4 className="text-sm font-bold text-white uppercase tracking-wider">Câmera Não Detectada ou Bloqueada</h4>
+              <p className="text-xs text-zinc-400 max-w-sm leading-relaxed font-sans">
+                A câmera está indisponível ou as permissões foram negadas. Por favor, feche esta tela de biometria e realize o login normalmente utilizando seu e-mail e senha cadastrados no formulário tradicional.
+              </p>
+            </div>
+          )}
+
+          {/* Core Webcam stream node */}
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            playsInline
+            muted
+          />
+
+          {/* Dynamic tracking overlays rendering plane */}
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none object-cover"
+          />
+
+          {/* Multi-scan progress bar in enrollment */}
+          {mode === 'enroll' && !loading && !errorText && (
+            <div className="absolute bottom-4 inset-x-4 bg-zinc-950/80 border border-zinc-900 p-2.5 rounded-xl backdrop-blur-md flex items-center space-x-3">
+              <span className="text-[10px] font-mono font-bold text-zinc-400 text-right w-12">{captureProgress}%</span>
+              <div className="flex-1 h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-white/5">
+                <div 
+                  className="h-full bg-[#00f0ff] transition-all duration-200 shadow-[0_0_10px_#00f0ff]"
+                  style={{ width: `${captureProgress}%` }}
+                />
               </div>
             </div>
-          ) : (
-            <>
-              {loading && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center space-y-4 bg-zinc-950/80">
-                  <RefreshCw className="text-zinc-500 animate-spin" size={28} />
-                  <p className="text-xs text-zinc-400 font-mono">{statusMessage}</p>
-                </div>
-              )}
-
-              {errorText && (
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 space-y-4 bg-zinc-950 text-center">
-                  <div className="p-3 bg-red-500/10 rounded-full border border-red-500/20 text-red-500">
-                    <AlertTriangle size={28} />
-                  </div>
-                  <h4 className="text-sm font-bold text-white uppercase">Recurso de Câmera Bloqueado</h4>
-                  <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
-                    A câmera foi recusada ou não está acessível no seu navegador. Ative as permissões nas configurações para que o escaneamento biométrico facial funcione de modo 100% seguro.
-                  </p>
-                </div>
-              )}
-
-              {/* Core Webcam stream node */}
-              <video
-                ref={videoRef}
-                className="w-full h-full object-cover"
-                playsInline
-                muted
-              />
-
-              {/* Dynamic tracking overlays rendering plane */}
-              <canvas
-                ref={canvasRef}
-                className="absolute inset-0 w-full h-full pointer-events-none object-cover"
-              />
-
-              {/* Multi-scan progress bar in enrollment */}
-              {mode === 'enroll' && !loading && !errorText && (
-                <div className="absolute bottom-4 inset-x-4 bg-black/60 border border-white/5 p-2 rounded-xl backdrop-blur-md flex items-center space-x-3">
-                  <span className="text-[9px] font-mono font-bold text-zinc-400 text-right w-12">{captureProgress}%</span>
-                  <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-blue-500 transition-all duration-200"
-                      style={{ width: `${captureProgress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </>
           )}
         </div>
 
         {/* Manual Scan Trigger Action Button */}
-        {!showUserSelector && !errorText && !loading && !scannedProfile && (
+        {!errorText && !loading && !scannedProfile && (
           <button
             type="button"
             onClick={handleTriggerScan}
             disabled={isScanning}
-            className={`w-full py-4 px-6 mb-5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2.5 shadow-lg border ${
+            style={{ 
+              borderColor: isScanning ? '#27272a' : `${primaryAccentColor}30`,
+              backgroundColor: isScanning ? 'rgba(24, 24, 27, 0.4)' : `${primaryAccentColor}06`
+            }}
+            className={`w-full py-4 px-6 mb-5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2.5 shadow-lg border hover:scale-[1.01] transition-transform duration-150 ${
               isScanning
-                ? 'bg-zinc-900 border-zinc-850 text-zinc-500 cursor-not-allowed'
-                : 'bg-[#0ffa9c]/10 hover:bg-[#0ffa9c]/25 hover:border-[#0ffa9c]/50 text-[#0ffa9c] border-[#0ffa9c]/20 hover:scale-[1.01] transition-transform duration-150 animate-pulse'
+                ? 'text-zinc-500 cursor-not-allowed border-zinc-800'
+                : 'hover:bg-zinc-900/60 text-white animate-pulse'
             }`}
           >
-            <Scan size={15} className={isScanning ? "animate-spin" : ""} />
-            <span>{isScanning ? 'Escaneando seu rosto...' : 'Clique aqui para escanear seu rosto'}</span>
+            <Scan size={15} style={{ color: isScanning ? '#71717a' : primaryAccentColor }} className={isScanning ? "animate-spin" : ""} />
+            <span style={{ color: isScanning ? '#71717a' : '#ffffff' }}>
+              {isScanning ? 'Mapeando Características...' : 'Iniciar Escaneamento Facial'}
+            </span>
           </button>
         )}
 
         {/* Console notification output bar */}
-        <div className={`p-3.5 rounded-xl text-xs flex items-center justify-center space-x-2.5 font-mono mb-5 border ${
-          scannedProfile 
-            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-            : mode === 'enroll' 
-              ? 'bg-blue-500/5 border-blue-500/10 text-zinc-400' 
-              : 'bg-amber-500/5 border-amber-500/10 text-zinc-400'
-        }`}>
-          {!scannedProfile && <div className={`w-1.5 h-1.5 rounded-full animate-ping ${mode === 'enroll' ? 'bg-blue-500' : 'bg-amber-500'}`} />}
-          <span className="leading-tight text-[11px] uppercase">{statusMessage}</span>
+        <div 
+          className={`p-3.5 rounded-xl text-xs flex items-center justify-center space-x-2.5 font-mono mb-5 border transition-all duration-300 ${
+            scannedProfile 
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.05)]' 
+              : mode === 'enroll' 
+                ? 'bg-zinc-900/40 border-zinc-800 text-zinc-300' 
+                : 'bg-zinc-900/40 border-zinc-800 text-zinc-300'
+          }`}
+        >
+          {!scannedProfile && (
+            <div 
+              style={{ backgroundColor: primaryAccentColor }} 
+              className="w-1.5 h-1.5 rounded-full animate-ping" 
+            />
+          )}
+          <span className="leading-tight text-[11px] uppercase tracking-wider">{statusMessage}</span>
         </div>
 
-        {/* Secondary controls/manual simulation triggers */}
+        {/* Secondary controls/manual simulation triggers & simulations panel */}
         {!errorText && (
-          <div className="flex justify-center items-center text-center pt-2 border-t border-zinc-900 text-xs w-full">
-            <span className="text-zinc-500 text-[10px] font-mono leading-none flex items-center justify-center">
-              <HelpCircle size={12} className="mr-1.5" />
-              Sua foto e dados biométricos não são compartilhados com terceiros.
-            </span>
+          <div className="flex flex-col space-y-3 pt-3 border-t border-zinc-900 text-xs w-full text-center">
+            <div className="flex items-center justify-center text-zinc-500 text-[10px] font-mono leading-none">
+              <span className="flex items-center">
+                <HelpCircle size={12} className="mr-1.5 text-zinc-600 animate-pulse" />
+                Biometria local criptografada de alta segurança.
+              </span>
+            </div>
           </div>
         )}
 

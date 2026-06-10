@@ -341,49 +341,32 @@ const Landing: React.FC = () => {
       <section id="planos" className="py-20 md:py-32 bg-[#010101] border-b border-white/5 print:hidden">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center mb-16 md:mb-24">
               <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">Escolha sua Proteção</h2>
-              <p className="text-gray-400 text-lg max-w-2xl mx-auto">Planos flexíveis para cada nível de necessidade.</p>
+              <p className="text-gray-400 text-lg max-w-2xl mx-auto">Plano completo para máxima segurança do morador.</p>
           </div>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-              <div className="bg-[#040404] border border-white/5 rounded-3xl p-8 flex flex-col hover:border-atalaia-neon/20 transition-all duration-300">
-                  <div className="mb-8">
-                      <div className="flex items-center gap-2 mb-4">
-                          <Heart className="text-gray-500" size={20} />
-                          <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Colaborativo</span>
+          <div className="max-w-md mx-auto px-4 sm:px-6">
+              <div className="bg-[#080808] border-2 border-atalaia-neon rounded-3xl p-8 flex flex-col shadow-[0_0_40px_rgba(0,255,102,0.1)] relative z-10 transition-all duration-300">
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-atalaia-neon text-black text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full">Plano Recomendado</div>
+                  <div className="mb-8 mt-2 text-center">
+                      <div className="flex items-center justify-center gap-2 mb-4">
+                          <Shield className="text-atalaia-neon" size={24} />
+                          <span className="text-xs font-bold text-atalaia-neon uppercase tracking-widest">Apoio Máximo e Tático</span>
                       </div>
-                      <h3 className="text-2xl font-bold text-white mb-2">Gratuito</h3>
-                      <p className="text-gray-500 text-sm">Apoie a rede sem custo fixo.</p>
+                      <h3 className="text-3xl font-black text-white mb-2">Morador Prêmio</h3>
+                      <p className="text-gray-400 text-sm">Acesso total e prioritário para sua família.</p>
                   </div>
-                  <div className="mb-10"><span className="text-4xl font-bold text-white">R$ 0</span><span className="text-gray-500 text-sm ml-1">/mês</span></div>
-                  <ul className="space-y-4 mb-12 flex-1">
-                      <li className="flex items-start gap-3 text-sm text-gray-400"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Notificações via WhatsApp</li>
-                      <li className="flex items-start gap-3 text-sm text-gray-400"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Botão de Pânico Ativo</li>
-                  </ul>
-                  <Button onClick={() => handleRegister('FREE')} variant="outline" className="w-full justify-center h-12">Começar Grátis</Button>
-              </div>
-              <div className="bg-[#080808] border-2 border-atalaia-neon rounded-3xl p-8 flex flex-col shadow-[0_0_40px_rgba(0,255,102,0.05)] relative transform md:-translate-y-4 scale-105 z-10 transition-all duration-300">
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-atalaia-neon text-black text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full">Mais Popular</div>
-                  <div className="mb-8">
-                      <div className="flex items-center gap-2 mb-4"><Shield className="text-atalaia-neon" size={20} /><span className="text-xs font-bold text-atalaia-neon uppercase tracking-widest">Segurança Total</span></div>
-                      <h3 className="text-2xl font-bold text-white mb-2">Família</h3>
+                  <div className="mb-10 text-center">
+                      <span className="text-5xl font-black text-white">R$ 79,90</span>
+                      <span className="text-gray-500 text-sm ml-1">/mês</span>
                   </div>
-                  <div className="mb-10"><span className="text-4xl font-bold text-white">R$ 39,90</span><span className="text-gray-500 text-sm ml-1">/mês</span></div>
                   <ul className="space-y-4 mb-12 flex-1">
-                      <li className="flex items-start gap-3 text-sm text-white"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Tudo do Plano Gratuito</li>
-                      <li className="flex items-start gap-3 text-sm text-white"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Acesso às 3 câmeras próximas</li>
+                      <li className="flex items-start gap-3 text-sm text-white"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Acesso em tempo real a todas as câmeras</li>
+                      <li className="flex items-start gap-3 text-sm text-white"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Botão de Pânico com Acionamento de Patrulha</li>
+                      <li className="flex items-start gap-3 text-sm text-white"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Alertas de Segurança via WhatsApp</li>
+                      <li className="flex items-start gap-3 text-sm text-white"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Suporte e integração imediata</li>
                   </ul>
-                  <Button onClick={() => handleRegister('FAMILY')} className="w-full justify-center h-12 font-bold">Assinar Plano Família</Button>
-              </div>
-              <div className="bg-[#040404] border border-white/5 rounded-3xl p-8 flex flex-col hover:border-atalaia-neon/20 transition-all duration-300">
-                  <div className="mb-8">
-                      <div className="flex items-center gap-2 mb-4"><Star className="text-atalaia-neon" size={20} /><span className="text-xs font-bold text-atalaia-neon uppercase tracking-widest">Apoio Tático</span></div>
-                      <h3 className="text-2xl font-bold text-white mb-2">Prêmio</h3>
-                  </div>
-                  <div className="mb-10"><span className="text-4xl font-bold text-white">R$ 79,90</span><span className="text-gray-500 text-sm ml-1">/mês</span></div>
-                  <ul className="space-y-4 mb-12 flex-1">
-                      <li className="flex items-start gap-3 text-sm text-gray-400"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Tudo do Plano Família</li>
-                      <li className="flex items-start gap-3 text-sm text-gray-400"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Acesso a TODAS as câmeras</li>
-                  </ul>
-                  <Button onClick={() => handleRegister('PREMIUM')} className="w-full justify-center h-12 font-bold">Assinar Plano Premium</Button>
+                  <Button onClick={() => handleRegister('PREMIUM')} className="w-full justify-center h-14 text-base font-black uppercase tracking-wider bg-atalaia-neon text-black hover:bg-atalaia-neon/90">
+                      Assinar Morador Prêmio
+                  </Button>
               </div>
           </div>
       </section>

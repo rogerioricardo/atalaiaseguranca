@@ -4,10 +4,8 @@ import Layout from '../components/Layout';
 import { useAuth } from '@/auth/context';
 import { Card, Input, Button } from '../components/UI';
 import { MockService } from '../services/mockService';
-import { Save, User as UserIcon, Camera, Home, MapPin, CheckCircle, Loader2, AlertCircle, Smartphone, Laptop, Monitor, Trash2, LogOut, Scan, UserCheck, ShieldAlert } from 'lucide-react';
+import { Save, User as UserIcon, Camera, Home, MapPin, CheckCircle, Loader2, AlertCircle, Smartphone, Laptop, Monitor, Trash2, LogOut } from 'lucide-react';
 import { SessionService } from '../services/sessionService';
-import { FacialScannerModal } from '@/components/FacialScannerModal';
-import { FacialBiometricService, FacialBiometric } from '@/services/facialBiometricService';
 
 const Profile: React.FC = () => {
   const { user, updateProfile } = useAuth();
@@ -39,68 +37,7 @@ const Profile: React.FC = () => {
     loadSessions();
   }, [user?.id]);
 
-  // Face biometrics states
-  const [userBiometrics, setUserBiometrics] = useState<any | null>(null);
-  const [loadingBiometrics, setLoadingBiometrics] = useState(true);
-  const [showEnrollModal, setShowEnrollModal] = useState(false);
-  const [deletingBiometrics, setDeletingBiometrics] = useState(false);
 
-  const loadUserBiometrics = async () => {
-    if (!user?.id) return;
-    setLoadingBiometrics(true);
-    try {
-      const bio = await FacialBiometricService.getBiometricsForUser(user.id);
-      setUserBiometrics(bio);
-    } catch (e) {
-      console.error("Erro ao carregar biometria facial:", e);
-    } finally {
-      setLoadingBiometrics(false);
-    }
-  };
-
-  const handleRemoveBiometrics = async () => {
-    if (!user?.id) return;
-    if (!window.confirm("Deseja realmente excluir seu cadastro facial? Você precisará cadastrar novamente para entrar com rosto.")) return;
-    
-    setDeletingBiometrics(true);
-    try {
-      await FacialBiometricService.deleteBiometrics(user.id);
-      setUserBiometrics(null);
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 2000);
-    } catch (e) {
-      console.error("Erro ao remover biometria:", e);
-      setErrorMsg("Falha ao remover cadastro facial.");
-    } finally {
-      setDeletingBiometrics(false);
-    }
-  };
-
-  const handleEnrollSuccess = async (data: any) => {
-    console.log("[Profile] Cadastro facial realizado com sucesso:", data);
-    // Set immediately in local state for instantaneous feedback and visible image
-    if (data) {
-      setUserBiometrics(data);
-    }
-    
-    if (user?.id) {
-      try {
-        const bio = await FacialBiometricService.getBiometricsForUser(user.id);
-        if (bio) {
-          setUserBiometrics(bio);
-        }
-      } catch (e) {
-        console.error("Erro ao sincronizar biometria recém-cadastrada da nuvem:", e);
-      }
-    }
-    setShowEnrollModal(false);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 4000);
-  };
-
-  useEffect(() => {
-    loadUserBiometrics();
-  }, [user?.id]);
 
   const handleTerminateSession = async (id: string) => {
     setSessionActionLoading(id);
@@ -414,100 +351,6 @@ const Profile: React.FC = () => {
             </div>
         </form>
 
-        {/* RECONHECIMENTO FACIAL - CADASTRO BIOMÉTRICO */}
-        <div className="pb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Card className="p-6 md:p-8 border border-white/5 bg-[#0a0a0a]/90 backdrop-blur-md relative overflow-hidden">
-                <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-atalaia-neon/30 to-transparent" />
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/5">
-                    <div>
-                        <h3 className="text-base font-bold text-white flex items-center gap-2">
-                            <Scan className="text-atalaia-neon" size={18} />
-                            Reconhecimento Facial (Acesso Seguro)
-                        </h3>
-                        <p className="text-[11px] text-zinc-500 mt-1">
-                            Cadastre seu rosto para conseguir acessar o Atalaia instantaneamente pelo navegador, de forma 100% segura usando inteligência artificial biométrica local. Nenhum serviço pago de terceiros é utilizado.
-                        </p>
-                    </div>
-                </div>
-
-                {loadingBiometrics ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-zinc-400">
-                        <Loader2 className="text-atalaia-neon animate-spin mb-3" size={24} />
-                        <span className="text-[11px] font-mono tracking-wider text-zinc-500">Verificando banco de dados biométrico...</span>
-                    </div>
-                ) : userBiometrics ? (
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-6">
-                        <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-xl border border-green-500/30 p-0.5 bg-black overflow-hidden relative group">
-                                {userBiometrics.photoBase64 ? (
-                                    <img src={userBiometrics.photoBase64} alt="Cadastrado" className="w-full h-full rounded-lg object-cover animate-pulse" />
-                                ) : (
-                                    <div className="w-full h-full rounded-lg bg-green-500/10 flex items-center justify-center text-green-500">
-                                        <UserCheck size={28} />
-                                    </div>
-                                )}
-                                <div className="absolute inset-0 bg-[#0ffa9c]/10 animate-pulse rounded-lg pointer-events-none" />
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm font-bold text-white">Biometria Facial Ativa</span>
-                                    <span className="px-2 py-0.5 bg-green-500/10 border border-green-500/20 text-[8px] font-bold text-green-400 tracking-widest rounded-md uppercase font-mono">
-                                        CADASTRADA
-                                    </span>
-                                </div>
-                                <p className="text-[10px] text-zinc-500 mt-1 font-mono">
-                                    Identificação Segura Local &bull; Registro: Ativo & Autenticado
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setShowEnrollModal(true)}
-                                className="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-850 text-xs font-bold uppercase py-2.5 px-4 rounded-xl transition-all"
-                            >
-                                Recadastrar Rosto
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleRemoveBiometrics}
-                                disabled={deletingBiometrics}
-                                className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold uppercase py-2.5 px-4 rounded-xl transition-all flex items-center gap-2"
-                            >
-                                {deletingBiometrics ? <Loader2 className="animate-spin" size={12} /> : <Trash2 size={12} />}
-                                <span>Remover Biometria</span>
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pt-6">
-                        <div className="flex items-start gap-3">
-                            <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-xl mt-1">
-                                <ShieldAlert size={20} />
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-bold text-zinc-200 font-sans">Acesso Biométrico Desabilitado</h4>
-                                <p className="text-[11px] text-zinc-500 mt-0.5">
-                                    Você ainda não possui um rosto cadastrado nesta conta tática. Registre sua biometria para realizar autenticações rápidas sem senha.
-                                </p>
-                            </div>
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={() => setShowEnrollModal(true)}
-                            className="bg-atalaia-neon text-black font-black hover:bg-atalaia-neon/90 hover:shadow-[0_0_20px_rgba(15,250,156,0.25)] text-xs uppercase tracking-wider py-3 px-6 rounded-xl transition-all flex items-center gap-2 self-start sm:self-center"
-                        >
-                            <Scan size={14} />
-                            <span>Cadastrar Meu Rosto</span>
-                        </button>
-                    </div>
-                )}
-            </Card>
-        </div>
-
         {/* CONTROLE DE SESSÕES ATIVAS - ANTI-COMPARTILHAMENTO */}
         <div className="pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <Card className="p-6 md:p-8 border border-white/5 bg-[#0a0a0a]/90 backdrop-blur-md relative overflow-hidden">
@@ -609,14 +452,6 @@ const Profile: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL DE CADASTRO BIOMÉTRICO (TENSORFLOW / BLAZEFACE) */}
-      <FacialScannerModal
-          isOpen={showEnrollModal}
-          onClose={() => setShowEnrollModal(false)}
-          mode="enroll"
-          userId={user?.id}
-          onSuccess={handleEnrollSuccess}
-      />
     </Layout>
   );
 };

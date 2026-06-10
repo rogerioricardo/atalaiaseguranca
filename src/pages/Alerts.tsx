@@ -8,6 +8,7 @@ import {
     Ambulance, Flame, Headset, Camera, MessageSquare, Send, Loader2, Sparkles,
     Save, RefreshCw, Edit2, Trash2
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { MockService } from '../services/mockService';
 import { UserRole } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -19,7 +20,15 @@ const Alerts: React.FC = () => {
   const [editingTemplates, setEditingTemplates] = useState<Record<string, string>>({});
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
   const [activeEditKey, setActiveEditKey] = useState<string | null>(null);
+  const [keyToDelete, setKeyToDelete] = useState<string | null>(null);
+  const [keyToSend, setKeyToSend] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+      setToast({ msg, type });
+      setTimeout(() => setToast(null), 4000);
+  };
 
   const isAdmin = user?.role === UserRole.ADMIN;
 
@@ -55,9 +64,9 @@ const Alerts: React.FC = () => {
             image: imageBase64
         });
         
-        alert(imageBase64 ? 'Alerta com foto enviado!' : 'Alerta enviado!');
+        showToast(imageBase64 ? 'Alerta com foto enviado!' : 'Alerta enviado!', 'success');
       } catch (e) {
-        alert('Erro ao enviar alerta.');
+        showToast('Erro ao enviar alerta.', 'error');
       } finally {
         setLoading(false);
       }
@@ -92,14 +101,12 @@ const Alerts: React.FC = () => {
       }
   };
 
-  const handleSendCustomTemplate = async (key: string) => {
+  const executeSendCustomTemplate = async (key: string) => {
       const content = editingTemplates[key];
       
       if (isAdmin && content !== customTemplates[key]) {
           await handleSaveTemplate(key);
       }
-
-      if (!window.confirm(`Disparar mensagem do template "${key}" agora?`)) return;
       
       setLoading(true);
       try {
@@ -118,12 +125,16 @@ const Alerts: React.FC = () => {
               message: `MENSAGEM RÁPIDA: ${finalMsg}`
           });
 
-          alert('Mensagem disparada e registrada no sistema!');
+          showToast('Mensagem disparada e registrada no sistema!', 'success');
       } catch (e) {
-          alert('Falha ao disparar template.');
+          showToast('Falha ao disparar template.', 'error');
       } finally {
           setLoading(false);
       }
+  };
+
+  const handleSendCustomTemplate = (key: string) => {
+      setKeyToSend(key);
   };
 
   const handleButtonClick = (type: 'PANIC' | 'DANGER' | 'SUSPICIOUS' | 'OK') => {
@@ -207,7 +218,7 @@ const Alerts: React.FC = () => {
                                             {isAdmin && (
                                                 <div className="flex gap-1">
                                                     <button onClick={() => setActiveEditKey(isEditing ? null : key)} className={`p-1.5 rounded transition-colors ${isEditing ? 'text-atalaia-neon bg-atalaia-neon/10' : 'text-gray-500 hover:text-white'}`}><Edit2 size={16} className="pointer-events-none" /></button>
-                                                    <button onClick={async () => { if(confirm('Excluir?')) { await MockService.deleteSetting(key); loadTemplates(); } }} className="p-1.5 text-gray-500 hover:text-red-500 rounded transition-colors"><Trash2 size={16} className="pointer-events-none" /></button>
+                                                    <button onClick={() => setKeyToDelete(key)} className="p-1.5 text-gray-500 hover:text-red-500 rounded transition-colors"><Trash2 size={16} className="pointer-events-none" /></button>
                                                 </div>
                                             )}
                                         </div>
@@ -278,6 +289,112 @@ const Alerts: React.FC = () => {
                 </div>
             </Card>
         </div>
+
+        <AnimatePresence>
+            {/* Real Toast Notification system */}
+            {toast && (
+                <motion.div 
+                    initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 50, scale: 0.95 }}
+                    className={`fixed bottom-6 right-6 z-50 p-4 rounded-xl shadow-2xl border flex items-center gap-3 backdrop-blur-md ${toast.type === 'success' ? 'bg-emerald-950/90 border-emerald-500/30 text-emerald-300' : 'bg-red-950/90 border-red-500/30 text-red-300'}`}
+                >
+                    <CheckCircle size={18} className={toast.type === 'success' ? 'text-emerald-400' : 'text-red-400'} />
+                    <span className="text-xs font-bold font-sans tracking-wide uppercase">{toast.msg}</span>
+                </motion.div>
+            )}
+
+            {/* Custom confirm dispatch template modal */}
+            {keyToSend && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden text-center"
+                    >
+                        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-atalaia-neon/50 to-transparent" />
+                        <div className="w-12 h-12 bg-atalaia-neon/10 border border-atalaia-neon/20 text-atalaia-neon rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                            <Send size={22} className="ml-0.5" />
+                        </div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-2 font-mono">
+                            Disparar Mensagem
+                        </h3>
+                        <p className="text-xs text-zinc-400 mb-6 leading-relaxed font-sans">
+                            Confirmar envio imediato do template <span className="text-white font-bold">"{keyToSend.replace(/_/g, ' ')}"</span> para todos os moradores do seu bairro?
+                        </p>
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setKeyToSend(null)}
+                                className="flex-1 py-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-zinc-900 text-zinc-300 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer font-sans"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    if (keyToSend) {
+                                        const key = keyToSend;
+                                        setKeyToSend(null);
+                                        await executeSendCustomTemplate(key);
+                                    }
+                                }}
+                                className="flex-1 py-2.5 rounded-xl bg-atalaia-neon text-black font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-atalaia-neon/15 cursor-pointer font-sans"
+                            >
+                                Enviar
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Custom delete template modal */}
+            {keyToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden text-center"
+                    >
+                        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+                        <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <AlertTriangle size={24} />
+                        </div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-2 font-mono">
+                            Remover Template
+                        </h3>
+                        <p className="text-xs text-zinc-400 mb-6 leading-relaxed font-sans">
+                            Tem certeza que deseja excluir o template de alerta <span className="text-white font-bold">"{keyToDelete.replace(/_/g, ' ')}"</span>?
+                        </p>
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setKeyToDelete(null)}
+                                className="flex-1 py-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-zinc-900 text-zinc-300 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer font-sans"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    if (keyToDelete) {
+                                        await MockService.deleteSetting(keyToDelete);
+                                        await loadTemplates();
+                                        setKeyToDelete(null);
+                                        showToast('Template removido com sucesso!', 'success');
+                                    }
+                                }}
+                                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-500/15 cursor-pointer font-sans"
+                            >
+                                Excluir
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
     </Layout>
   );
 };

@@ -20,10 +20,36 @@ const DEMO_USERS: Record<string, any> = {
         email: 'morador@atalaia.com',
         name: 'Mariana Costa',
         role: UserRole.RESIDENT,
-        plan: 'FREE',
+        plan: 'PREMIUM',
+        approved: true,
+        neighborhood_id: 'any-hood-id'
+    },
+    'scr@atalaia.com': {
+        id: 'demo-scr-id',
+        email: 'scr@atalaia.com',
+        name: 'Vigia Roberto',
+        role: UserRole.SCR,
+        plan: 'PREMIUM',
+        approved: true,
+        neighborhood_id: 'any-hood-id'
+    },
+    'integrador@atalaia.com': {
+        id: 'demo-integrator-id',
+        email: 'integrador@atalaia.com',
+        name: 'Gestor Anderson',
+        role: UserRole.INTEGRATOR,
+        plan: 'PREMIUM',
         approved: true,
         neighborhood_id: 'any-hood-id'
     }
+};
+
+const deriveRoleFromEmail = (emailStr: string, defaultRole = UserRole.RESIDENT): UserRole => {
+    const e = (emailStr || '').toLowerCase();
+    if (e.includes('admin')) return UserRole.ADMIN;
+    if (e.includes('integrador')) return UserRole.INTEGRATOR;
+    if (e.includes('scr') || e.includes('vigia') || e.includes('patrulha') || e.includes('moto')) return UserRole.SCR;
+    return defaultRole;
 };
 
 interface AuthContextType {
@@ -63,24 +89,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSessionTerminatedReason(null);
   };
 
-  const mapProfile = (profile: any): User => ({
-      id: profile.id,
-      name: profile.name || profile.email?.split('@')[0] || 'Usuário',
-      email: profile.email,
-      role: (profile.role as UserRole) || UserRole.RESIDENT,
-      plan: (profile.plan as UserPlan) || 'FREE',
-      neighborhoodId: profile.neighborhood_id,
-      address: profile.address,
-      city: profile.city,
-      state: profile.state,
-      phone: profile.phone,
-      photoUrl: profile.photo_url,
-      lat: profile.lat,
-      lng: profile.lng,
-      approved: profile.approved === true, 
-      mpPublicKey: profile.mp_public_key,
-      mpAccessToken: profile.mp_access_token
-  });
+  const mapProfile = (profile: any): User => {
+      const mappedRole = (profile.role as UserRole) || UserRole.RESIDENT;
+      return {
+          id: profile.id,
+          name: profile.name || profile.email?.split('@')[0] || 'Usuário',
+          email: profile.email,
+          role: mappedRole,
+          plan: mappedRole === UserRole.RESIDENT ? 'PREMIUM' : ((profile.plan as UserPlan) || 'FREE'),
+          neighborhoodId: profile.neighborhood_id,
+          address: profile.address,
+          city: profile.city,
+          state: profile.state,
+          phone: profile.phone,
+          photoUrl: profile.photo_url,
+          lat: profile.lat,
+          lng: profile.lng,
+          approved: profile.approved === true, 
+          mpPublicKey: profile.mp_public_key,
+          mpAccessToken: profile.mp_access_token
+      };
+  };
 
   const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
@@ -88,14 +117,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log("[Auth] Buscando perfil para:", userId);
       
       const isIdUuid = isUuid(userId);
+      const cachedRole = userId ? localStorage.getItem(`atalaia_cached_role_${userId}`) : null;
+
       if (!isRealSupabase || !isIdUuid) {
           console.log("[Auth] Bypass de busca no banco para ID não-UUID ou Supabase inativo. ID:", userId);
+          const resolvedRole = (cachedRole as UserRole) || (metadata?.role as UserRole) || deriveRoleFromEmail(email, UserRole.RESIDENT);
           setUser({
               id: userId,
               email: email,
               name: metadata?.name || email.split('@')[0],
-              role: (metadata?.role as UserRole) || UserRole.RESIDENT,
-              plan: (metadata?.plan as UserPlan) || 'FREE',
+              role: resolvedRole,
+              plan: resolvedRole === UserRole.RESIDENT ? 'PREMIUM' : ((metadata?.plan as UserPlan) || 'FREE'),
               neighborhoodId: metadata?.neighborhood_id,
               phone: metadata?.phone,
               approved: true
@@ -113,7 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
       const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout ao buscar perfil')), 8000)
+          setTimeout(() => reject(new Error('Timeout ao buscar perfil')), 12000)
       );
 
       try {
@@ -123,20 +155,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (data) {
               const mappedUser = mapProfile(data);
+              if (mappedUser.id && mappedUser.role) {
+                  localStorage.setItem(`atalaia_cached_role_${mappedUser.id}`, mappedUser.role);
+              }
               setUser(mappedUser);
               console.log("[Auth] Perfil carregado com sucesso. Role:", mappedUser.role);
               
               if (triggerNotify) {
                   MockService.notifyUserLogin(mappedUser).catch(() => {});
-              }
-          } else {
+               }
+           } else {
               console.warn("[Auth] Perfil não encontrado no banco para o ID:", userId, ". Usando metadados do Auth.");
+              const resolvedRole = (cachedRole as UserRole) || (metadata?.role as UserRole) || deriveRoleFromEmail(email, UserRole.RESIDENT);
               setUser({
                   id: userId,
                   email: email,
                   name: metadata?.name || email.split('@')[0],
-                  role: (metadata?.role as UserRole) || UserRole.RESIDENT,
-                  plan: (metadata?.plan as UserPlan) || 'FREE',
+                  role: resolvedRole,
+                  plan: resolvedRole === UserRole.RESIDENT ? 'PREMIUM' : ((metadata?.plan as UserPlan) || 'FREE'),
                   neighborhoodId: metadata?.neighborhood_id,
                   phone: metadata?.phone,
                   approved: true
@@ -146,12 +182,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.warn("[Auth] Erro ou Timeout ao buscar perfil:", e);
           // Fallback para não travar o usuário se o banco falhar mas o Auth do Supabase funcionou
           if (userId) {
+              const resolvedRole = (cachedRole as UserRole) || (metadata?.role as UserRole) || deriveRoleFromEmail(email, UserRole.RESIDENT);
               setUser({
                   id: userId,
                   email: email,
                   name: metadata?.name || email.split('@')[0],
-                  role: (metadata?.role as UserRole) || UserRole.RESIDENT,
-                  plan: (metadata?.plan as UserPlan) || 'FREE',
+                  role: resolvedRole,
+                  plan: resolvedRole === UserRole.RESIDENT ? 'PREMIUM' : ((metadata?.plan as UserPlan) || 'FREE'),
                   neighborhoodId: metadata?.neighborhood_id,
                   phone: metadata?.phone,
                   approved: true
@@ -315,7 +352,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: `demo-${cleanEmail.split('@')[0]}-id`,
             email: cleanEmail,
             name: cleanEmail.split('@')[0].toUpperCase(),
-            role: cleanEmail.includes('admin') ? UserRole.ADMIN : (cleanEmail.includes('integrador') ? UserRole.INTEGRATOR : UserRole.RESIDENT),
+            role: deriveRoleFromEmail(cleanEmail, UserRole.RESIDENT),
             plan: 'PREMIUM',
             approved: true
         };
@@ -382,6 +419,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     const { error } = await supabase.from('profiles').update(data).eq('id', user.id);
     if (error) throw error;
+    if (data.role) {
+       localStorage.setItem(`atalaia_cached_role_${user.id}`, data.role);
+    }
     setUser(prev => prev ? ({ ...prev, ...data }) : null);
   };
 
@@ -394,25 +434,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithBiometrics = async (profile: User) => {
     console.log("[Auth] Efetuando login via Biometria Facial para:", profile.email);
-    setUser(profile);
-    await SessionService.registerSession(profile.id, profile.email);
-    if (profile.phone) {
-       localStorage.setItem('user_last_phone', profile.phone);
+    
+    let completeProfile = { ...profile };
+
+    // Tentar carregar o perfil completo no banco de dados se houver conexão real
+    try {
+      if (isRealSupabase && isUuid(profile.id)) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', profile.id)
+          .maybeSingle();
+        
+        if (!error && data) {
+          completeProfile = mapProfile(data);
+        }
+      }
+    } catch (err) {
+      console.warn("[Auth] Erro ao buscar perfil completo após biometria:", err);
+    }
+
+    // Resolver a role da forma mais segura e persistente
+    if (!completeProfile.role) {
+      const cachedRole = localStorage.getItem(`atalaia_cached_role_${profile.id}`);
+      completeProfile.role = (cachedRole as UserRole) || deriveRoleFromEmail(profile.email, UserRole.RESIDENT);
+    } else {
+      localStorage.setItem(`atalaia_cached_role_${profile.id}`, completeProfile.role);
+    }
+
+    setUser(completeProfile);
+    await SessionService.registerSession(completeProfile.id, completeProfile.email);
+    if (completeProfile.phone) {
+       localStorage.setItem('user_last_phone', completeProfile.phone);
     }
   };
 
   const contextValue: AuthContextType = { 
         user, 
         login: async (email, password, role, name, neighborhoodId, phone) => {
-             if (name) {
-                if (!isRealSupabase) {
+             if (name || role) {
+                 if (!isRealSupabase) {
                     console.log("[Auth] Demo Mode: Simulando registro para", name);
+                    const resolvedRole = role || UserRole.RESIDENT;
                     const newUser = {
                         id: `demo-${Date.now()}`,
                         email,
-                        name,
-                        role: role || UserRole.RESIDENT,
-                        plan: 'FREE' as UserPlan,
+                        name: name || email.split('@')[0],
+                        role: resolvedRole,
+                        plan: (resolvedRole === UserRole.RESIDENT ? 'PREMIUM' : 'FREE') as UserPlan,
                         approved: true,
                         neighborhoodId,
                         phone
@@ -421,12 +490,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     return;
                 }
                 const isApproved = role === UserRole.ADMIN || role === UserRole.RESIDENT;
+                const safeNeighborhoodId = neighborhoodId && neighborhoodId.trim() !== '' ? neighborhoodId.trim() : null;
                 const { data, error } = await supabase.auth.signUp({
-                    email, password, options: { data: { role, name, neighborhood_id: neighborhoodId, phone, approved: isApproved } }
+                    email, password, options: { data: { role, name, neighborhood_id: safeNeighborhoodId, phone, approved: isApproved, plan: role === UserRole.RESIDENT ? 'PREMIUM' : 'FREE' } }
                 });
                 if (error) throw error;
                 if (data.user) {
-                    await supabase.from('profiles').upsert({ id: data.user.id, email, name, phone, neighborhood_id: neighborhoodId, role, approved: isApproved });
+                    await supabase.from('profiles').upsert({ id: data.user.id, email, name, phone, neighborhood_id: safeNeighborhoodId, role, approved: isApproved, plan: 'PREMIUM' });
                     if (!isApproved) { await supabase.auth.signOut(); throw new Error("Aguarde aprovação."); }
                 }
                 return;

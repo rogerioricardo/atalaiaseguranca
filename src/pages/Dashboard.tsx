@@ -11,10 +11,12 @@ import {
     AlertTriangle, Video, Users, Activity, MapPin, Inbox, Copy, Trash2, 
     Heart, DollarSign, Loader2, Navigation, FileText, 
     Shield, Star, Lock, Send, Search, CheckCircle, UserCheck, XCircle,
-    Wrench, MessageSquare
+    Wrench, MessageSquare, DoorOpen, LightbulbOff, Eye, ShieldAlert, UserX,
+    VolumeX, Package, Droplet, Sparkles, Bell
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PaymentService } from '@/services/paymentService';
+import { motion, AnimatePresence } from 'motion/react';
 
 // --- SUB-COMPONENT: SCR TACTICAL DASHBOARD ---
 const SCRDashboard = ({ user, neighborhood }: { user: User, neighborhood?: Neighborhood }) => {
@@ -28,22 +30,30 @@ const SCRDashboard = ({ user, neighborhood }: { user: User, neighborhood?: Neigh
     const [residentSearch, setResidentSearch] = useState('');
     const [pendingAction, setPendingAction] = useState<{type: 'CHECKIN' | 'LOG' | 'PANIC', note?: string} | null>(null);
 
+    // Dynamic Feedback state for beautiful UX without browser-blocking alerts
+    const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+    const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 5000);
+    };
+
     useEffect(() => {
         const loadData = async () => {
              // Carrega incidentes
              const alerts = await MockService.getAlerts(user.neighborhoodId);
-             setQuickIncidents(alerts.slice(0, 3));
+             setQuickIncidents(alerts.slice(0, 4));
 
              // Carrega solicitações VIP
              if (user.neighborhoodId) {
-                 const requests = await MockService.getServiceRequests(user.neighborhoodId);
-                 setServiceRequests(requests.filter(r => r.status === 'PENDING'));
-                 
-                 // Pre-load residents for selector
-                 const users = await MockService.getUsers(user.neighborhoodId);
-                 
-                 // FILTRO: Apenas moradores do plano PREMIUM (PRÊMIO) aparecem para o SCR
-                 setResidents(users.filter(u => u.role === UserRole.RESIDENT && u.plan === 'PREMIUM'));
+                  const requests = await MockService.getServiceRequests(user.neighborhoodId);
+                  setServiceRequests(requests.filter(r => r.status === 'PENDING'));
+                  
+                  // Pre-load residents for selector
+                  const users = await MockService.getUsers(user.neighborhoodId);
+                  
+                  // FILTRO: Mostrar TODOS os moradores do bairro no seletor para o Motovigia, alertando se é Premium ou Regular
+                  setResidents(users.filter(u => u.role === UserRole.RESIDENT));
              }
         };
         loadData();
@@ -76,14 +86,14 @@ const SCRDashboard = ({ user, neighborhood }: { user: User, neighborhood?: Neigh
                             position.coords.longitude,
                             targetUserId
                         );
-                        alert(`✅ Check-in registrado! ${targetUser ? `Notificação enviada para ${targetUser.name}.` : ''}`);
+                        showToast(`Check-in de ronda concluído! ${targetUser ? `Notificação enviada para o WhatsApp de ${targetUser.name}.` : ''}`, 'success');
                         setPatrolLoading(false);
                     }, (error) => {
-                        alert("Erro de GPS: " + error.message);
+                        showToast("Erro ao obter GPS: " + error.message, 'error');
                         setPatrolLoading(false);
                     });
                 } else {
-                    alert("GPS não suportado.");
+                    showToast("Recurso de GPS não suportado neste navegador.", 'error');
                     setPatrolLoading(false);
                 }
             } else if (pendingAction.type === 'LOG') {
@@ -95,171 +105,345 @@ const SCRDashboard = ({ user, neighborhood }: { user: User, neighborhood?: Neigh
                     undefined,
                     targetUserId
                 );
-                alert(`📖 Ocorrência registrada! ${targetUser ? `Notificação enviada para ${targetUser.name}.` : ''}`);
+                showToast(`Registro inserido! ${targetUser ? `Alerta WhatsApp disparado para ${targetUser.name}.` : 'Ocorrência geral registrada.'}`, 'success');
                 setPatrolLoading(false);
+                
+                // Refresh local timeline
+                const alerts = await MockService.getAlerts(user.neighborhoodId);
+                setQuickIncidents(alerts.slice(0, 4));
             } else if (pendingAction.type === 'PANIC') {
-                // For SCR Panic, we create a general alert but mention the resident in the note if selected
                 await MockService.createAlert({
-                    type: 'DANGER', // SCR panic is usually a danger report
+                    type: 'DANGER',
                     userId: user.id,
                     userName: user.name,
                     neighborhoodId: user.neighborhoodId!,
                     userRole: UserRole.SCR,
                     message: logNote
                 });
-                alert("🚨 Alerta de Perigo enviado à central!");
+                showToast("🚨 Chamado tático e alerta geral enviados para a central!", 'success');
                 setPatrolLoading(false);
             }
         } catch (e) {
-            alert("Erro ao executar ação.");
+            showToast("Erro de processamento no banco Atalaia.", 'error');
             setPatrolLoading(false);
         }
     };
 
     const filteredResidents = residents.filter(r => 
         r.name.toLowerCase().includes(residentSearch.toLowerCase()) ||
-        r.address?.toLowerCase().includes(residentSearch.toLowerCase())
+        (r.address && r.address.toLowerCase().includes(residentSearch.toLowerCase()))
     );
 
     return (
         <Layout>
             <div className="flex flex-col h-full gap-4">
-                <div className="bg-atalaia-neon/10 border-l-4 border-atalaia-neon p-4 rounded-r-lg mb-4">
-                    <h1 className="text-2xl font-black text-white tracking-tighter uppercase flex items-center gap-2">
-                        <ShieldCheckIcon /> PAINEL TÁTICO
-                    </h1>
-                    <p className="text-atalaia-neon font-mono text-xs uppercase tracking-widest">
-                        OPERADOR: {user.name} | POSTO: {neighborhood?.name || 'GLOBAL'}
-                    </p>
+                <div className="bg-atalaia-neon/10 border-l-4 border-atalaia-neon p-4 rounded-r-lg mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                    <div>
+                        <h1 className="text-2xl font-black text-white tracking-tighter uppercase flex items-center gap-2">
+                            <ShieldCheckIcon /> PAINEL DO MOTOVIGIA
+                        </h1>
+                        <p className="text-atalaia-neon font-mono text-xs uppercase tracking-widest">
+                            OPERADOR: {user.name} | BAIRRO: {neighborhood?.name || 'VILA INTEGRADA'}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-widest">PATRULHA ATIVA</span>
+                    </div>
                 </div>
 
                 {/* BIG BUTTONS FOR GLOVED HANDS */}
-                <div className="grid grid-cols-2 gap-4 h-48">
+                <div className="grid grid-cols-2 gap-4 h-32 md:h-40">
                     <button 
                         onClick={() => initiateAction('CHECKIN')}
                         disabled={patrolLoading}
-                        className="bg-green-700 hover:bg-green-600 active:bg-green-500 text-white rounded-xl border-2 border-green-500 shadow-[0_0_20px_rgba(21,128,61,0.5)] flex flex-col items-center justify-center gap-2 transition-all active:scale-95"
+                        className="bg-emerald-950/70 hover:bg-emerald-900 active:bg-emerald-800 text-white rounded-xl border-2 border-emerald-500/50 hover:border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)] flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                     >
-                        {patrolLoading ? <Loader2 className="animate-spin w-12 h-12" /> : <MapPin className="w-12 h-12" />}
-                        <span className="text-xl font-black uppercase">CHECK-IN RONDA</span>
+                        {patrolLoading ? <Loader2 className="animate-spin w-10 h-10 text-emerald-400" /> : <MapPin className="w-10 h-10 text-emerald-400" />}
+                        <span className="text-sm font-black uppercase tracking-wider">CHECK-IN RONDA</span>
                     </button>
 
                     <button 
                         onClick={() => initiateAction('PANIC')}
-                        className="bg-red-700 hover:bg-red-600 active:bg-red-500 text-white rounded-xl border-2 border-red-500 shadow-[0_0_20px_rgba(185,28,28,0.5)] flex flex-col items-center justify-center gap-2 transition-all active:scale-95"
+                        className="bg-red-950/70 hover:bg-red-900 active:bg-red-800 text-white rounded-xl border-2 border-red-500/50 hover:border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.15)] flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                     >
-                        <AlertTriangle className="w-12 h-12" />
-                        <span className="text-xl font-black uppercase">REPORTAR PERIGO</span>
+                        <AlertTriangle className="w-10 h-10 text-red-500" />
+                        <span className="text-sm font-black uppercase tracking-wider">PANICO / PERIGO</span>
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2">
-                    {/* VIP REQUESTS */}
-                    <Card className="p-4 bg-[#111] border-yellow-500/30">
-                        <h3 className="text-yellow-400 font-bold mb-4 flex items-center gap-2 uppercase text-sm">
-                            <Star size={16} fill="currentColor" /> Solicitações VIP (Premium)
-                        </h3>
-                        <div className="space-y-2">
-                            {serviceRequests.length === 0 ? (
-                                <p className="text-gray-600 italic text-xs">Nenhuma solicitação pendente.</p>
-                            ) : (
-                                serviceRequests.map(req => (
-                                    <div key={req.id} className="p-3 bg-yellow-900/10 border border-yellow-500/20 rounded flex justify-between items-center">
-                                        <div>
-                                            <p className="text-white font-bold text-sm">
-                                                {req.requestType === 'ESCORT' ? 'SOLICITAÇÃO DE ESCOLTA' : 
-                                                 req.requestType === 'EXTRA_ROUND' ? 'RONDA EXTRA NO LOCAL' : 'AVISO DE VIAGEM'}
-                                            </p>
-                                            <p className="text-gray-400 text-xs">Morador: {req.userName}</p>
-                                            <p className="text-gray-500 text-[10px]">{new Date(req.createdAt).toLocaleString()}</p>
-                                        </div>
-                                        <Badge color="yellow">PENDENTE</Badge>
-                                    </div>
-                                ))
-                            )}
+                {/* LIVRO DE OCORRÊNCIAS CLASSIFICADO */}
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mt-2">
+                    
+                    {/* COL 1: SEGURANÇA ATIVA */}
+                    <Card className="p-4 bg-black/60 border-red-500/10 flex flex-col">
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="w-1.5 h-4 bg-red-500 rounded-full" />
+                            <h3 className="text-white font-bold uppercase tracking-wider text-xs">
+                                Segurança e Alertas Críticos
+                            </h3>
                         </div>
-                    </Card>
-
-                    {/* QUICK INCIDENTS */}
-                    <Card className="p-4 bg-[#111] border-gray-800">
-                        <h3 className="text-white font-bold mb-4 flex items-center gap-2 uppercase text-sm text-gray-400">
-                            <FileText size={16} /> Livro de Ocorrências Rápido
-                        </h3>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button onClick={() => initiateAction('LOG', "PORTÃO ABERTO")} className="p-4 bg-gray-800 rounded border border-gray-700 hover:bg-gray-700 text-white font-bold text-sm">PORTÃO ABERTO</button>
-                            <button onClick={() => initiateAction('LOG', "LÂMPADA QUEIMADA")} className="p-4 bg-gray-800 rounded border border-gray-700 hover:bg-gray-700 text-white font-bold text-sm">LUZ QUEIMADA</button>
-                            <button onClick={() => initiateAction('LOG', "VEÍCULO SUSPEITO")} className="p-4 bg-gray-800 rounded border border-gray-700 hover:bg-gray-700 text-white font-bold text-sm">VEÍCULO SUSPEITO</button>
-                            <button onClick={() => initiateAction('LOG', "VIOLAÇÃO DE PERÍMETRO")} className="p-4 bg-gray-800 rounded border border-gray-700 hover:bg-gray-700 text-white font-bold text-sm">VIOLAÇÃO PERÍMETRO</button>
-                        </div>
-                    </Card>
-
-                    {/* RECENT ALERTS FEED */}
-                    <Card className="p-4 bg-[#111] border-gray-800">
-                         <h3 className="text-white font-bold mb-4 flex items-center gap-2 uppercase text-sm text-gray-400">
-                            <Activity size={16} /> Fila de Despacho (Últimos)
-                        </h3>
-                        <div className="space-y-2">
-                            {quickIncidents.map(alert => (
-                                <div key={alert.id} className={`p-3 rounded border-l-4 ${alert.type === 'PANIC' ? 'border-red-500 bg-red-900/20' : 'border-gray-500 bg-gray-900'}`}>
-                                    <div className="flex justify-between">
-                                        <span className="font-bold text-white">{alert.type}</span>
-                                        <span className="text-xs text-gray-400">{new Date(alert.timestamp).toLocaleTimeString()}</span>
+                        <div className="grid grid-cols-1 gap-2 flex-grow">
+                            <button 
+                                onClick={() => initiateAction('LOG', "PORTÃO ABERTO / VULNERABILIDADE")} 
+                                className="group flex items-center justify-between p-3.5 bg-zinc-900/60 hover:bg-red-950/20 rounded-lg border border-white/5 hover:border-red-500/30 text-left transition-all active:scale-98 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-red-500/10 text-red-400 rounded-md group-hover:bg-red-500/20">
+                                        <DoorOpen size={16} />
                                     </div>
-                                    <p className="text-xs text-gray-300 truncate">{alert.userName} - {alert.message || 'Sem detalhes'}</p>
+                                    <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase">Portão Aberto</span>
                                 </div>
-                            ))}
-                            {quickIncidents.length === 0 && <p className="text-gray-600 italic">Sem incidentes recentes.</p>}
+                                <span className="text-[10px] font-mono text-red-400 opacity-60 group-hover:opacity-100 uppercase tracking-widest font-black">LOG + WA</span>
+                            </button>
+
+                            <button 
+                                onClick={() => initiateAction('LOG', "VEÍCULO EM ATITUDE SUSPEITA")} 
+                                className="group flex items-center justify-between p-3.5 bg-zinc-900/60 hover:bg-orange-950/20 rounded-lg border border-white/5 hover:border-orange-500/30 text-left transition-all active:scale-98 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-orange-500/10 text-orange-400 rounded-md group-hover:bg-orange-500/20">
+                                        <Eye size={16} />
+                                    </div>
+                                    <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase">Veículo Suspeito</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-orange-400 opacity-60 group-hover:opacity-100 uppercase tracking-widest font-black">LOG + WA</span>
+                            </button>
+
+                            <button 
+                                onClick={() => initiateAction('LOG', "VIOLAÇÃO DE PERÍMETRO OU MURO")} 
+                                className="group flex items-center justify-between p-3.5 bg-zinc-900/60 hover:bg-red-950/20 rounded-lg border border-white/5 hover:border-red-500/30 text-left transition-all active:scale-98 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-red-500/10 text-red-400 rounded-md group-hover:bg-red-500/20">
+                                        <ShieldAlert size={16} />
+                                    </div>
+                                    <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase">Violação Perímetro</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-red-400 opacity-60 group-hover:opacity-100 uppercase tracking-widest font-black">LOG + WA</span>
+                            </button>
+
+                            <button 
+                                onClick={() => initiateAction('LOG', "PESSOA EM ATITUDE SUSPEITA NO SETOR")} 
+                                className="group flex items-center justify-between p-3.5 bg-zinc-900/60 hover:bg-amber-950/20 rounded-lg border border-white/5 hover:border-amber-500/30 text-left transition-all active:scale-98 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-amber-500/10 text-amber-400 rounded-md group-hover:bg-amber-500/20">
+                                        <UserX size={16} />
+                                    </div>
+                                    <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase">Pessoa Suspeita</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-amber-400 opacity-60 group-hover:opacity-100 uppercase tracking-widest font-black">LOG + WA</span>
+                            </button>
+
+                            <button 
+                                onClick={() => initiateAction('LOG', "BARULHO ESTRANHO OU DISPARO DE ALARME")} 
+                                className="group flex items-center justify-between p-3.5 bg-zinc-900/60 hover:bg-[#111] rounded-lg border border-white/5 hover:border-zinc-500/30 text-left transition-all active:scale-98 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-zinc-500/10 text-zinc-400 rounded-md group-hover:bg-zinc-500/20">
+                                        <VolumeX size={16} />
+                                    </div>
+                                    <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase">Barulho Estranho</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-zinc-400 opacity-60 group-hover:opacity-100 uppercase tracking-widest font-black">LOG + WA</span>
+                            </button>
                         </div>
                     </Card>
+
+                    {/* COL 2: ZELADORIA E COMUNIDADE */}
+                    <Card className="p-4 bg-black/60 border-zinc-500/10 flex flex-col">
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="w-1.5 h-4 bg-atalaia-neon rounded-full" />
+                            <h3 className="text-white font-bold uppercase tracking-wider text-xs">
+                                Zeladoria e Rond Comunitária
+                            </h3>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 flex-grow">
+                            <button 
+                                onClick={() => initiateAction('LOG', "LÂMPADA DA COLETIVA OU LUZ INTERNA QUEIMADA")} 
+                                className="group flex items-center justify-between p-3.5 bg-zinc-900/60 hover:bg-yellow-950/20 rounded-lg border border-white/5 hover:border-yellow-500/30 text-left transition-all active:scale-98 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-yellow-500/10 text-yellow-400 rounded-md group-hover:bg-yellow-500/20">
+                                        <LightbulbOff size={16} />
+                                    </div>
+                                    <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase">Luz Queimada</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-yellow-400 opacity-60 group-hover:opacity-100 uppercase tracking-widest">LOG + WA</span>
+                            </button>
+
+                            <button 
+                                onClick={() => initiateAction('LOG', "VAZAMENTO DE ÁGUA / CANO ESTOURADO NA CALÇADA")} 
+                                className="group flex items-center justify-between p-3.5 bg-zinc-900/60 hover:bg-cyan-950/20 rounded-lg border border-white/5 hover:border-cyan-500/30 text-left transition-all active:scale-98 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-cyan-500/10 text-cyan-400 rounded-md group-hover:bg-cyan-500/20">
+                                        <Droplet size={16} />
+                                    </div>
+                                    <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase">Vazamento Água</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-cyan-400 opacity-60 group-hover:opacity-100 uppercase tracking-widest">LOG + WA</span>
+                            </button>
+
+                            <button 
+                                onClick={() => initiateAction('LOG', "ENCOMENDA EXPOSTA / DEIXADA NA COVA DE ENTRADA")} 
+                                className="group flex items-center justify-between p-3.5 bg-zinc-900/60 hover:bg-amber-950/20 rounded-lg border border-white/5 hover:border-amber-500/30 text-left transition-all active:scale-98 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-amber-500/10 text-amber-500 rounded-md group-hover:bg-amber-500/20">
+                                        <Package size={16} />
+                                    </div>
+                                    <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase">Encomenda Exposta</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-amber-500 opacity-60 group-hover:opacity-100 uppercase tracking-widest">LOG + WA</span>
+                            </button>
+
+                            <button 
+                                onClick={() => initiateAction('LOG', "ANIMAIS DE ESTIMAÇÃO AGITADOS / CÃO LATINDO SEGUIDO")} 
+                                className="group flex items-center justify-between p-3.5 bg-zinc-900/60 hover:bg-orange-950/20 rounded-lg border border-white/5 hover:border-orange-500/30 text-left transition-all active:scale-98 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-orange-500/10 text-orange-400 rounded-md group-hover:bg-orange-500/20">
+                                        <Bell size={16} />
+                                    </div>
+                                    <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase">Cão Latindo muito</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-orange-400 opacity-60 group-hover:opacity-100 uppercase tracking-widest">LOG + WA</span>
+                            </button>
+
+                            <button 
+                                onClick={() => initiateAction('LOG', "APOIO EXTRA / COOPERAÇÃO POLICIAL")} 
+                                className="group flex items-center justify-between p-3.5 bg-zinc-900/60 hover:bg-[#111] rounded-lg border border-white/5 hover:border-zinc-500/30 text-left transition-all active:scale-98 cursor-pointer"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-blue-500/10 text-blue-400 rounded-md group-hover:bg-blue-500/20">
+                                        <Shield size={16} />
+                                    </div>
+                                    <span className="text-xs font-bold text-zinc-300 group-hover:text-white uppercase">Solicitar Apoio</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-blue-400 opacity-60 group-hover:opacity-100 uppercase tracking-widest">APOIO</span>
+                            </button>
+                        </div>
+                    </Card>
+
+                    {/* COL 3: PEDIDOS PENDENTES E FEED RECENTE */}
+                    <div className="flex flex-col gap-4">
+                        {/* VIP VIP VIP */}
+                        <Card className="p-4 bg-black/60 border-yellow-500/30">
+                            <h3 className="text-yellow-400 font-bold mb-3 flex items-center gap-2 uppercase text-xs">
+                                <Star size={14} fill="currentColor" /> Pedidos de Suporte Vip (Premium)
+                            </h3>
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                                {serviceRequests.length === 0 ? (
+                                    <p className="text-zinc-650 italic text-[11px] py-4 text-center">Nenhuma requisição de escolta ou suporte VIP no momento.</p>
+                                ) : (
+                                    serviceRequests.map(req => (
+                                        <div key={req.id} className="p-2.5 bg-yellow-900/10 border border-yellow-500/20 rounded flex justify-between items-center animate-pulse">
+                                            <div>
+                                                <p className="text-white font-black text-xs uppercase">
+                                                    {req.requestType === 'ESCORT' ? 'ESCOLTA RESIDENCIAL' : 
+                                                     req.requestType === 'EXTRA_ROUND' ? 'PEDIDO RONDA EXTRA' : 'NOTIFICADO VIAGEM'}
+                                                </p>
+                                                <p className="text-zinc-400 text-[10px] font-sans">Morador: {req.userName}</p>
+                                            </div>
+                                            <Badge color="yellow" className="text-[9px] scale-90">Pendente</Badge>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </Card>
+
+                        {/* DESPACHOS RECENTES */}
+                        <Card className="p-4 bg-black/60 border-zinc-800">
+                             <h3 className="text-zinc-400 font-bold mb-3 flex items-center gap-2 uppercase text-xs">
+                                <Activity size={14} /> Fila de Histórico de Despacho
+                            </h3>
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                                {quickIncidents.map(alert => (
+                                    <div key={alert.id} className={`p-2.5 rounded border-l-4 ${alert.type === 'PANIC' ? 'border-red-500 bg-red-950/20' : 'border-zinc-700 bg-zinc-900'}`}>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="font-extrabold text-[10px] tracking-wider uppercase text-white">{alert.type}</span>
+                                            <span className="text-[9px] font-mono text-zinc-500">{new Date(alert.timestamp).toLocaleTimeString('pt-BR')}</span>
+                                        </div>
+                                        <p className="text-[11px] text-zinc-300 font-sans leading-tight">
+                                            {alert.userName}: {alert.message || 'Ronda de rotina sem observação.'}
+                                        </p>
+                                    </div>
+                                ))}
+                                {quickIncidents.length === 0 && <p className="text-zinc-600 italic text-xs py-4 text-center">Nenhuma atividade recente.</p>}
+                            </div>
+                        </Card>
+                    </div>
                 </div>
 
                 {/* RESIDENT SELECTION MODAL */}
                 <Modal isOpen={isResidentModalOpen} onClose={() => setIsResidentModalOpen(false)}>
-                    <div className="p-4">
-                        <h2 className="text-xl font-bold text-white mb-2">Vincular Morador (VIP)</h2>
-                        <p className="text-gray-400 text-sm mb-4">
-                            Selecione o morador <strong>Premium</strong> relacionado a esta ocorrência.
-                            Apenas assinantes do plano Prêmio aparecem nesta lista.
+                    <div className="p-5 font-sans">
+                        <h2 className="text-lg font-black text-white uppercase tracking-tight mb-1 flex items-center gap-2">
+                            <Users size={20} className="text-atalaia-neon" /> Vincular e Notificar Morador
+                        </h2>
+                        <p className="text-zinc-400 text-xs mb-5">
+                            Selecione o morador correspondente. O sistema irá registrar o log da ronda e enviar um alerta completo de imediato via **WhatsApp** para proteger e notificar o morador.
                         </p>
 
                         <div className="relative mb-4">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
                             <input 
                                 type="text" 
-                                placeholder="Buscar morador ou endereço..."
+                                placeholder="Discar nome ou endereço..."
                                 value={residentSearch}
                                 onChange={(e) => setResidentSearch(e.target.value)}
                                 autoFocus
-                                className="w-full bg-black border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-white focus:border-atalaia-neon focus:outline-none"
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:border-atalaia-neon focus:outline-none placeholder-zinc-600"
                             />
                         </div>
 
-                        <div className="max-h-60 overflow-y-auto space-y-2 mb-4">
+                        <div className="max-h-60 overflow-y-auto space-y-2 mb-5 pr-1">
                             {filteredResidents.map(resident => (
                                 <div 
                                     key={resident.id}
                                     onClick={() => confirmAction(resident.id)}
-                                    className="p-3 bg-atalaia-neon/10 border border-atalaia-neon/20 rounded-lg hover:bg-atalaia-neon/20 hover:border-atalaia-neon cursor-pointer flex justify-between items-center group"
+                                    className="p-3 bg-zinc-900/40 hover:bg-zinc-900 border border-white/5 hover:border-atalaia-neon/30 rounded-xl cursor-pointer flex justify-between items-center group transition-all"
                                 >
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <p className="text-white font-bold text-sm">{resident.name}</p>
-                                            <Badge color="green">PRÊMIO</Badge>
+                                            <p className="text-white font-bold text-sm group-hover:text-atalaia-neon transition-colors">{resident.name}</p>
+                                            <Badge color="green" className="text-[9px] uppercase">
+                                                PRÊMIO
+                                            </Badge>
                                         </div>
-                                        <p className="text-gray-500 text-xs">{resident.address || 'Sem endereço'}</p>
+                                        <p className="text-zinc-500 text-xs font-mono">{resident.address || 'Sem endereço registrado'}</p>
                                     </div>
-                                    <CheckCircle size={18} className="text-gray-600 group-hover:text-atalaia-neon" />
+                                    <div className="p-1 px-3 bg-zinc-950 group-hover:bg-atalaia-neon text-zinc-400 group-hover:text-black font-mono text-[10px] font-black uppercase rounded-lg transition-colors border border-white/5">
+                                        Selecionar
+                                    </div>
                                 </div>
                             ))}
-                            {filteredResidents.length === 0 && <p className="text-center text-gray-500 py-4">Nenhum assinante Prêmio encontrado.</p>}
+                            {filteredResidents.length === 0 && <p className="text-center text-zinc-500 py-6 text-xs">Nenhum morador localizado com este termo.</p>}
                         </div>
 
-                        <Button onClick={() => confirmAction(undefined)} variant="secondary" className="w-full">
-                            Pular Seleção (Registro Geral)
+                        <Button onClick={() => confirmAction(undefined)} variant="outline" className="w-full uppercase text-xs tracking-wider py-3 rounded-xl">
+                            Pular Seleção (Apenas Registro Geral no Setor)
                         </Button>
                     </div>
                 </Modal>
             </div>
+
+            {/* Premium Toast Notification System */}
+            <AnimatePresence>
+                {toast && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 50, scale: 0.95 }}
+                        className={`fixed bottom-6 right-6 z-[80] p-4 rounded-xl shadow-2xl border flex items-center gap-3 backdrop-blur-md ${toast.type === 'success' ? 'bg-emerald-950/90 border-emerald-500/30 text-emerald-300' : 'bg-red-950/90 border-red-500/30 text-red-300'}`}
+                    >
+                        <CheckCircle size={18} className={toast.type === 'success' ? 'text-emerald-400' : 'text-red-400'} />
+                        <span className="text-xs font-bold font-sans tracking-wide uppercase">{toast.msg}</span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </Layout>
     )
 }
@@ -291,6 +475,10 @@ const Dashboard: React.FC = () => {
   
   // POPUP FEEDBACK STATE
   const [feedback, setFeedback] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
+
+  const [notifToDelete, setNotifToDelete] = useState<string | null>(null);
+  const [notifUserToReject, setNotifUserToReject] = useState<{ notifId: string, pendingUserId: string } | null>(null);
+  const [serviceToRequest, setServiceToRequest] = useState<'ESCORT' | 'EXTRA_ROUND' | 'TRAVEL_NOTICE' | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -358,11 +546,13 @@ const Dashboard: React.FC = () => {
       setTimeout(() => setFeedback(null), 4000);
   };
 
+  const executeDeleteNotification = async (id: string) => {
+    await MockService.deleteNotification(id);
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
   const handleDeleteNotification = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta notificação?')) {
-        await MockService.deleteNotification(id);
-        setNotifications(prev => prev.filter(n => n.id !== id));
-    }
+    setNotifToDelete(id);
   };
 
   const handleApproveFromNotification = async (notifId: string, pendingUserId: string) => {
@@ -379,9 +569,7 @@ const Dashboard: React.FC = () => {
       }
   };
 
-  const handleRejectFromNotification = async (notifId: string, pendingUserId: string) => {
-      if(!window.confirm("Rejeitar e excluir este cadastro?")) return;
-      
+  const executeRejectFromNotification = async (notifId: string, pendingUserId: string) => {
       setActionLoading(notifId);
       try {
           await MockService.deleteUser(pendingUserId);
@@ -393,6 +581,10 @@ const Dashboard: React.FC = () => {
       } finally {
           setActionLoading(null);
       }
+  };
+
+  const handleRejectFromNotification = async (notifId: string, pendingUserId: string) => {
+      setNotifUserToReject({ notifId, pendingUserId });
   };
 
   const handleDonation = async () => {
@@ -418,24 +610,25 @@ const Dashboard: React.FC = () => {
       }
   };
 
+  const executeRequestService = async (type: 'ESCORT' | 'EXTRA_ROUND' | 'TRAVEL_NOTICE') => {
+      setRequestLoading(type);
+      try {
+          await MockService.createServiceRequest(user.id, user.name, user.neighborhoodId!, type);
+          showFeedback("Solicitação enviada via WhatsApp para a Equipe Tática!", 'success');
+      } catch (e) {
+          showFeedback("Erro ao enviar solicitação.", 'error');
+      } finally {
+          setRequestLoading(null);
+      }
+  };
+
   const handleRequestService = async (type: 'ESCORT' | 'EXTRA_ROUND' | 'TRAVEL_NOTICE') => {
       if (!user || !user.neighborhoodId) return;
       if (user.plan !== 'PREMIUM') {
           setShowUpgradeModal(true);
           return;
       }
-
-      if (window.confirm("Confirmar solicitação ao Motovigia?")) {
-          setRequestLoading(type);
-          try {
-              await MockService.createServiceRequest(user.id, user.name, user.neighborhoodId, type);
-              showFeedback("Solicitação enviada via WhatsApp para a Equipe Tática!", 'success');
-          } catch (e) {
-              showFeedback("Erro ao enviar solicitação.", 'error');
-          } finally {
-              setRequestLoading(null);
-          }
-      }
+      setServiceToRequest(type);
   };
 
   const StatCard = ({ icon: Icon, label, value, color }: any) => (
@@ -793,6 +986,141 @@ const Dashboard: React.FC = () => {
 
        {/* Modal Upgrade Global */}
        <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
+
+       <AnimatePresence>
+            {/* Custom delete notification modal */}
+            {notifToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden text-center"
+                    >
+                        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+                        <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 font-sans">
+                            <AlertTriangle size={24} className="mx-auto text-red-500" />
+                        </div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-2 font-mono">
+                            Excluir Notificação
+                        </h3>
+                        <p className="text-xs text-zinc-400 mb-6 leading-relaxed font-sans">
+                            Deseja realmente excluir esta notificação?
+                        </p>
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setNotifToDelete(null)}
+                                className="flex-1 py-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-zinc-900 text-zinc-300 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer font-sans"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    if (notifToDelete) {
+                                        await executeDeleteNotification(notifToDelete);
+                                        setNotifToDelete(null);
+                                    }
+                                }}
+                                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-500/15 cursor-pointer font-sans"
+                            >
+                                Excluir
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Custom reject user modal */}
+            {notifUserToReject && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden text-center"
+                    >
+                        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+                        <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 font-sans">
+                            <XCircle size={24} className="mx-auto text-red-500" />
+                        </div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-2 font-mono">
+                            Rejeitar Usuário
+                        </h3>
+                        <p className="text-xs text-zinc-400 mb-6 leading-relaxed font-sans">
+                            Deseja rejeitar e remover este cadastro do sistema?
+                        </p>
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setNotifUserToReject(null)}
+                                className="flex-1 py-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-zinc-900 text-zinc-300 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer font-sans"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    if (notifUserToReject) {
+                                        await executeRejectFromNotification(notifUserToReject.notifId, notifUserToReject.pendingUserId);
+                                        setNotifUserToReject(null);
+                                    }
+                                }}
+                                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-500/15 cursor-pointer font-sans"
+                            >
+                                Rejeitar
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Custom request service confirm modal */}
+            {serviceToRequest && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden text-center"
+                    >
+                        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-atalaia-neon/50 to-transparent" />
+                        <div className="w-12 h-12 bg-atalaia-neon/10 border border-atalaia-neon/20 text-atalaia-neon rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Navigation size={22} className="text-atalaia-neon mx-auto" />
+                        </div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-2 font-mono">
+                            Confirmar Serviço
+                        </h3>
+                        <p className="text-xs text-zinc-400 mb-6 leading-relaxed font-sans">
+                            Deseja confirmar o pedido de <span className="text-white font-bold">{serviceToRequest === 'ESCORT' ? 'Acompanhamento Seguro' : serviceToRequest === 'EXTRA_ROUND' ? 'Ronda Extra' : 'Aviso de Viagem'}</span> para o Motovigia da sua região?
+                        </p>
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setServiceToRequest(null)}
+                                className="flex-1 py-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-zinc-900 text-zinc-300 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer font-sans"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    if (serviceToRequest) {
+                                        const type = serviceToRequest;
+                                        setServiceToRequest(null);
+                                        await executeRequestService(type);
+                                    }
+                                }}
+                                className="flex-1 py-2.5 rounded-xl bg-atalaia-neon text-black font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-atalaia-neon/15 cursor-pointer font-sans"
+                            >
+                                Confirmar
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
     </Layout>
   );
 };

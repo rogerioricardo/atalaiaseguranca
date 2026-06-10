@@ -19,6 +19,7 @@ import FinancialAdmin from '@/pages/FinancialAdmin';
 import Documentation from '@/pages/Documentation';
 import Terms from '@/pages/Terms';
 import Privacy from '@/pages/Privacy';
+import ResetPassword from '@/pages/ResetPassword';
 import { ShieldCheck, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/UI';
 
@@ -107,6 +108,7 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/docs" element={<Documentation />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />

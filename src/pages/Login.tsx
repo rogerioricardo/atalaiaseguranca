@@ -4,15 +4,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/context';
 import { UserRole, Neighborhood } from '@/types';
 import { Button, Input, Card } from '@/components/UI';
-import { ShieldCheck, ArrowLeft, AlertCircle, MapPin, CheckCircle, RefreshCw, Loader2, Scan } from 'lucide-react';
+import { ShieldCheck, ArrowLeft, AlertCircle, MapPin, CheckCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { MockService } from '@/services/mockService';
 import { PaymentService } from '@/services/paymentService';
 import { SessionService } from '@/services/sessionService';
 import { supabase, isRealSupabase } from '@/lib/supabaseClient';
-import { FacialScannerModal } from '@/components/FacialScannerModal';
 
 const Login: React.FC = () => {
-  const { login, isAuthenticated, user, loading: authLoading, loginWithBiometrics } = useAuth();
+  const { login, isAuthenticated, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isRegister, setIsRegister] = useState(searchParams.get('mode') === 'register');
@@ -34,92 +33,10 @@ const Login: React.FC = () => {
   // States to audit concurrent session security
   const [showActiveSessionModal, setShowActiveSessionModal] = useState(false);
   const [activeSessions, setActiveSessions] = useState<any[]>([]);
-  const [showFaceModal, setShowFaceModal] = useState(false);
 
-  const handleFaceLoginSuccess = async (matchedBiometrics: any) => {
-    if (!matchedBiometrics) return;
-    console.log("[FaceLogin] Sucesso! Biometria associada:", matchedBiometrics);
-    
-    setSuccess(`Reconhecimento Facial Válido: ${matchedBiometrics.name}!`);
-    setLoading(true);
-    
-    try {
-      let fullProfile: any = null;
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(matchedBiometrics.userId);
-
-      if (!isRealSupabase || !isUuid) {
-        const demoAccounts: Record<string, any> = {
-          'demo-admin-id': {
-             id: 'demo-admin-id',
-             email: 'admin@atalaia.com',
-             name: 'Carlos Silva',
-             role: UserRole.ADMIN,
-             plan: 'PREMIUM',
-             approved: true
-          },
-          'demo-user-id': {
-             id: 'demo-user-id',
-             email: 'morador@atalaia.com',
-             name: 'Mariana Costa',
-             role: UserRole.RESIDENT,
-             plan: 'FREE',
-             approved: true,
-             neighborhoodId: 'any-hood-id'
-          }
-        };
-
-        fullProfile = demoAccounts[matchedBiometrics.userId] || {
-          id: matchedBiometrics.userId,
-          email: matchedBiometrics.email,
-          name: matchedBiometrics.name,
-          role: UserRole.RESIDENT,
-          plan: 'FREE',
-          approved: true
-        };
-      } else {
-         const { data, error } = await supabase
-           .from('profiles')
-           .select('*')
-           .eq('id', matchedBiometrics.userId)
-           .maybeSingle();
-
-         if (error) throw error;
-         if (data) {
-           fullProfile = {
-             id: data.id,
-             name: data.name || data.email?.split('@')[0],
-             email: data.email,
-             role: data.role || UserRole.RESIDENT,
-             plan: data.plan || 'FREE',
-             neighborhoodId: data.neighborhood_id,
-             address: data.address,
-             city: data.city,
-             state: data.state,
-             phone: data.phone,
-             photoUrl: data.photo_url || matchedBiometrics.photoBase64,
-             approved: data.approved === true,
-             mpPublicKey: data.mp_public_key,
-             mpAccessToken: data.mp_access_token
-           };
-         }
-      }
-
-      if (fullProfile) {
-         await loginWithBiometrics(fullProfile);
-         setSuccess('Acesso biométrico autorizado com sucesso!');
-         // Sync isAuth and let the useEffect redirect automatically
-      } else {
-         setSuccess('');
-         setError('Não foi possível carregar as credenciais deste perfil facial.');
-      }
-    } catch (err: any) {
-       console.error("[FaceLogin] Error during face matching profile loading:", err);
-       setSuccess('');
-       setError(err.message || 'Falha ao processar login por biometria.');
-    } finally {
-       setLoading(false);
-    }
-  };
+  // Recovery Password states
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   // Monitora se o usuário foi autenticado para redirecionar
   useEffect(() => {
@@ -200,7 +117,7 @@ const Login: React.FC = () => {
           
           const loginPromise = login(email, password);
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão ou tente novamente.')), 10000)
+            setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão ou tente novamente.')), 20000)
           );
 
           await Promise.race([loginPromise, timeoutPromise]);
@@ -221,14 +138,143 @@ const Login: React.FC = () => {
     }
   };
 
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      setError('Por favor, informe seu e-mail ou WhatsApp cadastrado.');
+      return;
+    }
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      const inputStr = email.trim();
+
+      // Se estiver rodando sem banco de dados configurado (Conexão Local de Demonstração Dev):
+      if (!isRealSupabase) {
+        setSuccess(`[Simulador] Solicitação de recuperação processada via ambiente de demonstração! Instruções enviadas de forma segura.`);
+        setResetSent(true);
+        setLoading(false);
+        return;
+      }
+
+      let targetEmail = '';
+      let targetPhone = '';
+      let userName = '';
+      let foundProfile: any = null;
+
+      if (inputStr.includes('@')) {
+        targetEmail = inputStr.toLowerCase();
+        // Buscar perfil para ver se tem WhatsApp cadastrado de forma clássica
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('email', targetEmail)
+          .maybeSingle();
+        if (profile) {
+          foundProfile = profile;
+          targetPhone = profile.phone || '';
+          userName = profile.name || '';
+        }
+      } else {
+        // Tratar como possível telefone digitado pelo usuário
+        const cleanPhone = inputStr.replace(/\D/g, '');
+        if (cleanPhone.length < 8) {
+          throw new Error('Por favor, insira um e-mail válido ou o número do seu WhatsApp com DDD.');
+        }
+
+        // Buscar todos os perfis para localizar de forma resiliente, ignorando diferenças de formato
+        const { data: profiles, error: queryErr } = await supabase
+          .from('profiles')
+          .select('*');
+
+        if (queryErr) throw queryErr;
+
+        const matchedProfile = (profiles || []).find((p: any) => {
+          if (!p.phone) return false;
+          const cleanDbPhone = p.phone.replace(/\D/g, '');
+          // Correspondência idêntica ou correspondência nos últimos 8 caracteres para ser imune a prefixo internacional ou DDD digitado diferente
+          return cleanDbPhone === cleanPhone ||
+                 (cleanDbPhone.length >= 8 && cleanPhone.endsWith(cleanDbPhone.slice(-8))) ||
+                 (cleanPhone.length >= 8 && cleanDbPhone.endsWith(cleanPhone.slice(-8)));
+        });
+
+        if (!matchedProfile) {
+          throw new Error('Nenhum cadastro com esse número de WhatsApp foi localizado no sistema Atalaia.');
+        }
+
+        foundProfile = matchedProfile;
+        targetEmail = matchedProfile.email || '';
+        targetPhone = matchedProfile.phone || '';
+        userName = matchedProfile.name || '';
+      }
+
+      if (!targetEmail) {
+        throw new Error('Não conseguimos identificar um e-mail cadastrado associado a essa conta de acesso.');
+      }
+
+      // Dispara o reset via Auth do Supabase por segurança
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+        redirectTo: `${window.location.origin}/#/reset-password`
+      });
+      if (resetError) throw resetError;
+
+      // Ofuscar e-mail para feedback visual seguro
+      const obscureEmail = (emailStr: string) => {
+        const parts = emailStr.split('@');
+        if (parts.length !== 2) return emailStr;
+        const u = parts[0];
+        const d = parts[1];
+        if (u.length <= 3) return `${u[0]}***@${d}`;
+        return `${u.slice(0, 2)}***${u.slice(-1)}@${d}`;
+      };
+
+      const obscured = obscureEmail(targetEmail);
+      let waStatus = '';
+
+      // Tenta enviar o WhatsApp via função oficial de disparo de alertas
+      if (targetPhone) {
+        try {
+          const customMsg = `🛡️ *ATALAIA - RECUPERAÇÃO DE ACESSO*\n\nOlá, *${userName || 'Colaborador Atalaia'}*!\n\nRecebemos uma solicitação de redefinição de senha para sua credencial de acesso tático ao Atalaia.\n\nEnviamos o link de alteração de senha de forma segura para o seu e-mail:\n➡️ *${targetEmail}*\n\nSe você não recebeu o e-mail ou precisa que alteremos seu e-mail de acesso cadastrado, basta responder a esta mensagem diretamente no WhatsApp!\n\nAtenciosamente,\n*Equipe de Suporte Atalaia*`;
+
+          await supabase.functions.invoke('send-alert', {
+            body: { message: customMsg, numbers: [targetPhone] }
+          });
+
+          waStatus = ` E notificamos seu WhatsApp (${targetPhone})!`;
+        } catch (waErr) {
+          console.error('[ForgotPassword] Failed to send WhatsApp alert:', waErr);
+        }
+      }
+
+      setSuccess(`Solicitação processada! Código e link enviados com sucesso para ${obscured}.${waStatus}`);
+      setResetSent(true);
+    } catch (err: any) {
+      console.error('[ForgotPassword] Error:', err);
+      setError(err.message || 'Erro ao processar sua solicitação de recuperação.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#010101] relative overflow-hidden px-4 py-8">
       <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-atalaia-neon/5 rounded-full blur-[120px]" />
       
       <Card className="w-full max-w-md p-8 border-atalaia-border relative z-10 bg-[#040404]">
         <button 
-          onClick={() => navigate('/')}
-          className="absolute top-6 left-6 text-gray-500 hover:text-atalaia-neon transition-colors flex items-center gap-2 text-sm font-medium group"
+          onClick={() => {
+            if (isForgotPassword) {
+              setIsForgotPassword(false);
+              setResetSent(false);
+              setError('');
+              setSuccess('');
+            } else {
+              navigate('/');
+            }
+          }}
+          className="absolute top-6 left-6 text-gray-500 hover:text-atalaia-neon transition-colors flex items-center gap-2 text-sm font-medium group text-left"
         >
           <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
           <span>Voltar</span>
@@ -239,10 +285,14 @@ const Login: React.FC = () => {
             <ShieldCheck size={40} />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">
-            {isRegister ? 'Criar Conta' : 'Acesso Atalaia'}
+            {isForgotPassword ? 'Recuperar Acesso' : isRegister ? 'Criar Conta' : 'Acesso Atalaia'}
           </h1>
           <p className="text-gray-500 text-sm mt-2">
-            {isRegister ? 'Segurança colaborativa inteligente.' : 'Entre para monitorar sua comunidade.'}
+            {isForgotPassword 
+              ? 'Digite seu e-mail ou WhatsApp (DDD+número) para receber as instruções de recuperação.' 
+              : isRegister 
+                ? 'Segurança colaborativa inteligente.' 
+                : 'Entre para monitorar sua comunidade.'}
           </p>
         </div>
 
@@ -274,6 +324,36 @@ const Login: React.FC = () => {
                 <RefreshCw size={32} className="animate-spin text-atalaia-neon mx-auto mb-4" />
                 <p className="text-white font-bold">Iniciando pagamento seguro...</p>
             </div>
+        ) : isForgotPassword ? (
+            <form onSubmit={handleForgotPasswordSubmit} className="space-y-5">
+                <Input 
+                    label="E-mail ou WhatsApp Cadastrado" 
+                    type="text" 
+                    placeholder="ex: rogerio@gmail.com ou 48999999999" 
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)} 
+                    required 
+                />
+                
+                <Button type="submit" className="w-full h-12 text-sm uppercase tracking-wider font-bold mt-6" disabled={loading || resetSent}>
+                    {loading ? <><Loader2 className="animate-spin mr-2" /> Enviando...</> : 'Enviar Link & WhatsApp'}
+                </Button>
+
+                <div className="text-center mt-4">
+                    <button 
+                        type="button"
+                        onClick={() => {
+                            setIsForgotPassword(false);
+                            setResetSent(false);
+                            setError('');
+                            setSuccess('');
+                        }}
+                        className="text-xs text-atalaia-neon hover:underline transition-colors bg-transparent border-none p-0 cursor-pointer"
+                    >
+                        Voltar para a tela de login
+                    </button>
+                </div>
+            </form>
         ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
             {isRegister && (
@@ -307,15 +387,33 @@ const Login: React.FC = () => {
                 onChange={(e) => setEmail(e.target.value)} 
                 required 
             />
-            <Input 
-                label="Senha" 
-                type="password" 
-                placeholder="••••••••" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                required 
-                minLength={6} 
-            />
+            
+            <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                    <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider">Senha</label>
+                    {!isRegister && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsForgotPassword(true);
+                                setError('');
+                                setSuccess('');
+                            }}
+                            className="text-xs text-atalaia-neon/80 hover:text-atalaia-neon transition-colors font-medium bg-transparent border-none p-0 cursor-pointer focus:outline-none"
+                        >
+                            Esqueci minha senha
+                        </button>
+                    )}
+                </div>
+                <Input 
+                    type="password" 
+                    placeholder="••••••••" 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                    required 
+                    minLength={6} 
+                />
+            </div>
 
             {isRegister && (
                 <div className="space-y-2">
@@ -342,38 +440,18 @@ const Login: React.FC = () => {
             </form>
         )}
 
-        {!isRegister && !redirectingToPay && (
-          <div className="space-y-4 mt-6">
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-zinc-900"></div>
-              <span className="flex-shrink mx-4 text-[9px] text-zinc-500 uppercase tracking-widest font-mono font-bold">Ou acesse rápido com</span>
-              <div className="flex-grow border-t border-zinc-900"></div>
+        {!isForgotPassword && (
+            <div className="mt-6 text-center">
+                <button 
+                    onClick={() => { setIsRegister(!isRegister); setError(''); setSuccess(''); }}
+                    className="text-sm text-gray-400 hover:text-atalaia-neon transition-colors"
+                    type="button"
+                    disabled={loading || authLoading}
+                >
+                    {isRegister ? 'Já tem conta? Faça login' : 'Não tem conta? Crie agora'}
+                </button>
             </div>
-            
-            <button
-              type="button"
-              onClick={() => setShowFaceModal(true)}
-              className="w-full h-12 text-xs bg-zinc-950 hover:bg-zinc-900 border border-zinc-850 hover:border-atalaia-neon/30 text-zinc-300 font-bold rounded-xl uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2.5 group shadow-[0_0_15px_rgba(0,0,0,0.5)]"
-              disabled={loading || authLoading}
-            >
-              <div className="w-5 h-5 rounded-md bg-atalaia-neon/10 text-atalaia-neon flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Scan size={14} className="animate-pulse" />
-              </div>
-              <span>Entrar com Reconhecimento Facial</span>
-            </button>
-          </div>
         )}
-
-        <div className="mt-6 text-center">
-            <button 
-                onClick={() => { setIsRegister(!isRegister); setError(''); setSuccess(''); }}
-                className="text-sm text-gray-400 hover:text-atalaia-neon transition-colors"
-                type="button"
-                disabled={loading || authLoading}
-            >
-                {isRegister ? 'Já tem conta? Faça login' : 'Não tem conta? Crie agora'}
-            </button>
-        </div>
       </Card>
 
       {/* POPUP DE AVISO CONEXÃO ATIVA (SEGUNDO USUÁRIO) */}
@@ -440,15 +518,6 @@ const Login: React.FC = () => {
               </div>
           </div>
       )}
-
-      {/* MODAL DE ESCANEAMENTO BIOMÉTRICO (TENSORFLOW / BLAZEFACE) */}
-      <FacialScannerModal
-          isOpen={showFaceModal}
-          onClose={() => setShowFaceModal(false)}
-          mode="login"
-          typedEmail={email}
-          onSuccess={handleFaceLoginSuccess}
-      />
     </div>
   );
 };

@@ -8,8 +8,9 @@ import { supabase } from '../lib/supabaseClient';
 import { Card, Button, Input, Modal, Badge } from '../components/UI';
 import { 
     Trash2, MapPin, Users, Search, 
-    Edit2, Loader2, Wrench, CheckCircle, Smartphone, Mail, RefreshCw, Filter, Database
+    Edit2, Loader2, Wrench, CheckCircle, Smartphone, Mail, RefreshCw, Filter, Database, AlertTriangle
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 const IntegratorUsers: React.FC = () => {
   const { user } = useAuth();
@@ -26,6 +27,7 @@ const IntegratorUsers: React.FC = () => {
   const [editHoodId, setEditHoodId] = useState('');
   const [editPlan, setEditPlan] = useState<string>('FREE');
   const [editRole, setEditRole] = useState<UserRole>(UserRole.RESIDENT);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -67,7 +69,7 @@ const IntegratorUsers: React.FC = () => {
               name: editName, 
               phone: editPhone, 
               neighborhood_id: editHoodId || null,
-              plan: editPlan,
+              plan: editRole === UserRole.RESIDENT ? 'PREMIUM' : editPlan,
               role: editRole
           });
           setIsEditModalOpen(false);
@@ -148,7 +150,7 @@ const IntegratorUsers: React.FC = () => {
                             <div className="flex gap-2">
                                 <button onClick={() => { setEditingUser(resident); setEditName(resident.name); setEditPhone(resident.phone || ''); setEditHoodId(resident.neighborhoodId || ''); setEditPlan(resident.plan); setEditRole(resident.role); setIsEditModalOpen(true); }} className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg"><Edit2 size={18} className="pointer-events-none" /></button>
                                 {user?.id !== resident.id && (
-                                    <button onClick={async () => { if(confirm('Excluir usuário do banco?')) { await MockService.deleteUser(resident.id); fetchData(); } }} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={18} className="pointer-events-none" /></button>
+                                    <button onClick={() => setUserToDelete(resident)} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={18} className="pointer-events-none" /></button>
                                 )}
                             </div>
                         </div>
@@ -175,11 +177,17 @@ const IntegratorUsers: React.FC = () => {
                         </div>
                         <div>
                             <label className="text-[10px] text-gray-500 uppercase font-black mb-1 block">Plano</label>
-                            <select className="w-full bg-black border border-white/10 rounded-xl p-4 text-white" value={editPlan} onChange={e => setEditPlan(e.target.value)}>
-                                <option value="FREE">FREE</option>
-                                <option value="FAMILY">FAMILY</option>
-                                <option value="PREMIUM">PREMIUM</option>
-                            </select>
+                            {editRole === UserRole.RESIDENT ? (
+                                <div className="w-full bg-black border border-[#00ff66]/20 text-atalaia-neon rounded-xl p-4 font-black text-sm text-center">
+                                    MORADOR PRÊMIO
+                                </div>
+                            ) : (
+                                <select className="w-full bg-black border border-white/10 rounded-xl p-4 text-white" value={editPlan} onChange={e => setEditPlan(e.target.value)}>
+                                    <option value="FREE">FREE</option>
+                                    <option value="FAMILY">FAMILY</option>
+                                    <option value="PREMIUM">PREMIUM</option>
+                                </select>
+                            )}
                         </div>
                     </div>
                     <div>
@@ -193,7 +201,52 @@ const IntegratorUsers: React.FC = () => {
                 </form>
             </div>
         </Modal>
-      </div>
+        <AnimatePresence>
+            {userToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden text-center"
+                    >
+                        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+                        <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <AlertTriangle size={24} />
+                        </div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-2 font-mono">
+                            Excluir Usuário
+                        </h3>
+                        <p className="text-xs text-zinc-400 mb-6 leading-relaxed font-sans">
+                            Deseja realmente excluir permanentemente o cadastro de <span className="text-white font-bold">"{userToDelete.name}"</span> do sistema?
+                        </p>
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setUserToDelete(null)}
+                                className="flex-1 py-2.5 rounded-xl border border-white/10 hover:border-white/20 bg-zinc-900 text-zinc-300 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer font-sans"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    if (userToDelete) {
+                                        await MockService.deleteUser(userToDelete.id);
+                                        await fetchData();
+                                        setUserToDelete(null);
+                                    }
+                                }}
+                                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-500/15 cursor-pointer font-sans"
+                             >
+                                 Excluir
+                             </button>
+                         </div>
+                     </motion.div>
+                 </div>
+             )}
+         </AnimatePresence>
+       </div>
     </Layout>
   );
 };

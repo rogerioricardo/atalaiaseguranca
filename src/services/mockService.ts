@@ -489,10 +489,72 @@ export const MockService = {
   },
 
   registerPatrol: async (userId: string, neighborhoodId: string, note: string, lat?: number, lng?: number, targetUserId?: string) => {
-    const { error } = await supabase.from('patrol_logs').insert([{ user_id: sanitizeUUID(userId), neighborhood_id: sanitizeUUID(neighborhoodId), note, lat, lng, target_user_id: sanitizeUUID(targetUserId) || undefined }]);
+    // 1. Insert into patrol_logs
+    const { error } = await supabase.from('patrol_logs').insert([{ 
+        user_id: sanitizeUUID(userId), 
+        neighborhood_id: sanitizeUUID(neighborhoodId), 
+        note, 
+        lat, 
+        lng, 
+        target_user_id: sanitizeUUID(targetUserId) || undefined 
+    }]);
+    
     if (error) {
         console.error("[MockService] Error in registerPatrol:", error);
         throw error;
+    }
+
+    // 2. Send Whatsapp and Resident Notifications if a user was linked
+    if (targetUserId) {
+        try {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', sanitizeUUID(targetUserId))
+                .maybeSingle();
+
+            if (profile) {
+                // Determine clean time string
+                const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+                // Send WhatsApp if they have a phone number
+                if (profile.phone) {
+                    const settings = await MockService.getSettings();
+                    const template = settings['patrol_notification_template'] || 
+                        "*ATALAIA - INFORME DO MOTOVIGIA* 🏍️💨\n\nOlá *{name}*!\n\nInformamos que o Motovigia em ronda pelo seu setor registrou uma ocorrência em sua residência:\n\n📌 Ocorrência: *{note}*\n🏠 Local: {address}\n⏰ Horário: *{time}*\n\n_Bairro Seguro e vigiado com o Atalaia. Se precisar, conte conosco!_";
+
+                    const customMessage = template
+                        .replace(/{name}/g, profile.name || 'Morador')
+                        .replace(/{note}/g, note.replace(/OCORRÊNCIA:\s*/g, '')) // clean any occurrence prefix
+                        .replace(/{address}/g, profile.address || 'Seu lote cadastrado')
+                        .replace(/{time}/g, timeStr);
+
+                    try {
+                        await supabase.functions.invoke('send-alert', {
+                            body: { message: customMessage, numbers: [profile.phone] }
+                        });
+                    } catch (err) {
+                        console.error("[MockService/WhatsApp] Failed to dispatch patrol WhatsApp alert:", err);
+                    }
+                }
+
+                // Create an in-app notification record so they see it in the user app dashboard
+                try {
+                    await supabase.from('notifications').insert([{
+                        user_id: sanitizeUUID(targetUserId),
+                        type: 'SYSTEM',
+                        title: 'Ronda do Motovigia',
+                        message: `O Motovigia registrou a seguinte ocorrência: ${note.replace(/OCORRÊNCIA:\s*/g, '')}`,
+                        from_user_name: 'Motovigia',
+                        read: false
+                    }]);
+                } catch (err) {
+                    console.error("[MockService/InApp] Failed to insert in-app notification:", err);
+                }
+            }
+        } catch (e) {
+            console.error("[MockService] Failed during registerPatrol notification side-effects:", e);
+        }
     }
   },
 
