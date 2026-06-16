@@ -54,7 +54,7 @@ const deriveRoleFromEmail = (emailStr: string, defaultRole = UserRole.RESIDENT):
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string, role?: UserRole, name?: string, neighborhoodId?: string, phone?: string) => Promise<void>;
+  login: (email: string, password: string, role?: UserRole, name?: string, neighborhoodId?: string, phone?: string, plan?: UserPlan) => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<void>;
   isAuthenticated: boolean;
@@ -91,12 +91,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const mapProfile = (profile: any): User => {
       const mappedRole = (profile.role as UserRole) || UserRole.RESIDENT;
+      
+      let companyName = undefined;
+      let companyLogo = undefined;
+      let splitPercentage = undefined;
+      let cnpj = undefined;
+      let razaoSocial = undefined;
+      let banco = undefined;
+      let pix = undefined;
+      let cpf = undefined;
+      
+      if (profile.address && profile.address.trim().startsWith('{')) {
+          try {
+              const parsed = JSON.parse(profile.address);
+              companyName = parsed.companyName;
+              companyLogo = parsed.companyLogo;
+              splitPercentage = parsed.splitPercentage;
+              cnpj = parsed.cnpj;
+              razaoSocial = parsed.razaoSocial;
+              banco = parsed.banco;
+              pix = parsed.pix;
+              cpf = parsed.cpf;
+          } catch (e) {}
+      }
+
       return {
           id: profile.id,
           name: profile.name || profile.email?.split('@')[0] || 'Usuário',
           email: profile.email,
           role: mappedRole,
-          plan: mappedRole === UserRole.RESIDENT ? 'PREMIUM' : ((profile.plan as UserPlan) || 'FREE'),
+          plan: (profile.plan as UserPlan) || 'FREE',
           neighborhoodId: profile.neighborhood_id,
           address: profile.address,
           city: profile.city,
@@ -107,7 +131,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           lng: profile.lng,
           approved: profile.approved === true, 
           mpPublicKey: profile.mp_public_key,
-          mpAccessToken: profile.mp_access_token
+          mpAccessToken: profile.mp_access_token,
+          companyName,
+          companyLogo,
+          splitPercentage: splitPercentage || 10,
+          cnpj,
+          razaoSocial,
+          banco,
+          pix,
+          cpf
       };
   };
 
@@ -119,18 +151,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isIdUuid = isUuid(userId);
       const cachedRole = userId ? localStorage.getItem(`atalaia_cached_role_${userId}`) : null;
 
+      // Carrega atualizações locais do perfil do localStorage se existirem
+      let localCachedUser: any = {};
+      const cachedStr = localStorage.getItem(`atalaia_local_profile_${userId}`);
+      if (cachedStr) {
+          try { localCachedUser = JSON.parse(cachedStr); } catch (e) {}
+      }
+
       if (!isRealSupabase || !isIdUuid) {
           console.log("[Auth] Bypass de busca no banco para ID não-UUID ou Supabase inativo. ID:", userId);
           const resolvedRole = (cachedRole as UserRole) || (metadata?.role as UserRole) || deriveRoleFromEmail(email, UserRole.RESIDENT);
-          setUser({
+          
+          const finalUser = {
               id: userId,
               email: email,
               name: metadata?.name || email.split('@')[0],
               role: resolvedRole,
-              plan: resolvedRole === UserRole.RESIDENT ? 'PREMIUM' : ((metadata?.plan as UserPlan) || 'FREE'),
+              plan: ((metadata?.plan as UserPlan) || 'FREE'),
               neighborhoodId: metadata?.neighborhood_id,
               phone: metadata?.phone,
-              approved: true
+              approved: true,
+              ...localCachedUser
+          };
+
+          // Garante mapeamento correto das colunas serializadas no address também
+          let companyName = finalUser.companyName;
+          let companyLogo = finalUser.companyLogo;
+          let splitPercentage = finalUser.splitPercentage;
+          let cnpj = finalUser.cnpj;
+          let razaoSocial = finalUser.razaoSocial;
+          let banco = finalUser.banco;
+          let pix = finalUser.pix;
+          let cpf = finalUser.cpf;
+
+          if (finalUser.address && finalUser.address.trim().startsWith('{')) {
+              try {
+                  const parsed = JSON.parse(finalUser.address);
+                  if (parsed.companyName !== undefined) companyName = parsed.companyName;
+                  if (parsed.companyLogo !== undefined) companyLogo = parsed.companyLogo;
+                  if (parsed.splitPercentage !== undefined) splitPercentage = parsed.splitPercentage;
+                  if (parsed.cnpj !== undefined) cnpj = parsed.cnpj;
+                  if (parsed.razaoSocial !== undefined) razaoSocial = parsed.razaoSocial;
+                  if (parsed.banco !== undefined) banco = parsed.banco;
+                  if (parsed.pix !== undefined) pix = parsed.pix;
+                  if (parsed.cpf !== undefined) cpf = parsed.cpf;
+              } catch (e) {}
+          }
+
+          setUser({
+              ...finalUser,
+              companyName,
+              companyLogo,
+              splitPercentage: splitPercentage || 10,
+              cnpj,
+              razaoSocial,
+              banco,
+              pix,
+              cpf
           });
           setLoading(false);
           return;
@@ -158,7 +235,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (mappedUser.id && mappedUser.role) {
                   localStorage.setItem(`atalaia_cached_role_${mappedUser.id}`, mappedUser.role);
               }
-              setUser(mappedUser);
+              
+              setUser({
+                  ...mappedUser,
+                  ...localCachedUser
+              });
               console.log("[Auth] Perfil carregado com sucesso. Role:", mappedUser.role);
               
               if (triggerNotify) {
@@ -172,10 +253,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   email: email,
                   name: metadata?.name || email.split('@')[0],
                   role: resolvedRole,
-                  plan: resolvedRole === UserRole.RESIDENT ? 'PREMIUM' : ((metadata?.plan as UserPlan) || 'FREE'),
+                  plan: ((metadata?.plan as UserPlan) || 'FREE'),
                   neighborhoodId: metadata?.neighborhood_id,
                   phone: metadata?.phone,
-                  approved: true
+                  approved: true,
+                  ...localCachedUser
               });
           }
       } catch (e) {
@@ -188,10 +270,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   email: email,
                   name: metadata?.name || email.split('@')[0],
                   role: resolvedRole,
-                  plan: resolvedRole === UserRole.RESIDENT ? 'PREMIUM' : ((metadata?.plan as UserPlan) || 'FREE'),
+                  plan: ((metadata?.plan as UserPlan) || 'FREE'),
                   neighborhoodId: metadata?.neighborhood_id,
                   phone: metadata?.phone,
-                  approved: true
+                  approved: true,
+                  ...localCachedUser
               });
           }
       } finally {
@@ -201,15 +284,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const token = sessionStorage.getItem('atalaia_session_token');
-        if (!token) {
-          await SessionService.registerSession(session.user.id, session.user.email!);
+      try {
+        if (session?.user) {
+          const token = sessionStorage.getItem('atalaia_session_token');
+          if (!token) {
+            SessionService.registerSession(session.user.id, session.user.email!).catch(err => {
+              console.error("[Auth Init] Erro assíncrono ao registrar sessão:", err);
+            });
+          }
+          await fetchProfile(session.user.id, session.user.email!, session.user.user_metadata);
+        } else {
+          setLoading(false);
         }
-        fetchProfile(session.user.id, session.user.email!, session.user.user_metadata);
-      } else {
+      } catch (err) {
+        console.error("[Auth Init] Erro ao recuperar sessão inicial:", err);
         setLoading(false);
       }
+    }).catch(err => {
+      console.error("[Auth Init] Erro crítico no getSession:", err);
+      setLoading(false);
     });
 
     // Timeout de segurança para não travar a UI se o Supabase demorar
@@ -218,16 +311,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 5000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      clearTimeout(safetyTimeout);
-      if (session?.user) {
-         const token = sessionStorage.getItem('atalaia_session_token');
-         if (!token) {
-           await SessionService.registerSession(session.user.id, session.user.email!);
-         }
-         await fetchProfile(session.user.id, session.user.email!, session.user.user_metadata, event === 'SIGNED_IN');
-      } else {
-        setUser(null);
+      try {
+        if (session?.user) {
+           const token = sessionStorage.getItem('atalaia_session_token');
+           if (!token) {
+             SessionService.registerSession(session.user.id, session.user.email!).catch(err => {
+               console.error("[Auth State Change] Erro assíncrono ao registrar sessão:", err);
+             });
+           }
+           await fetchProfile(session.user.id, session.user.email!, session.user.user_metadata, event === 'SIGNED_IN');
+        } else {
+          setUser(null);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("[Auth State Change] Erro crítico:", err);
         setLoading(false);
+      } finally {
+        clearTimeout(safetyTimeout);
       }
     });
 
@@ -374,7 +475,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (data.user) {
-            await SessionService.registerSession(data.user.id, data.user.email!);
+            SessionService.registerSession(data.user.id, data.user.email!).catch(err => {
+                console.error("[Auth Login] Erro assíncrono ao registrar sessão:", err);
+            });
         }
     } catch (e: any) {
         if (e.message?.includes('Failed to fetch')) {
@@ -417,12 +520,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProfile = async (data: Partial<User>) => {
     if (!user) return;
-    const { error } = await supabase.from('profiles').update(data).eq('id', user.id);
-    if (error) throw error;
+    
+    const dbPayload: any = {};
+    if ('email' in data) dbPayload.email = data.email;
+    if ('name' in data) dbPayload.name = data.name;
+    if ('role' in data) dbPayload.role = data.role;
+    if ('plan' in data) dbPayload.plan = data.plan;
+    if ('neighborhoodId' in data) dbPayload.neighborhood_id = data.neighborhoodId;
+    if ('address' in data) dbPayload.address = data.address;
+    if ('city' in data) dbPayload.city = data.city;
+    if ('state' in data) dbPayload.state = data.state;
+    if ('phone' in data) dbPayload.phone = data.phone;
+    if ('photoUrl' in data) dbPayload.photo_url = data.photoUrl;
+    if ('lat' in data) dbPayload.lat = data.lat;
+    if ('lng' in data) dbPayload.lng = data.lng;
+    if ('approved' in data) dbPayload.approved = data.approved;
+    if ('mpPublicKey' in data) dbPayload.mp_public_key = data.mpPublicKey;
+    if ('mpAccessToken' in data) dbPayload.mp_access_token = data.mpAccessToken;
+
+    const isIdUuid = isUuid(user.id);
+
+    if (isRealSupabase && isIdUuid) {
+        const { error } = await supabase.from('profiles').update(dbPayload).eq('id', user.id);
+        if (error) throw error;
+    } else {
+        console.log("[Auth - Local Mode] Simulating profile update successfully:", dbPayload);
+    }
     if (data.role) {
        localStorage.setItem(`atalaia_cached_role_${user.id}`, data.role);
     }
-    setUser(prev => prev ? ({ ...prev, ...data }) : null);
+
+    const updatedUser = { ...user, ...data };
+    
+    // Persist in localStorage so changes (including clearing brandName or brandLogo) are retained on refresh
+    try {
+        localStorage.setItem(`atalaia_local_profile_${user.id}`, JSON.stringify(updatedUser));
+    } catch (e) {
+        console.error("[Auth] Error caching profile updates:", e);
+    }
+
+    setUser(updatedUser);
   };
 
   const refreshUser = async () => {
@@ -471,7 +608,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const contextValue: AuthContextType = { 
         user, 
-        login: async (email, password, role, name, neighborhoodId, phone) => {
+        login: async (email, password, role, name, neighborhoodId, phone, plan) => {
              if (name || role) {
                  if (!isRealSupabase) {
                     console.log("[Auth] Demo Mode: Simulando registro para", name);
@@ -481,7 +618,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         email,
                         name: name || email.split('@')[0],
                         role: resolvedRole,
-                        plan: (resolvedRole === UserRole.RESIDENT ? 'PREMIUM' : 'FREE') as UserPlan,
+                        plan: (resolvedRole === UserRole.RESIDENT ? (plan || 'PREMIUM') : 'FREE') as UserPlan,
                         approved: true,
                         neighborhoodId,
                         phone
@@ -491,12 +628,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
                 const isApproved = role === UserRole.ADMIN || role === UserRole.RESIDENT;
                 const safeNeighborhoodId = neighborhoodId && neighborhoodId.trim() !== '' ? neighborhoodId.trim() : null;
+                const resolvedPlan = role === UserRole.RESIDENT ? (plan || 'PREMIUM') : 'FREE';
                 const { data, error } = await supabase.auth.signUp({
-                    email, password, options: { data: { role, name, neighborhood_id: safeNeighborhoodId, phone, approved: isApproved, plan: role === UserRole.RESIDENT ? 'PREMIUM' : 'FREE' } }
+                    email, password, options: { data: { role, name, neighborhood_id: safeNeighborhoodId, phone, approved: isApproved, plan: resolvedPlan } }
                 });
                 if (error) throw error;
                 if (data.user) {
-                    await supabase.from('profiles').upsert({ id: data.user.id, email, name, phone, neighborhood_id: safeNeighborhoodId, role, approved: isApproved, plan: 'PREMIUM' });
+                    await supabase.from('profiles').upsert({ id: data.user.id, email, name, phone, neighborhood_id: safeNeighborhoodId, role, approved: isApproved, plan: resolvedPlan });
                     if (!isApproved) { await supabase.auth.signOut(); throw new Error("Aguarde aprovação."); }
                 }
                 return;

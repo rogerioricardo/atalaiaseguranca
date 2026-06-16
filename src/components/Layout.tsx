@@ -1,8 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/auth/context';
 import { UserRole } from '@/types';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { MockService } from '@/services/mockService';
 import { 
   ShieldCheck, 
   LayoutDashboard, 
@@ -31,6 +32,42 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  const [partnerLogo, setPartnerLogo] = useState<string | null>(null);
+  const [partnerName, setPartnerName] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPartnerBranding = async () => {
+      if (!user) {
+        setPartnerName(null);
+        setPartnerLogo(null);
+        return;
+      }
+      if (user.role === UserRole.INTEGRATOR) {
+        setPartnerName(user.companyName || null);
+        setPartnerLogo(user.companyLogo || null);
+      } else if (user.neighborhoodId) {
+        try {
+          const integrator = await MockService.getNeighborhoodIntegrator(user.neighborhoodId);
+          if (integrator) {
+            setPartnerName(integrator.companyName || null);
+            setPartnerLogo(integrator.companyLogo || null);
+          } else {
+            setPartnerName(null);
+            setPartnerLogo(null);
+          }
+        } catch (e) {
+          console.error("[Layout] Erro ao carregar co-branding do Integrador", e);
+          setPartnerName(null);
+          setPartnerLogo(null);
+        }
+      } else {
+        setPartnerName(null);
+        setPartnerLogo(null);
+      }
+    };
+    fetchPartnerBranding();
+  }, [user]);
 
   const handleLogout = () => {
     logout();
@@ -78,17 +115,33 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         transform transition-transform duration-300 ease-in-out flex flex-col
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <div className="p-6 border-b border-atalaia-border">
-          {/* LOGOTIPO CLICÁVEL (VOLTAR PARA A LANDING) */}
-          <Link to="/" className="flex items-center gap-2 group transition-opacity hover:opacity-80">
-            <div className="w-10 h-10 rounded-lg bg-atalaia-neon flex items-center justify-center shadow-[0_0_15px_rgba(0,255,102,0.4)] group-hover:scale-105 transition-transform">
-              <ShieldCheck className="text-black" size={24} />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-white group-hover:text-atalaia-neon transition-colors">ATALAIA</h1>
-              <p className="text-xs text-atalaia-neon font-medium tracking-widest">SEGURANÇA</p>
-            </div>
-          </Link>
+        <div className="p-5 border-b border-atalaia-border space-y-3">
+          {/* LOGOTIPOS EM CO-BRANDING JUNTOS NO TOPO */}
+          <div className="flex items-center justify-between gap-2">
+            <Link to="/" className="flex items-center gap-2 group transition-opacity hover:opacity-80">
+              <div className="w-9 h-9 rounded-lg bg-atalaia-neon flex items-center justify-center shadow-[0_0_15px_rgba(0,255,102,0.3)] group-hover:scale-105 transition-transform">
+                <ShieldCheck className="text-black" size={22} />
+              </div>
+              <div>
+                <h1 className="text-lg font-black tracking-tight text-white group-hover:text-atalaia-neon transition-colors">ATALAIA</h1>
+                <p className="text-[9px] text-atalaia-neon font-bold tracking-widest leading-none">SEGURANÇA</p>
+              </div>
+            </Link>
+
+            {partnerLogo && (
+              <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-500 shrink-0">
+                <span className="text-zinc-600 text-[10px]">🤝</span>
+                <div className="flex items-center gap-1.5 bg-zinc-950 border border-white/10 px-2 py-1.5 rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+                   {partnerLogo.startsWith('http') || partnerLogo.startsWith('data:') ? (
+                     <img referrerPolicy="no-referrer" src={partnerLogo} alt={partnerName || 'Parceiro'} className="w-5 h-5 rounded object-cover bg-zinc-800 shrink-0" />
+                   ) : null}
+                   <span className="text-[10px] font-black text-atalaia-neon max-w-[85px] truncate uppercase tracking-wider" title={partnerName || 'Parceiro'}>
+                     {partnerName?.split(' ')[0]}
+                   </span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-2">
@@ -184,11 +237,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         {/* Mobile Header */}
         <header className="lg:hidden h-16 bg-[#040404] border-b border-atalaia-border flex items-center px-4 justify-between z-30">
-          {/* LOGOTIPO MÓVEL CLICÁVEL */}
-          <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-             <ShieldCheck className="text-atalaia-neon" size={24} />
-             <span className="font-bold">ATALAIA</span>
-          </Link>
+          {/* LOGOTIPO MÓVEL CLICÁVEL COM CO-BRANDING */}
+          <div className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0">
+               <ShieldCheck className="text-atalaia-neon" size={20} />
+               <span className="font-bold text-sm tracking-tight">ATALAIA</span>
+            </Link>
+            {partnerLogo && (
+              <div className="flex items-center gap-1 animate-in fade-in duration-300">
+                <span className="text-zinc-600 text-[9px]">🤝</span>
+                <div className="flex items-center gap-1 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-lg">
+                   {partnerLogo.startsWith('http') || partnerLogo.startsWith('data:') ? (
+                     <img referrerPolicy="no-referrer" src={partnerLogo} alt={partnerName || 'Parceiro'} className="w-4 h-4 rounded object-cover bg-zinc-800" />
+                   ) : null}
+                   <span className="text-[9px] font-bold text-atalaia-neon max-w-[65px] truncate uppercase">{partnerName?.split(' ')[0]}</span>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <a 
               href="/atalaia-seguranca.apk" 

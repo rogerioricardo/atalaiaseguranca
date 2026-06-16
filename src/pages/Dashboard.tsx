@@ -5,6 +5,7 @@ import { useAuth } from '@/auth/context';
 import { UserRole, Alert, Neighborhood, Notification, User, ServiceRequest, SupportTicket } from '@/types';
 import { Card, Badge, Button, Modal, Input } from '@/components/UI';
 import { UpgradeModal } from '@/components/UpgradeModal';
+import { ContractSignature } from '@/components/ContractSignature';
 import { MockService } from '@/services/mockService';
 import { supabase } from '@/lib/supabaseClient';
 import { 
@@ -476,6 +477,14 @@ const Dashboard: React.FC = () => {
   // POPUP FEEDBACK STATE
   const [feedback, setFeedback] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
 
+  const [contractSigned, setContractSigned] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setContractSigned(localStorage.getItem(`atalaia_contract_signed_${user.id}`) !== null);
+    }
+  }, [user]);
+
   const [notifToDelete, setNotifToDelete] = useState<string | null>(null);
   const [notifUserToReject, setNotifUserToReject] = useState<{ notifId: string, pendingUserId: string } | null>(null);
   const [serviceToRequest, setServiceToRequest] = useState<'ESCORT' | 'EXTRA_ROUND' | 'TRAVEL_NOTICE' | null>(null);
@@ -505,8 +514,8 @@ const Dashboard: React.FC = () => {
           setMyNeighborhood(hood);
           setStats(prev => ({ ...prev, cameras: 1, users: 42 }));
 
-          // Check for Integrator to receive donations
-          if (user.role === UserRole.RESIDENT && user.plan === 'FREE') {
+          // Check for Integrator to receive donations & custom co-branding Partner information
+          if (user?.role === UserRole.RESIDENT) {
               const integrator = await MockService.getNeighborhoodIntegrator(user.neighborhoodId);
               setNeighborhoodIntegrator(integrator);
           }
@@ -665,6 +674,21 @@ const Dashboard: React.FC = () => {
         <div>
             <h1 className="text-3xl font-bold text-white mb-2">Painel de Controle</h1>
             <p className="text-gray-400">Bem-vindo, {user?.name}. Sistema operacional e vigilante.</p>
+            {user?.role === UserRole.RESIDENT && neighborhoodIntegrator?.companyName && (
+                 <div className="mt-3 flex items-center gap-2 text-xs text-zinc-400 animate-in fade-in slide-in-from-left-2">
+                     <span className="font-medium">Vigilância em parceria com:</span>
+                     <div className="flex items-center gap-2 bg-gradient-to-r from-zinc-900 to-black px-3 py-1.5 rounded-xl border border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+                         {neighborhoodIntegrator.companyLogo ? (
+                             <img referrerPolicy="no-referrer" src={neighborhoodIntegrator.companyLogo} alt={neighborhoodIntegrator.companyName} className="w-4 h-4 rounded-md object-cover bg-zinc-800" />
+                         ) : (
+                             <div className="w-4 h-4 rounded bg-atalaia-neon/20 flex items-center justify-center text-[8px] font-black text-atalaia-neon">
+                                 P
+                             </div>
+                         )}
+                         <span className="text-atalaia-neon font-black tracking-wide">{neighborhoodIntegrator.companyName}</span>
+                     </div>
+                 </div>
+            )}
         </div>
         {user?.neighborhoodId && myNeighborhood && (
              <div className="px-4 py-2 bg-atalaia-neon/10 border border-atalaia-neon/20 rounded-full text-atalaia-neon text-sm font-bold flex items-center gap-2">
@@ -673,21 +697,48 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
+      {/* WARNING REMINDER: CONTRACT SIGNATURE PENDING */}
+      {user?.role === UserRole.RESIDENT && !contractSigned && (
+          <div className="mb-8 p-4 bg-yellow-500/10 border-2 border-dashed border-yellow-500/40 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-4">
+              <div className="flex items-center gap-3">
+                  <div className="p-2 bg-yellow-500/20 text-yellow-500 rounded-xl">
+                      <AlertTriangle size={20} />
+                  </div>
+                  <div>
+                      <h4 className="font-bold text-sm text-white">Pendência de Segurança: Contrato de Adesão</h4>
+                      <p className="text-xs text-zinc-400 mt-0.5">O contrato Atalaia SaaS está pendente de sua assinatura eletrônica ativa e verificação digital.</p>
+                  </div>
+              </div>
+              <a 
+                  href="#contrato-adesao-morador" 
+                  className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shrink-0 text-center"
+              >
+                  Assinar Agora
+              </a>
+          </div>
+      )}
+
       {/* DONATION CARD (Only for FREE Residents with Integrator Configured) */}
       {user?.role === UserRole.RESIDENT && user?.plan === 'FREE' && neighborhoodIntegrator?.mpAccessToken && (
           <div className="mb-8 animate-in slide-in-from-top-4">
               <Card className="p-6 bg-gradient-to-r from-purple-900/40 to-blue-900/40 border-purple-500/30 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
                   
-                  <div className="flex items-start gap-4 relative z-10">
-                      <div className="p-4 bg-white/10 rounded-full text-purple-300">
-                          <Heart size={32} fill="currentColor" />
+                   <div className="flex items-start gap-4 relative z-10">
+                      <div className="p-1 bg-white/5 rounded-2xl border border-white/20 shrink-0 flex items-center justify-center overflow-hidden w-16 h-16">
+                          {neighborhoodIntegrator.companyLogo ? (
+                              <img referrerPolicy="no-referrer" src={neighborhoodIntegrator.companyLogo} alt="Logo" className="w-full h-full object-cover rounded-xl bg-zinc-800" />
+                          ) : (
+                              <div className="p-3">
+                                  <Heart size={28} className="text-purple-300" fill="currentColor" />
+                              </div>
+                          )}
                       </div>
                       <div>
                           <h2 className="text-xl font-bold text-white mb-2">Apoie a Segurança do seu Bairro</h2>
-                          <p className="text-gray-300 text-sm max-w-lg">
-                              O plano gratuito é mantido pelo esforço comunitário. Contribua com qualquer valor para ajudar o Integrador 
-                              <strong> {neighborhoodIntegrator.name}</strong> a manter o sistema ativo.
+                          <p className="text-gray-300 text-sm max-w-lg leading-relaxed">
+                              O plano gratuito é mantido sob esforço comunitário voluntário. Contribua com qualquer valor para ajudar nosso integrador parceiro 
+                              <strong className="text-atalaia-neon font-black"> {neighborhoodIntegrator.companyName || neighborhoodIntegrator.name}</strong> a manter ativa a infraestrutura e os motovigias locais.
                           </p>
                       </div>
                   </div>
@@ -898,6 +949,16 @@ const Dashboard: React.FC = () => {
                   ))}
               </div>
           </Card>
+      )}
+
+      {/* CONTRACT SIGNATURE SYSTEM (Only for RESIDENTS) */}
+      {user?.role === UserRole.RESIDENT && (
+          <div className="mb-8">
+              <ContractSignature 
+                  user={user} 
+                  onSignComplete={() => setContractSigned(true)} 
+              />
+          </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

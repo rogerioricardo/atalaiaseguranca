@@ -588,9 +588,61 @@ export const MockService = {
 
   getNeighborhoodIntegrator: async (neighborhoodId: string): Promise<User | null> => {
       try {
+          // Primeiro, verifica se há atualizações locais salvas no localStorage (ex: conta Demo Integrador ou atualizações salvas localmente)
+          const keys = Object.keys(localStorage);
+          for (const key of keys) {
+              if (key.startsWith('atalaia_local_profile_')) {
+                  try {
+                      const cached = JSON.parse(localStorage.getItem(key) || '');
+                      if (cached && cached.role === UserRole.INTEGRATOR && cached.neighborhoodId === neighborhoodId) {
+                          return cached;
+                      }
+                  } catch (e) {}
+              }
+          }
+
+          // Fallback específico para o demo-integrator-id na mesma sessão/local se as chaves de neighborhoodId não baterem
+          const demoCached = localStorage.getItem('atalaia_local_profile_demo-integrator-id');
+          if (demoCached) {
+              try {
+                  const parsed = JSON.parse(demoCached);
+                  if (parsed && parsed.role === UserRole.INTEGRATOR) {
+                      return parsed;
+                  }
+              } catch (e) {}
+          }
+
           const { data, error } = await supabase.from('profiles').select('*').eq('neighborhood_id', neighborhoodId).eq('role', UserRole.INTEGRATOR).maybeSingle();
           if (error || !data) return null;
-          return { id: data.id, name: data.name, email: data.email, role: data.role as UserRole, plan: data.plan, neighborhoodId: data.neighborhood_id, phone: data.phone, mpPublicKey: data.mp_public_key, mpAccessToken: data.mp_access_token };
+
+          let companyName = undefined;
+          let companyLogo = undefined;
+          let splitPercentage = undefined;
+
+          if (data.address && data.address.trim().startsWith('{')) {
+              try {
+                  const parsed = JSON.parse(data.address);
+                  companyName = parsed.companyName;
+                  companyLogo = parsed.companyLogo;
+                  splitPercentage = parsed.splitPercentage;
+              } catch (e) {}
+          }
+
+          return { 
+              id: data.id, 
+              name: data.name, 
+              email: data.email, 
+              role: data.role as UserRole, 
+              plan: data.plan, 
+              neighborhoodId: data.neighborhood_id, 
+              phone: data.phone, 
+              mpPublicKey: data.mp_public_key, 
+              mpAccessToken: data.mp_access_token,
+              companyName,
+              companyLogo,
+              splitPercentage: splitPercentage || 10,
+              address: data.address
+          };
       } catch (e) {
           return null;
       }

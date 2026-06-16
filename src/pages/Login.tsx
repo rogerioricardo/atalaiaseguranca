@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/context';
-import { UserRole, Neighborhood } from '@/types';
+import { UserRole, Neighborhood, UserPlan } from '@/types';
 import { Button, Input, Card } from '@/components/UI';
 import { ShieldCheck, ArrowLeft, AlertCircle, MapPin, CheckCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { MockService } from '@/services/mockService';
@@ -81,7 +81,7 @@ const Login: React.FC = () => {
               throw new Error('Por favor, selecione seu bairro.');
           }
           
-          await login(email, password, role, name, selectedNeighborhoodId, phone);
+          await login(email, password, role, name, selectedNeighborhoodId, phone, (planParam || 'FREE') as UserPlan);
 
           if (planParam && (planParam === 'FAMILY' || planParam === 'PREMIUM')) {
               setRedirectingToPay(true);

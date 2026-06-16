@@ -4,8 +4,9 @@ import Layout from '../components/Layout';
 import { useAuth } from '@/auth/context';
 import { Card, Input, Button } from '../components/UI';
 import { MockService } from '../services/mockService';
-import { Save, User as UserIcon, Camera, Home, MapPin, CheckCircle, Loader2, AlertCircle, Smartphone, Laptop, Monitor, Trash2, LogOut } from 'lucide-react';
+import { Save, User as UserIcon, Camera, Home, MapPin, CheckCircle, Loader2, AlertCircle, Smartphone, Laptop, Monitor, Trash2, LogOut, Sparkles, Upload, Building, CreditCard, Sliders, Check } from 'lucide-react';
 import { SessionService } from '../services/sessionService';
+import { UserRole } from '@/types';
 
 const Profile: React.FC = () => {
   const { user, updateProfile } = useAuth();
@@ -64,6 +65,97 @@ const Profile: React.FC = () => {
     }
   };
   
+  // BRANDING & SPLIT PAYMENT STATES FOR INTEGRATOR
+  const [brandName, setBrandName] = useState('');
+  const [brandLogo, setBrandLogo] = useState('');
+  const [mpPubKey, setMpPubKey] = useState('');
+  const [mpAccToken, setMpAccToken] = useState('');
+  const [splitPct, setSplitPct] = useState(70);
+  const [savingBranding, setSavingBranding] = useState(false);
+  const [brandingStatusMsg, setBrandingStatusMsg] = useState('');
+
+  const [brandCnpj, setBrandCnpj] = useState('');
+  const [brandRazaoSocial, setBrandRazaoSocial] = useState('');
+  const [brandPhone, setBrandPhone] = useState('');
+  const [brandBanco, setBrandBanco] = useState('');
+  const [brandPix, setBrandPix] = useState('');
+  const [brandCpf, setBrandCpf] = useState('');
+  const [brandEmail, setBrandEmail] = useState('');
+
+  useEffect(() => {
+    if (user && !savingBranding) {
+      setBrandName(user.companyName || '');
+      setBrandLogo(user.companyLogo || '');
+      setMpPubKey(user.mpPublicKey || '');
+      setMpAccToken(user.mpAccessToken || '');
+      setSplitPct(user.splitPercentage || 70);
+      setBrandCnpj(user.cnpj || '');
+      setBrandRazaoSocial(user.razaoSocial || '');
+      setBrandPhone(user.phone || '');
+      setBrandBanco(user.banco || '');
+      setBrandPix(user.pix || '');
+      setBrandCpf(user.cpf || '');
+      setBrandEmail(user.email || '');
+    }
+  }, [user, savingBranding]);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              if (typeof reader.result === 'string') {
+                  setBrandLogo(reader.result);
+              }
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const handleSaveBranding = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setSavingBranding(true);
+      setBrandingStatusMsg('');
+      try {
+          // Serialize branding details inside standard 'address' column as JSON string to maintain schema consistency
+          const serializedAddress = JSON.stringify({
+              companyName: brandName,
+              companyLogo: brandLogo,
+              splitPercentage: Number(splitPct),
+              cnpj: brandCnpj,
+              razaoSocial: brandRazaoSocial,
+              banco: brandBanco,
+              pix: brandPix,
+              cpf: brandCpf
+          });
+
+          await updateProfile({
+              address: serializedAddress,
+              mpPublicKey: mpPubKey,
+              mpAccessToken: mpAccToken,
+              companyName: brandName,
+              companyLogo: brandLogo,
+              splitPercentage: Number(splitPct),
+              cnpj: brandCnpj,
+              razaoSocial: brandRazaoSocial,
+              phone: brandPhone,
+              banco: brandBanco,
+              pix: brandPix,
+              cpf: brandCpf,
+              email: brandEmail
+          } as any);
+
+          setBrandingStatusMsg('Configurações de Parceria e Dados Corporativos salvas com sucesso!');
+          setTimeout(() => {
+              setBrandingStatusMsg('');
+          }, 3500);
+      } catch (err: any) {
+          setBrandingStatusMsg('Erro ao salvar configurações: ' + (err.message || err));
+      } finally {
+          setSavingBranding(false);
+      }
+  };
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -185,7 +277,7 @@ const Profile: React.FC = () => {
             </div>
         )}
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-20">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-20">
             {/* Left Col: Photo & Basic Info */}
             <div className="lg:col-span-1 space-y-6">
                 <Card className="p-6 text-center">
@@ -240,7 +332,8 @@ const Profile: React.FC = () => {
 
             {/* Right Col: Forms */}
             <div className="lg:col-span-2 space-y-6">
-                <Card className="p-6 md:p-8">
+                <form onSubmit={handleSubmit}>
+                    <Card className="p-6 md:p-8">
                     <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                         <UserIcon className="text-atalaia-neon" size={20} />
                         Dados Pessoais
@@ -348,8 +441,234 @@ const Profile: React.FC = () => {
                         </Button>
                     </div>
                 </Card>
+                </form>
+
+                {/* INTEGRATOR CO-BRANDING & SPLIT PAYMENTS SECTOR */}
+                {user?.role === UserRole.INTEGRATOR && (
+                    <Card className="p-6 md:p-8 border border-atalaia-neon/20 bg-gradient-to-b from-[#03140a]/40 to-black relative overflow-hidden">
+                        {/* Glowing backdrop decorative bubble */}
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-atalaia-neon/5 rounded-full blur-3xl pointer-events-none" />
+                        
+                        <div className="flex items-center gap-3 mb-6 pb-6 border-b border-white/5">
+                            <div className="p-2.5 bg-atalaia-neon/15 rounded-xl text-atalaia-neon border border-atalaia-neon/20 shadow-[0_0_15px_rgba(0,255,102,0.1)]">
+                                <Sparkles size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-white tracking-wide">Configurar Parceria & Split</h3>
+                                <p className="text-[11px] text-gray-400">Co-Branding Visual & Integração Financeira Mercado Pago</p>
+                            </div>
+                        </div>
+
+                        {/* ALERT INFO */}
+                        <div className="p-4 bg-[#05110a] border border-atalaia-neon/20 rounded-xl flex items-start gap-3 mb-6">
+                            <AlertCircle className="text-atalaia-neon shrink-0 mt-0.5 animate-pulse" size={18} />
+                            <p className="text-xs text-zinc-305 leading-relaxed font-sans">
+                                Como nosso <strong className="text-atalaia-neon">Integrador Parceiro</strong>, suas modificações comerciais são refletidas para todos os moradores do seu bairro. Customize sua identidade visual e configure suas credenciais de Mercado Pago para split automático instantâneo em tempo real!
+                            </p>
+                        </div>
+
+                        <form onSubmit={handleSaveBranding} className="space-y-6">
+                            {/* SECTION 1: IDENTITY */}
+                            <div className="space-y-4">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 border-b border-zinc-800/60 pb-2">
+                                    <Building size={14} className="text-atalaia-neon" /> Identidade Visual da sua Empresa
+                                </h4>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Input 
+                                        label="Nome da Empresa" 
+                                        placeholder="Ex: Delta Monitoramento Ltda" 
+                                        value={brandName} 
+                                        onChange={e => setBrandName(e.target.value)} 
+                                    />
+                                    <div>
+                                        <label className="text-[10px] text-gray-405 uppercase font-black tracking-wider block mb-2 font-mono">Logomarca (URL ou Upload)</label>
+                                        <div className="flex gap-2">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Link da imagem da sua marca..." 
+                                                value={brandLogo} 
+                                                onChange={e => setBrandLogo(e.target.value)} 
+                                                className="flex-1 h-12 bg-black border border-white/10 rounded-xl px-4 text-xs text-white placeholder-gray-600 focus:border-atalaia-neon outline-none transition-all"
+                                            />
+                                            <label className="h-12 w-12 bg-zinc-900 border border-white/10 hover:border-atalaia-neon/50 rounded-xl flex items-center justify-center cursor-pointer text-gray-400 hover:text-white transition-all shadow-md shrink-0">
+                                                <Upload size={18} />
+                                                <input 
+                                                    type="file" 
+                                                    accept="image/*" 
+                                                    onChange={handleLogoUpload} 
+                                                    className="hidden" 
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* CO-BRANDING LIVE PREVIEW */}
+                                <div className="p-4 bg-zinc-950 border border-white/5 rounded-xl space-y-2.5 shadow-inner">
+                                    <span className="text-[9px] text-zinc-500 uppercase font-black block font-mono">Pré-visualização da Parceria Comercial</span>
+                                    <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-zinc-900 to-black rounded-lg border border-white/10">
+                                        <div className="flex items-center gap-2.5">
+                                            <h5 className="text-xs font-black text-white tracking-widest uppercase">ATALAIA</h5>
+                                            <span className="text-[10px] text-zinc-500 font-bold">🤝</span>
+                                            {brandLogo ? (
+                                                <div className="flex items-center gap-2 filter drop-shadow-[0_0_5px_rgba(255,255,255,0.15)] animate-in fade-in-30">
+                                                    <img referrerPolicy="no-referrer" src={brandLogo} alt="Logo" className="w-5 h-5 rounded-md object-cover bg-zinc-800" />
+                                                    <span className="text-xs font-semibold text-atalaia-neon">{brandName || 'Sua Empresa'}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest bg-zinc-900/50 px-2 py-1 rounded">Logomarca Pendente</span>
+                                            )}
+                                        </div>
+                                        <span className="text-[9px] bg-atalaia-neon/15 text-atalaia-neon px-2 py-0.5 rounded font-black uppercase">Homologado</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* SECTION 2: CORPORATE REGISTRATION & BILLING */}
+                            <div className="space-y-4 pt-4 border-t border-white/5">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 border-b border-zinc-800/60 pb-2">
+                                    <Building size={14} className="text-atalaia-neon" /> Cadastro Corporativo & Faturamento Bancário
+                                </h4>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Input 
+                                        label="Razão Social" 
+                                        placeholder="Ex: Delta Serviços Gerais de Monitoramento Eireli" 
+                                        value={brandRazaoSocial} 
+                                        onChange={e => setBrandRazaoSocial(e.target.value)} 
+                                    />
+                                    <Input 
+                                        label="CNPJ" 
+                                        placeholder="Ex: 00.000.000/0001-00" 
+                                        value={brandCnpj} 
+                                        onChange={e => setBrandCnpj(e.target.value)} 
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <Input 
+                                        label="CPF do Responsável" 
+                                        placeholder="Ex: 000.000.000-00" 
+                                        value={brandCpf} 
+                                        onChange={e => setBrandCpf(e.target.value)} 
+                                    />
+                                    <Input 
+                                        label="Telefone Corporativo" 
+                                        placeholder="Ex: (11) 99999-9999" 
+                                        value={brandPhone} 
+                                        onChange={e => setBrandPhone(e.target.value)} 
+                                    />
+                                    <Input 
+                                        label="E-mail Corporativo" 
+                                        type="email"
+                                        placeholder="Ex: contato@suaempresa.com" 
+                                        value={brandEmail} 
+                                        onChange={e => setBrandEmail(e.target.value)} 
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Input 
+                                        label="Banco" 
+                                        placeholder="Ex: Itaú Unibanco (341) ou Nubank (260)" 
+                                        value={brandBanco} 
+                                        onChange={e => setBrandBanco(e.target.value)} 
+                                    />
+                                    <Input 
+                                        label="Chave PIX do Sacado" 
+                                        placeholder="Ex: Celular, E-mail, CNPJ ou Chave Aleatória" 
+                                        value={brandPix} 
+                                        onChange={e => setBrandPix(e.target.value)} 
+                                    />
+                                </div>
+                            </div>
+
+                            {/* SECTION 3: MERCADO PAGO INTEGRATION */}
+                            <div className="space-y-4 pt-4 border-t border-white/5">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 border-b border-zinc-800/60 pb-2">
+                                    <CreditCard size={14} className="text-atalaia-neon" /> Integração Financeira Mercado Pago (Split)
+                                </h4>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Input 
+                                        label="Chave Pública (Public Key)" 
+                                        placeholder="APP_USR-xxxxxx..." 
+                                        value={mpPubKey} 
+                                        onChange={e => setMpPubKey(e.target.value)} 
+                                    />
+                                    <Input 
+                                        label="Token de Acesso (Access Token)" 
+                                        type="password"
+                                        placeholder="MLA-xxxxxx..." 
+                                        value={mpAccToken} 
+                                        onChange={e => setMpAccToken(e.target.value)} 
+                                    />
+                                </div>
+
+                                {/* SLIDER FOR SPLIT PERCENTAGE */}
+                                <div className="p-4 bg-zinc-950/40 rounded-xl border border-white/5 space-y-4 shadow-inner">
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-gray-400 font-bold flex items-center gap-1.5 font-mono"><Sliders size={14} className="text-atalaia-neon"/> Divisão de Split (% Repasse)</span>
+                                        <span className="bg-atalaia-neon text-black font-black px-2.5 py-1 rounded text-xs animate-pulse">
+                                            {splitPct}% de Comissão
+                                        </span>
+                                    </div>
+                                    <input 
+                                        type="range" 
+                                        min="20" 
+                                        max="95" 
+                                        step="5" 
+                                        value={splitPct}
+                                        onChange={e => setSplitPct(Number(e.target.value))}
+                                        className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-atalaia-neon focus:outline-none focus:ring-1 focus:ring-atalaia-neon"
+                                    />
+                                    <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
+                                        <span>Mínima (20% Integrador)</span>
+                                        <span>Máxima (95% Integrador)</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 pt-3.5 text-center text-xs border-t border-white/5">
+                                        <div>
+                                            <span className="text-zinc-550 font-bold block text-[9px] uppercase tracking-wider font-mono">Sua Comissão (Integrador)</span>
+                                            <span className="text-lg font-black text-white">{splitPct}%</span>
+                                        </div>
+                                        <div className="border-l border-white/5">
+                                            <span className="text-zinc-550 font-bold block text-[9px] uppercase tracking-wider font-mono">Royalties Plataforma (Atalaia)</span>
+                                            <span className="text-lg font-black text-zinc-400">{100 - splitPct}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {brandingStatusMsg && (
+                                <div className={`p-4 rounded-xl text-center text-xs font-bold leading-relaxed border animate-in fade-in slide-in-from-bottom-2 ${
+                                    brandingStatusMsg.includes('Erro') 
+                                    ? 'bg-red-950/20 border-red-500/20 text-red-500' 
+                                    : 'bg-[#0f2415] border-atalaia-neon/20 text-atalaia-neon'
+                                }`}>
+                                    {brandingStatusMsg}
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-end pt-2">
+                                <Button
+                                    type="submit"
+                                    disabled={savingBranding}
+                                    className="px-8 h-12 bg-atalaia-neon hover:bg-atalaia-neon/90 text-black font-black uppercase text-xs tracking-wider rounded-xl transition-all shadow-[0_4px_15px_rgba(0,255,102,0.25)] flex items-center justify-center gap-2 w-full md:w-auto"
+                                >
+                                    {savingBranding ? (
+                                        <Loader2 className="animate-spin mr-2" size={18} />
+                                    ) : (
+                                        <><Check size={18} className="mr-2" /> Gravar Configurações de Parceria</>
+                                    )}
+                                </Button>
+                            </div>
+                        </form>
+                    </Card>
+                )}
             </div>
-        </form>
+        </div>
 
         {/* CONTROLE DE SESSÕES ATIVAS - ANTI-COMPARTILHAMENTO */}
         <div className="pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">

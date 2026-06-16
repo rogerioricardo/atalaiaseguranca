@@ -8,12 +8,13 @@ import { supabase } from '../lib/supabaseClient';
 import { Card, Button, Input, Modal, Badge } from '../components/UI';
 import { 
     Trash2, MapPin, Users, Search, 
-    Edit2, Loader2, Wrench, CheckCircle, Smartphone, Mail, RefreshCw, Filter, Database, AlertTriangle
+    Edit2, Loader2, Wrench, CheckCircle, Smartphone, Mail, RefreshCw, Filter, Database, AlertTriangle,
+    Star, Upload, Check, Settings, Building, CreditCard, Sparkles, AlertCircle, Sliders
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const IntegratorUsers: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [residents, setResidents] = useState<User[]>([]);
   const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +70,7 @@ const IntegratorUsers: React.FC = () => {
               name: editName, 
               phone: editPhone, 
               neighborhood_id: editHoodId || null,
-              plan: editRole === UserRole.RESIDENT ? 'PREMIUM' : editPlan,
+              plan: editPlan,
               role: editRole
           });
           setIsEditModalOpen(false);
@@ -140,8 +141,11 @@ const IntegratorUsers: React.FC = () => {
                             <div className="flex-1">
                                 <h3 className="font-bold text-white">{resident.name}</h3>
                                 <p className="text-xs text-gray-500">{resident.email}</p>
-                                <div className="flex items-center gap-2 mt-2">
+                                <div className="flex items-center gap-2 mt-2 flex-wrap">
                                     <Badge color={resident.role === UserRole.ADMIN ? 'purple' : 'green'}>{resident.role}</Badge>
+                                    <Badge color={resident.plan === 'PREMIUM' ? 'green' : (resident.plan === 'FAMILY' ? 'yellow' : 'blue')}>
+                                        {resident.plan || 'FREE'}
+                                    </Badge>
                                     <span className="text-[10px] text-atalaia-neon font-bold uppercase">
                                         {neighborhoods.find(n => n.id === resident.neighborhoodId)?.name || 'NÃO VINCULADO'}
                                     </span>
@@ -177,17 +181,11 @@ const IntegratorUsers: React.FC = () => {
                         </div>
                         <div>
                             <label className="text-[10px] text-gray-500 uppercase font-black mb-1 block">Plano</label>
-                            {editRole === UserRole.RESIDENT ? (
-                                <div className="w-full bg-black border border-[#00ff66]/20 text-atalaia-neon rounded-xl p-4 font-black text-sm text-center">
-                                    MORADOR PRÊMIO
-                                </div>
-                            ) : (
-                                <select className="w-full bg-black border border-white/10 rounded-xl p-4 text-white" value={editPlan} onChange={e => setEditPlan(e.target.value)}>
-                                    <option value="FREE">FREE</option>
-                                    <option value="FAMILY">FAMILY</option>
-                                    <option value="PREMIUM">PREMIUM</option>
-                                </select>
-                            )}
+                            <select className="w-full bg-black border border-white/10 rounded-xl p-4 text-white" value={editPlan} onChange={e => setEditPlan(e.target.value)}>
+                                <option value="FREE">FREE</option>
+                                <option value="FAMILY">FAMILY</option>
+                                <option value="PREMIUM">PREMIUM</option>
+                            </select>
                         </div>
                     </div>
                     <div>
@@ -201,6 +199,7 @@ const IntegratorUsers: React.FC = () => {
                 </form>
             </div>
         </Modal>
+
         <AnimatePresence>
             {userToDelete && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">

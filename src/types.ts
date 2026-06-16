@@ -25,6 +25,14 @@ export interface User {
   photoUrl?: string;
   mpPublicKey?: string;
   mpAccessToken?: string;
+  companyName?: string;
+  companyLogo?: string;
+  splitPercentage?: number;
+  cnpj?: string;
+  razaoSocial?: string;
+  banco?: string;
+  pix?: string;
+  cpf?: string;
 }
 
 export interface Neighborhood {
