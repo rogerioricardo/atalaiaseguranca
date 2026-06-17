@@ -5,7 +5,7 @@ import { useAuth } from '@/auth/context';
 import { MockService } from '../services/mockService';
 import { Card, Button } from '../components/UI';
 import { CheckCircle, ShieldCheck, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase, isRealSupabase } from '@/lib/supabaseClient';
 
 const PaymentSuccess: React.FC = () => {
   const { user } = useAuth();
@@ -14,7 +14,8 @@ const PaymentSuccess: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [success, setSuccess] = useState(false);
   const rawPlanId = searchParams.get('plan');
-  const planId = (rawPlanId || 'FAMILY').toUpperCase();
+  const couponCode = searchParams.get('coupon');
+  const planId = couponCode ? 'FAMILY' : (rawPlanId || 'FAMILY').toUpperCase();
 
   useEffect(() => {
       const processPayment = async () => {
@@ -24,13 +25,49 @@ const PaymentSuccess: React.FC = () => {
           }
 
           try {
-              // 1. Atualizar o plano do usuário na tabela de profiles
-              await MockService.updateUserPlan(user.id, planId);
-
-              // 2. Determinar o preço do plano contratado
-              const amount = planId === 'PREMIUM' ? 79.90 : 39.90;
+              // 1. Determinar o preço do plano contratado
+              let amount = planId === 'PREMIUM' ? 79.90 : 39.90;
               const payDate = new Date();
               const refMonth = `${(payDate.getMonth() + 1).toString().padStart(2, '0')}/${payDate.getFullYear()}`;
+
+              if (couponCode) {
+                  const validateRes = await MockService.validateCoupon(couponCode, user.id);
+                  if (validateRes.success && validateRes.coupon) {
+                      amount = validateRes.coupon.promotionalPrice;
+                      const startDate = new Date();
+                      const endDate = new Date();
+                      endDate.setDate(startDate.getDate() + validateRes.coupon.trialDays);
+
+                      if (isRealSupabase) {
+                          await supabase.from('profiles').update({
+                              plan: 'FAMILY',
+                              promo_active: true,
+                              promo_start: startDate.toISOString(),
+                              promo_end: endDate.toISOString(),
+                              promo_coupon: validateRes.coupon.code
+                          }).eq('id', user.id);
+                      }
+
+                      const cachedStr = localStorage.getItem(`atalaia_local_profile_${user.id}`);
+                      if (cachedStr) {
+                         try {
+                             const parsed = JSON.parse(cachedStr);
+                             parsed.plan = 'FAMILY';
+                             parsed.promoActive = true;
+                             parsed.promoStart = startDate.toISOString();
+                             parsed.promoEnd = endDate.toISOString();
+                             parsed.promoCoupon = validateRes.coupon.code;
+                             localStorage.setItem(`atalaia_local_profile_${user.id}`, JSON.stringify(parsed));
+                         } catch (e) {}
+                      }
+
+                      await MockService.incrementCouponUses(validateRes.coupon.code);
+                  } else {
+                      await MockService.updateUserPlan(user.id, planId);
+                  }
+              } else {
+                  await MockService.updateUserPlan(user.id, planId);
+              }
 
               // 3. Registrar o pagamento na tabela 'payments' do Supabase para atualizar o Painel Financeiro
               // Evita duplicatas se o usuário recarregar a tela de sucesso
@@ -70,7 +107,7 @@ const PaymentSuccess: React.FC = () => {
       };
 
       processPayment();
-  }, [user, planId]);
+  }, [user, planId, couponCode]);
 
   return (
     <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4">

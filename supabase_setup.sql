@@ -31,8 +31,32 @@ CREATE TABLE IF NOT EXISTS profiles (
     approved BOOLEAN DEFAULT FALSE,
     mp_public_key TEXT,
     mp_access_token TEXT,
+    promo_active BOOLEAN DEFAULT FALSE,
+    promo_start TIMESTAMP WITH TIME ZONE,
+    promo_end TIMESTAMP WITH TIME ZONE,
+    promo_coupon TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- 3.5 TABELA DE CUPONS PROMOCIONAIS
+CREATE TABLE IF NOT EXISTS coupons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code TEXT UNIQUE NOT NULL,
+    active BOOLEAN DEFAULT TRUE,
+    promotional_price DECIMAL(10,2) DEFAULT 1.00,
+    trial_days INTEGER DEFAULT 7,
+    max_uses INTEGER DEFAULT 1000,
+    used_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+INSERT INTO coupons (code, active, promotional_price, trial_days, max_uses, used_count)
+VALUES ('TESTE7DIAS1REAL', TRUE, 1.00, 7, 1000, 0)
+ON CONFLICT (code) DO NOTHING;
+
+ALTER TABLE coupons ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Tudo em coupons" ON coupons;
+CREATE POLICY "Tudo em coupons" ON coupons FOR ALL USING (true) WITH CHECK (true);
 
 -- 4. TABELA DE CONFIGURAÇÕES (TEMPLATES DE MENSAGENS)
 CREATE TABLE IF NOT EXISTS system_settings (

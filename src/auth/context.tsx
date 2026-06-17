@@ -139,7 +139,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           razaoSocial,
           banco,
           pix,
-          cpf
+          cpf,
+          promoActive: profile.promo_active === true,
+          promoStart: profile.promo_start,
+          promoEnd: profile.promo_end,
+          promoCoupon: profile.promo_coupon
       };
   };
 
@@ -232,6 +236,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (data) {
               const mappedUser = mapProfile(data);
+              
+              // Verificação de Expiração do Teste Promocional (7 dias)
+              if (mappedUser.promoActive && mappedUser.promoEnd && new Date(mappedUser.promoEnd) < new Date()) {
+                  console.log("[Auth] Cupom promocional de teste de 7 dias expirado! Rebaixando automaticamente para Plano Gratuito...");
+                  mappedUser.plan = 'FREE';
+                  mappedUser.promoActive = false;
+                  mappedUser.promoStart = undefined;
+                  mappedUser.promoEnd = undefined;
+                  mappedUser.promoCoupon = undefined;
+                  
+                  if (isRealSupabase && isIdUuid) {
+                      const expireProfile = async () => {
+                          try {
+                              await supabase.from('profiles').update({
+                                  plan: 'FREE',
+                                  promo_active: false,
+                                  promo_start: null,
+                                  promo_end: null,
+                                  promo_coupon: null
+                              }).eq('id', userId);
+                          } catch (err) {
+                              console.error("[Promo Expire] Erro ao rebaixar perfil no Supabase:", err);
+                          }
+                      };
+                      expireProfile();
+                  }
+                  
+                  const cachedStr = localStorage.getItem(`atalaia_local_profile_${userId}`);
+                  if (cachedStr) {
+                      try {
+                          const parsed = JSON.parse(cachedStr);
+                          parsed.plan = 'FREE';
+                          parsed.promoActive = false;
+                          parsed.promoStart = undefined;
+                          parsed.promoEnd = undefined;
+                          parsed.promoCoupon = undefined;
+                          localStorage.setItem(`atalaia_local_profile_${userId}`, JSON.stringify(parsed));
+                      } catch (e) {}
+                  }
+              }
+
               if (mappedUser.id && mappedUser.role) {
                   localStorage.setItem(`atalaia_cached_role_${mappedUser.id}`, mappedUser.role);
               }
@@ -537,6 +582,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if ('approved' in data) dbPayload.approved = data.approved;
     if ('mpPublicKey' in data) dbPayload.mp_public_key = data.mpPublicKey;
     if ('mpAccessToken' in data) dbPayload.mp_access_token = data.mpAccessToken;
+    if ('promoActive' in data) dbPayload.promo_active = data.promoActive;
+    if ('promoStart' in data) dbPayload.promo_start = data.promoStart;
+    if ('promoEnd' in data) dbPayload.promo_end = data.promoEnd;
+    if ('promoCoupon' in data) dbPayload.promo_coupon = data.promoCoupon;
 
     const isIdUuid = isUuid(user.id);
 

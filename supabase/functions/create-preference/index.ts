@@ -49,7 +49,7 @@ serve(async (req) => {
       console.warn("MERCADO_PAGO_ACCESS_TOKEN não configurado nos Secrets do Supabase e nem no sistema. Usando modo de simulação.");
     }
 
-    const { planId, payer, metadata, redirectUrl } = await req.json();
+    const { planId, payer, metadata, redirectUrl, couponCode } = await req.json();
 
     if (!planId) {
       return new Response(JSON.stringify({ error: "Parâmetro planId é obrigatório" }), {
@@ -73,19 +73,78 @@ serve(async (req) => {
       price = 39.90; 
     }
 
+    // Verificar se existe cupom e se é válido
+    let appliedCoupon = null;
+    if (couponCode) {
+      const cleanCode = couponCode.trim().toUpperCase();
+      console.log(`[create-preference] Verificando cupom de desconto: ${cleanCode}`);
+      
+      let foundInDb = false;
+      // Tentar buscar do banco do Supabase primeiro (inclusive para 'TESTE7DIAS1REAL' alterados)
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL");
+        const supabaseAnonKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY");
+        if (supabaseUrl && supabaseAnonKey) {
+          const fetchUrl = `${supabaseUrl}/rest/v1/coupons?code=eq.${encodeURIComponent(cleanCode)}&select=*`;
+          const dbResponse = await fetch(fetchUrl, {
+            headers: {
+              "apikey": supabaseAnonKey,
+              "Authorization": `Bearer ${supabaseAnonKey}`,
+              "Content-Type": "application/json"
+            }
+          });
+          if (dbResponse.ok) {
+            const rows = await dbResponse.json();
+            if (rows && rows.length > 0) {
+              const coupon = rows[0];
+              // Verificar se está ativo e se não esgotou o limite
+              if (coupon.active && (coupon.used_count || 0) < (coupon.max_uses || 999999)) {
+                appliedCoupon = coupon;
+                foundInDb = true;
+                
+                // Pegar o preço correto, suportando snake_case e camelCase
+                const couponPrice = Number(
+                  coupon.promotional_price !== undefined 
+                    ? coupon.promotional_price 
+                    : (coupon.promotionalPrice !== undefined ? coupon.promotionalPrice : 1.00)
+                );
+                
+                price = couponPrice;
+                title = `${title} (Cupom ${coupon.code})`;
+                console.log(`[create-preference] Cupom de banco ${coupon.code} aplicado com sucesso. Novo preço: R$ ${price}`);
+              } else {
+                console.log(`[create-preference] Cupom ${cleanCode} encontrado no banco de dados, mas não está ativo ou esgotou o limite de usos.`);
+              }
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.error("[create-preference] Erro ao buscar cupom no banco de dados:", dbErr);
+      }
+
+      // Se não encontrou no banco (ou houve erro de conexão/configuração), usar o fallback estático robusto como backup para o cupom padrão
+      if (!foundInDb && cleanCode === 'TESTE7DIAS1REAL') {
+        price = 1.00;
+        title = `${title} (Promoção 7d R$1,00 - Fallback)`;
+        console.log(`[create-preference] Cupom estático TESTE7DIAS1REAL aplicado via FALLBACK. Novo preço: R$ 1,00`);
+      }
+    }
+
+    // Limpar redirectUrl tirando parâmetros de query para gerar o baseRedirect correto
+    let baseRedirect = redirectUrl || "https://atalaia-app.pages.dev";
+    if (baseRedirect.includes('?')) {
+      baseRedirect = baseRedirect.split('?')[0];
+    }
+
     // Se não houver token do Mercado Pago, geramos um fallback imediato
     if (!MERCADO_PAGO_ACCESS_TOKEN) {
-      const baseRedirect = redirectUrl || "https://atalaia-app.pages.dev";
-      const simulatedUrl = `${baseRedirect}/#/payment-success?plan=${planId}&simulated=true`;
-      console.warn("[create-preference] Sem credencial MP: Redirecionando para sucesso simulado.", simulatedUrl);
-      return new Response(JSON.stringify({ init_point: simulatedUrl, info: "Simulado localmente por falta de credenciais." }), {
+      const successUrlSimulated = `${baseRedirect}/#/payment-success?plan=${planId}${couponCode ? `&coupon=${couponCode}` : ''}&simulated=true`;
+      console.warn("[create-preference] Sem credencial MP: Redirecionando para sucesso simulado.", successUrlSimulated);
+      return new Response(JSON.stringify({ init_point: successUrlSimulated, info: "Simulado localmente por falta de credenciais." }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       });
     }
-
-    // Determinar URL base de retorno de forma dinâmica
-    const baseRedirect = redirectUrl || "https://atalaia-app.pages.dev";
 
     // Corpo de requisição da preferência do Mercado Pago v1 API
     const mpPayload = {
@@ -104,7 +163,7 @@ serve(async (req) => {
       },
       back_urls: {
         // Redireciona de volta para a rota de sucesso do applet
-        success: `${baseRedirect}/#/payment-success?plan=${planId}`,
+        success: `${baseRedirect}/#/payment-success?plan=${planId}${couponCode ? `&coupon=${couponCode}` : ''}`,
         failure: `${baseRedirect}/#/dashboard`,
         pending: `${baseRedirect}/#/dashboard`
       },

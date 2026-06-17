@@ -1,6 +1,6 @@
 
 import { supabase, isRealSupabase } from '../lib/supabaseClient';
-import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, ServiceRequest, Camera, SupportTicket } from '../types';
+import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, ServiceRequest, Camera, SupportTicket, Coupon } from '../types';
 
 const sanitizeUUID = (id?: string): string | null => {
     if (!id || id === 'unknown' || id === 'undefined' || id.trim() === '') return null;
@@ -764,6 +764,287 @@ export const MockService = {
         console.error("[MockService] Error in updatePaymentStatus:", error);
         throw error;
     }
+  },
+
+  // --- COUPONS AND TRIAL PROMOTIONS SYSTEM ---
+  getCoupons: async (): Promise<Coupon[]> => {
+    let localCoupons: Coupon[] = [];
+    const cached = localStorage.getItem('atalaia_coupons');
+    if (cached) {
+      try { localCoupons = JSON.parse(cached); } catch (e) {}
+    } else {
+      localCoupons = [
+        {
+          id: "teste-7dias-1real-id",
+          code: "TESTE7DIAS1REAL",
+          active: true,
+          promotionalPrice: 1.00,
+          trialDays: 7,
+          maxUses: 1000,
+          usedCount: 0,
+          createdAt: new Date().toISOString()
+        }
+      ];
+      localStorage.setItem('atalaia_coupons', JSON.stringify(localCoupons));
+    }
+
+    if (isRealSupabase) {
+      try {
+        const { data, error } = await supabase.from('coupons').select('*');
+        if (!error && data) {
+          const dbCoupons = data.map((c: any) => ({
+            id: c.id,
+            code: c.code,
+            active: c.active,
+            promotionalPrice: Number(c.promotional_price),
+            trialDays: c.trial_days,
+            maxUses: c.max_uses,
+            usedCount: c.used_count,
+            createdAt: c.created_at
+          }));
+          
+          // Se o TESTE7DIAS1REAL não estiver no banco, vamos inseri-lo ou mesclá-lo para que sempre exista
+          const hasDefault = dbCoupons.some(c => c.code.toUpperCase() === 'TESTE7DIAS1REAL');
+          if (!hasDefault) {
+             const defaultCoupon = {
+                id: "teste-7dias-1real-id",
+                code: "TESTE7DIAS1REAL",
+                active: true,
+                promotionalPrice: 1.00,
+                trialDays: 7,
+                maxUses: 1000,
+                usedCount: 0,
+                createdAt: new Date().toISOString()
+             };
+             try {
+                // Tenta inserir no banco. Se falhar, pelo menos retorna em dbCoupons
+                await supabase.from('coupons').insert({
+                   code: defaultCoupon.code,
+                   active: defaultCoupon.active,
+                   promotional_price: defaultCoupon.promotionalPrice,
+                   trial_days: defaultCoupon.trialDays,
+                   max_uses: defaultCoupon.maxUses,
+                   used_count: defaultCoupon.usedCount
+                });
+             } catch (insertErr) {
+                console.warn("[MockService] Erro ao auto-inserir cupom padrão no banco:", insertErr);
+             }
+             dbCoupons.push(defaultCoupon);
+          }
+          return dbCoupons;
+        }
+      } catch (e) {
+        console.warn("[MockService] Erro ao carregar cupons do Supabase. Usando local:", e);
+      }
+    }
+
+    return localCoupons;
+  },
+
+  saveCoupon: async (coupon: Coupon): Promise<void> => {
+    let localCoupons: Coupon[] = [];
+    const cached = localStorage.getItem('atalaia_coupons');
+    if (cached) {
+      try { localCoupons = JSON.parse(cached); } catch (e) {}
+    }
+    const idx = localCoupons.findIndex(c => c.id === coupon.id || c.code === coupon.code);
+    if (idx >= 0) {
+      localCoupons[idx] = { ...localCoupons[idx], ...coupon };
+    } else {
+      localCoupons.push(coupon);
+    }
+    localStorage.setItem('atalaia_coupons', JSON.stringify(localCoupons));
+
+    if (isRealSupabase) {
+      try {
+        const dbPayload: any = {
+          code: coupon.code.toUpperCase().trim(),
+          active: coupon.active,
+          promotional_price: coupon.promotionalPrice,
+          trial_days: coupon.trialDays,
+          max_uses: coupon.maxUses,
+          used_count: coupon.usedCount
+        };
+        
+        // Só envia id se for um UUID válido.
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(coupon.id);
+        if (isUuid) {
+          dbPayload.id = coupon.id;
+        }
+
+        const { data, error } = await supabase
+          .from('coupons')
+          .upsert(dbPayload, { onConflict: 'code' })
+          .select();
+
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          const dbCoupon = data[0];
+          const updatedLocalIdx = localCoupons.findIndex(c => c.code.toUpperCase() === dbCoupon.code.toUpperCase());
+          if (updatedLocalIdx >= 0) {
+            localCoupons[updatedLocalIdx].id = dbCoupon.id;
+            localStorage.setItem('atalaia_coupons', JSON.stringify(localCoupons));
+          }
+        }
+      } catch (e) {
+        console.error("[MockService] Erro ao salvar cupom no Supabase:", e);
+      }
+    }
+  },
+
+  deleteCoupon: async (id: string): Promise<void> => {
+    let localCoupons: Coupon[] = [];
+    const cached = localStorage.getItem('atalaia_coupons');
+    if (cached) {
+      try { localCoupons = JSON.parse(cached); } catch (e) {}
+    }
+    
+    const couponToDelete = localCoupons.find(c => c.id === id);
+    const code = couponToDelete?.code;
+
+    localCoupons = localCoupons.filter(c => c.id !== id);
+    localStorage.setItem('atalaia_coupons', JSON.stringify(localCoupons));
+
+    if (isRealSupabase) {
+      try {
+        let query = supabase.from('coupons').delete();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+        if (isUuid) {
+          query = query.eq('id', id);
+        } else if (code) {
+          query = query.eq('code', code.toUpperCase().trim());
+        } else {
+          query = query.eq('id', id);
+        }
+        const { error } = await query;
+        if (error) throw error;
+      } catch (e) {
+        console.error("[MockService] Erro ao deletar cupom no Supabase:", e);
+      }
+    }
+  },
+
+  validateCoupon: async (code: string, userId: string): Promise<{ success: boolean; message: string; coupon?: Coupon }> => {
+    const coupons = await MockService.getCoupons();
+    const coupon = coupons.find(c => c.code.trim().toUpperCase() === code.trim().toUpperCase());
+
+    if (!coupon) {
+      return { success: false, message: "Cupom inválido ou não encontrado." };
+    }
+
+    if (!coupon.active) {
+      return { success: false, message: "Este cupom promocional não está mais ativo." };
+    }
+
+    if (coupon.usedCount >= coupon.maxUses) {
+      return { success: false, message: "Limite de utilizações deste cupom esgotado." };
+    }
+
+    let alreadyUsed = false;
+    const cachedProfileStr = localStorage.getItem(`atalaia_local_profile_${userId}`);
+    if (cachedProfileStr) {
+      try {
+        const u = JSON.parse(cachedProfileStr);
+        if (u.promoCoupon?.trim().toUpperCase() === code.trim().toUpperCase()) {
+          alreadyUsed = true;
+        }
+      } catch (e) {}
+    }
+
+    if (isRealSupabase && userId) {
+      try {
+        const { data, error } = await supabase.from('profiles').select('promo_coupon').eq('id', userId).maybeSingle();
+        if (!error && data && data.promo_coupon?.trim().toUpperCase() === code.trim().toUpperCase()) {
+          alreadyUsed = true;
+        }
+      } catch (e) {
+        console.warn("[MockService] Erro ao verificar reuso de cupom no Supabase:", e);
+      }
+    }
+
+    if (alreadyUsed) {
+      return { success: false, message: "Este cupom já foi utilizado nesta conta." };
+    }
+
+    return { success: true, message: "Cupom aplicado com sucesso!", coupon };
+  },
+
+  incrementCouponUses: async (code: string): Promise<void> => {
+    let coupons = await MockService.getCoupons();
+    const coupon = coupons.find(c => c.code.toUpperCase() === code.toUpperCase());
+    if (coupon) {
+      coupon.usedCount += 1;
+      await MockService.saveCoupon(coupon);
+    }
+  },
+
+  checkAllUsersPromoExpiration: async (): Promise<number> => {
+    console.log("[MockService] Iniciando varredura diária de expiração de testes de 7 dias...");
+    let degradedCount = 0;
+    const nowISO = new Date().toISOString();
+
+    const keys = Object.keys(localStorage);
+    for (const key of keys) {
+      if (key.startsWith('atalaia_local_profile_')) {
+        try {
+          const cachedUser = JSON.parse(localStorage.getItem(key) || '');
+          if (cachedUser && cachedUser.promoActive && cachedUser.promoEnd && new Date(cachedUser.promoEnd) < new Date()) {
+            console.log(`[MockService Local] Expirando promoção de: ${cachedUser.email}. Novo plano: FREE`);
+            cachedUser.plan = 'FREE';
+            cachedUser.promoActive = false;
+            cachedUser.promoStart = undefined;
+            cachedUser.promoEnd = undefined;
+            localStorage.setItem(key, JSON.stringify(cachedUser));
+            degradedCount++;
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (isRealSupabase) {
+      try {
+        const { data: expiredProfiles, error } = await supabase
+          .from('profiles')
+          .select('id, email, name')
+          .eq('promo_active', true)
+          .lt('promo_end', nowISO);
+
+        if (!error && expiredProfiles && expiredProfiles.length > 0) {
+          for (const profile of expiredProfiles) {
+            const { error: updateError } = await supabase
+              .from('profiles')
+              .update({
+                plan: 'FREE',
+                promo_active: false,
+                promo_start: null,
+                promo_end: null
+              })
+              .eq('id', profile.id);
+
+            if (!updateError) {
+              console.log(`[MockService Cloud] Cupom expirado com sucesso para ${profile.email}`);
+              const cachedStr = localStorage.getItem(`atalaia_local_profile_${profile.id}`);
+              if (cachedStr) {
+                try {
+                  const parsed = JSON.parse(cachedStr);
+                  parsed.plan = 'FREE';
+                  parsed.promoActive = false;
+                  parsed.promoStart = undefined;
+                  parsed.promoEnd = undefined;
+                  localStorage.setItem(`atalaia_local_profile_${profile.id}`, JSON.stringify(parsed));
+                } catch (e) {}
+              }
+              degradedCount++;
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[MockService] Falha ao processar expirações automáticas no banco:", e);
+      }
+    }
+
+    return degradedCount;
   },
 
   // --- REAL-TIME HELPER ---

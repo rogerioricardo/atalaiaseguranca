@@ -4,7 +4,7 @@ export const PaymentService = {
   /**
    * Cria uma preferência de pagamento no Mercado Pago via Supabase Edge Function
    */
-  createPreference: async (planId: string, email: string, name: string, phone: string) => {
+  createPreference: async (planId: string, email: string, name: string, phone: string, couponCode?: string) => {
     try {
         // Determinar dinamicamente o redirecionamento com base no domínio de execução do front-end
         const currentOrigin = window.location.origin + window.location.pathname;
@@ -15,10 +15,12 @@ export const PaymentService = {
             body: { 
                 planId, 
                 payer: { email, name, phone },
-                redirectUrl: cleanOrigin,
+                redirectUrl: cleanOrigin + (couponCode ? `?coupon=${couponCode}` : ''),
+                couponCode,
                 // Adicionalmente podemos passar metadados
                 metadata: {
                     source: 'web-app',
+                    couponCode: couponCode || undefined,
                     timestamp: new Date().toISOString()
                 }
             }
@@ -39,7 +41,7 @@ export const PaymentService = {
         
         // Fallback de desenvolvimento: se a function não existir ou der erro, 
         // simulamos uma URL de checkout para não travar o fluxo do app
-        const simulatedUrl = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=simulated_${planId}_${Date.now()}`;
+        const simulatedUrl = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=simulated_${planId}_${Date.now()}${couponCode ? `&coupon=${couponCode}` : ''}`;
         console.warn("[PaymentService] Redirecionando para URL simulada:", simulatedUrl);
         
         return simulatedUrl;

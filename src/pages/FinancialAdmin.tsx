@@ -25,9 +25,10 @@ import {
   HelpCircle,
   TrendingUp,
   Sliders,
-  UserCheck
+  UserCheck,
+  Trash2
 } from 'lucide-react';
-import { UserRole } from '@/types';
+import { UserRole, Coupon } from '@/types';
 
 interface Payment {
   id: string;
@@ -59,7 +60,7 @@ const FinancialAdmin: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'PAID' | 'PENDING' | 'OVERDUE'>('ALL');
   
   // States para Integração Mercado Pago
-  const [activeTab, setActiveTab] = useState<'SYSTEM' | 'MERCADOPAGO'>('SYSTEM');
+  const [activeTab, setActiveTab] = useState<'SYSTEM' | 'MERCADOPAGO' | 'COUPONS'>('SYSTEM');
   const [mpToken, setMpToken] = useState('');
   const [showConfig, setShowConfig] = useState(false);
   const [savingToken, setSavingToken] = useState(false);
@@ -67,6 +68,142 @@ const FinancialAdmin: React.FC = () => {
   const [mpTransactions, setMpTransactions] = useState<MPTransaction[]>([]);
   const [loadingMP, setLoadingMP] = useState(false);
   const [residents, setResidents] = useState<any[]>([]);
+
+  // Estados para Gestão de Cupons Promocionais
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [loadingCoupons, setLoadingCoupons] = useState(false);
+  const [showCouponForm, setShowCouponForm] = useState(false);
+  const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
+  
+  // Estados para Formulário de Cupons
+  const [couponCode, setCouponCode] = useState('');
+  const [couponPrice, setCouponPrice] = useState('1,00');
+  const [couponDays, setCouponDays] = useState('7');
+  const [couponMaxUses, setCouponMaxUses] = useState('1000');
+  const [couponActive, setCouponActive] = useState(true);
+  const [couponFormError, setCouponFormError] = useState<string | null>(null);
+
+  // Estado para simulação de expiração diária
+  const [expiringUsers, setExpiringUsers] = useState(false);
+
+  const loadCouponsData = async () => {
+    setLoadingCoupons(true);
+    try {
+      const data = await MockService.getCoupons();
+      setCoupons(data);
+    } catch (e) {
+      console.error("Erro ao carregar cupons:", e);
+    } finally {
+      setLoadingCoupons(false);
+    }
+  };
+
+  const handleSaveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCouponFormError(null);
+
+    if (!couponCode.trim()) {
+      setCouponFormError("O código do cupom é obrigatório.");
+      return;
+    }
+
+    const priceNum = parseFloat(couponPrice.replace(',', '.'));
+    if (isNaN(priceNum) || priceNum < 0) {
+      setCouponFormError("O preço promocional deve ser um número válido maior ou igual a zero.");
+      return;
+    }
+
+    const daysNum = parseInt(couponDays);
+    if (isNaN(daysNum) || daysNum <= 0) {
+      setCouponFormError("O período de teste (dias) deve ser um número inteiro maior que zero.");
+      return;
+    }
+
+    const maxUsesNum = parseInt(couponMaxUses);
+    if (isNaN(maxUsesNum) || maxUsesNum <= 0) {
+      setCouponFormError("O limite de utilizações deve ser um número inteiro maior que zero.");
+      return;
+    }
+
+    try {
+      const couponPayload: Coupon = {
+        id: editingCoupon ? editingCoupon.id : `coupon-${Date.now()}`,
+        code: couponCode.trim().toUpperCase(),
+        active: couponActive,
+        promotionalPrice: priceNum,
+        trialDays: daysNum,
+        maxUses: maxUsesNum,
+        usedCount: editingCoupon ? editingCoupon.usedCount : 0,
+        createdAt: editingCoupon ? editingCoupon.createdAt : new Date().toISOString()
+      };
+
+      await MockService.saveCoupon(couponPayload);
+      
+      // Limpar formulário
+      setCouponCode('');
+      setCouponPrice('1,00');
+      setCouponDays('7');
+      setCouponMaxUses('1000');
+      setCouponActive(true);
+      setEditingCoupon(null);
+      setShowCouponForm(false);
+      
+      await loadCouponsData();
+    } catch (err) {
+      console.error("Erro ao salvar cupom:", err);
+      setCouponFormError("Não foi possível salvar o cupom promocional.");
+    }
+  };
+
+  const handleToggleActiveCoupon = async (coupon: Coupon) => {
+    try {
+      const updated = { ...coupon, active: !coupon.active };
+      await MockService.saveCoupon(updated);
+      await loadCouponsData();
+    } catch (err) {
+      console.error("Erro ao alternar status do cupom:", err);
+    }
+  };
+
+  const handleDeleteCoupon = async (id: string) => {
+    if (window.confirm("Deseja realmente deletar este cupom de desconto permanentemente?")) {
+      try {
+        await MockService.deleteCoupon(id);
+        await loadCouponsData();
+      } catch (err) {
+        console.error("Erro ao deletar cupom:", err);
+      }
+    }
+  };
+
+  const handleSimulateExpiration = async () => {
+    setExpiringUsers(true);
+    try {
+      const degraded = await MockService.checkAllUsersPromoExpiration();
+      alert(`Varredura concluída com sucesso! ${degraded} morador(es) com teste de 7 dias vencidos foram rebaixados para o Plano Gratuito.`);
+    } catch (err) {
+      console.error("Erro ao simular varredura de cupons:", err);
+      alert("Falha na varredura.");
+    } finally {
+      setExpiringUsers(false);
+    }
+  };
+
+  const handleEditClick = (coupon: Coupon) => {
+    setEditingCoupon(coupon);
+    setCouponCode(coupon.code);
+    setCouponPrice(coupon.promotionalPrice.toFixed(2).replace('.', ','));
+    setCouponDays(coupon.trialDays.toString());
+    setCouponMaxUses(coupon.maxUses.toString());
+    setCouponActive(coupon.active);
+    setShowCouponForm(true);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'COUPONS') {
+      loadCouponsData();
+    }
+  }, [activeTab]);
 
   // Helper robusto para encontrar usuário correspondente a um pagamento Mercado Pago
   const findMatchedUser = (rawPay: any, users: any[]) => {
@@ -195,9 +332,34 @@ const FinancialAdmin: React.FC = () => {
       const mpUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=50&access_token=${token}`;
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(mpUrl)}`;
 
-      const response = await fetch(proxyUrl);
-      if (!response.ok) throw new Error("Erro na conexão com o gateway do Mercado Pago.");
-      const data = await response.json();
+      let response: Response;
+      try {
+        response = await fetch(mpUrl);
+        if (!response.ok) {
+          throw new Error("Erro direto, tentando via proxy...");
+        }
+      } catch (directErr) {
+        console.warn("[FinancialAdmin] Chamada direta falhou ou CORS bloqueou. Tentando via Proxy...", directErr);
+        response = await fetch(proxyUrl);
+      }
+
+      if (!response.ok) {
+        throw new Error("Erro na conexão com o gateway do Mercado Pago.");
+      }
+
+      let data: any;
+      try {
+        const textData = await response.clone().text();
+        if (textData.startsWith('{')) {
+          data = JSON.parse(textData);
+        } else {
+          // Se for do allorigins proxy, extrair o payload correto
+          const wrapper = JSON.parse(textData);
+          data = JSON.parse(wrapper.contents);
+        }
+      } catch (parseError) {
+        data = await response.json();
+      }
 
       if (data && data.results) {
         const users = await MockService.getUsers();
@@ -226,7 +388,7 @@ const FinancialAdmin: React.FC = () => {
         setMpTransactions(mapped);
       }
     } catch (e) {
-      console.error("[FinancialAdmin] Erro ao carregar transações reais:", e);
+      console.warn("[FinancialAdmin] Erro ao carregar transações reais:, talvez o token do Mercado Pago esteja expirado ou sem internet:", e);
     } finally {
       setLoadingMP(false);
     }
@@ -630,6 +792,17 @@ const FinancialAdmin: React.FC = () => {
           >
             <CreditCard size={16} /> Feed Mercado Pago (Tempo Real)
           </button>
+
+          <button
+            onClick={() => setActiveTab('COUPONS')}
+            className={`pb-3 text-sm font-bold tracking-wide uppercase transition-all relative flex items-center gap-2 ${
+              activeTab === 'COUPONS' 
+                ? 'text-atalaia-neon border-b-2 border-atalaia-neon' 
+                : 'text-gray-500 hover:text-white'
+            }`}
+          >
+            🎟️ Cupons Promocionais (Trials 7d)
+          </button>
         </div>
 
         {activeTab === 'SYSTEM' ? (
@@ -768,7 +941,7 @@ const FinancialAdmin: React.FC = () => {
               </div>
             </Card>
           </>
-        ) : (
+        ) : activeTab === 'MERCADOPAGO' ? (
           /* FEED MERCADO PAGO TEMPO REAL */
           <Card className="overflow-hidden">
             <div className="p-4 bg-white/5 border-b border-white/10 flex flex-wrap items-center justify-between gap-4">
@@ -878,6 +1051,251 @@ const FinancialAdmin: React.FC = () => {
               </table>
             </div>
           </Card>
+        ) : (
+          /* GESTÃO DE CUPONS PROMOCIONAIS */
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Banner superior de Ações */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/[0.02] border border-white/5 p-6 rounded-2xl">
+              <div>
+                <h3 className="text-xl font-black text-white italic uppercase tracking-tight">🎒 Cupons de Teste Promocional</h3>
+                <p className="text-xs text-gray-400 mt-1 max-w-xl">
+                  Configure cupons como <strong className="text-yellow-500 font-mono text-sm bg-black/40 px-1.5 py-0.5 rounded border border-white/5">TESTE7DIAS1REAL</strong> que liberam acessos temporários de 7 dias ao Plano Família pelo valor simbólico de R$ 1,00.
+                </p>
+              </div>
+              
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  onClick={handleSimulateExpiration}
+                  disabled={expiringUsers}
+                  variant="outline"
+                  className="h-10 text-xs font-bold uppercase tracking-wider text-white border-white/10 hover:bg-white/5"
+                >
+                  <RefreshCw size={14} className={`mr-1.5 ${expiringUsers ? 'animate-spin' : ''}`} />
+                  Varredura de Expiração (Simular Diária)
+                </Button>
+                
+                <Button
+                  onClick={() => {
+                    setEditingCoupon(null);
+                    setCouponCode('');
+                    setCouponPrice('1,00');
+                    setCouponDays('7');
+                    setCouponMaxUses('1000');
+                    setCouponActive(true);
+                    setCouponFormError(null);
+                    setShowCouponForm(!showCouponForm);
+                  }}
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-xs uppercase px-4 h-10 tracking-wider"
+                >
+                  {showCouponForm ? 'Cancelar' : '+ Novo Cupom'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Formulário de Configuração */}
+            {showCouponForm && (
+              <Card className="p-6 border border-yellow-500/20 bg-yellow-500/[0.01]">
+                <h4 className="text-base font-bold text-white mb-4">
+                  {editingCoupon ? `📝 Editar Cupom: ${editingCoupon.code}` : '🎟️ Cadastrar Novo Cupom de Teste'}
+                </h4>
+                
+                <form onSubmit={handleSaveCoupon} className="space-y-4">
+                  <div className="grid md:grid-cols-4 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Código do Cupom</label>
+                      <input
+                        type="text"
+                        required
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                        placeholder="EX: TESTE7DIAS1REAL"
+                        disabled={!!editingCoupon}
+                        className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-gray-700 focus:border-yellow-500/50 outline-none uppercase disabled:opacity-50"
+                      />
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Valor Cobrado (R$)</label>
+                      <input
+                        type="text"
+                        required
+                        value={couponPrice}
+                        onChange={(e) => setCouponPrice(e.target.value)}
+                        placeholder="EX: 1,00"
+                        className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-gray-700 focus:border-yellow-500/50 outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Período de Teste (Dias)</label>
+                      <input
+                        type="number"
+                        required
+                        value={couponDays}
+                        onChange={(e) => setCouponDays(e.target.value)}
+                        placeholder="7"
+                        className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-gray-700 focus:border-yellow-500/50 outline-none"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Limite de Usos (Max)</label>
+                      <input
+                        type="number"
+                        required
+                        value={couponMaxUses}
+                        onChange={(e) => setCouponMaxUses(e.target.value)}
+                        placeholder="1000"
+                        className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-gray-700 focus:border-yellow-500/50 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="coupon-active-checkbox"
+                        checked={couponActive}
+                        onChange={(e) => setCouponActive(e.target.checked)}
+                        className="w-4 h-4 rounded accent-yellow-500 cursor-pointer text-yellow-600 bg-black border-white/10"
+                      />
+                      <label htmlFor="coupon-active-checkbox" className="text-xs font-bold text-gray-300 uppercase tracking-wider cursor-pointer select-none">
+                        Cupom Ativo (Qualificado para Uso)
+                      </label>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setShowCouponForm(false);
+                          setEditingCoupon(null);
+                        }}
+                        className="h-10 text-xs font-bold uppercase tracking-wider px-4 text-white border-white/10 hover:bg-white/5"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="submit"
+                        className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold text-xs uppercase px-6 h-10 tracking-wider"
+                      >
+                        {editingCoupon ? 'Salvar Edição' : 'Criar Cupom'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {couponFormError && (
+                    <p className="text-xs text-red-500 font-semibold animate-in fade-in duration-200">{couponFormError}</p>
+                  )}
+                </form>
+              </Card>
+            )}
+
+            {/* Listagem de cupons */}
+            <Card className="overflow-hidden">
+              <div className="p-4 bg-white/5 border-b border-white/10">
+                <h4 className="text-sm font-bold text-white">Cupons Registrados no Atalaia</h4>
+              </div>
+              
+              <div className="overflow-x-auto select-none">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/5 bg-white/[0.01]">
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Código do Cupom</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Valor Cobrado</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Período de Teste</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Contador de Usos</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Status</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {loadingCoupons ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                          <RefreshCw size={24} className="animate-spin text-atalaia-neon mx-auto mb-2" />
+                          Carregando cupons ativos...
+                        </td>
+                      </tr>
+                    ) : coupons.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                          Nenhum cupom promocional cadastrado no momento. Clique em "+ Novo Cupom" acima.
+                        </td>
+                      </tr>
+                    ) : (
+                      coupons.map((coupon) => {
+                        const usagePercentage = Math.min(100, (coupon.usedCount / coupon.maxUses) * 100);
+                        return (
+                          <tr key={coupon.id} className="hover:bg-white/[0.01] transition-colors">
+                            <td className="px-6 py-4">
+                              <span className="font-mono text-xs font-black text-white bg-white/[0.05] border border-white/5 px-2 py-1 rounded">
+                                {coupon.code}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-sm font-bold text-atalaia-neon">
+                                R$ {coupon.promotionalPrice.toFixed(2).replace('.', ',')}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-sm font-medium text-white">
+                                {coupon.trialDays} Dias
+                              </span>
+                              <span className="block text-[10px] text-gray-500">Família / FAMILY</span>
+                            </td>
+                            <td className="px-6 py-4 max-w-[180px]">
+                              <div className="flex justify-between text-[11px] font-medium text-gray-400 mb-1 font-mono">
+                                <span>{coupon.usedCount} usados</span>
+                                <span>limite {coupon.maxUses}</span>
+                              </div>
+                              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full ${usagePercentage >= 90 ? 'bg-red-500' : 'bg-yellow-500'}`}
+                                  style={{ width: `${usagePercentage}%` }}
+                                ></div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <Badge color={coupon.active ? 'green' : 'red'}>
+                                {coupon.active ? 'Ativo' : 'Inativo'}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex justify-end gap-1.5">
+                                <Button
+                                  onClick={() => handleToggleActiveCoupon(coupon)}
+                                  variant="outline"
+                                  className="h-8 text-[11px] font-bold uppercase transition-colors text-white border-white/10 hover:bg-white/5"
+                                >
+                                  {coupon.active ? 'Desativar' : 'Ativar'}
+                                </Button>
+                                <Button
+                                  onClick={() => handleEditClick(coupon)}
+                                  className="h-8 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold uppercase tracking-wider"
+                                >
+                                  Editar
+                                </Button>
+                                <Button
+                                  onClick={() => handleDeleteCoupon(coupon.id)}
+                                  className="h-8 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] font-bold uppercase tracking-wider border border-red-500/20"
+                                  title="Excluir Cupom"
+                                >
+                                  <Trash2 size={13} className="mr-1 inline" /> Excluir
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
         )}
       </div>
     </Layout>

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/context';
-import { UserRole, Neighborhood, UserPlan } from '@/types';
+import { UserRole, Neighborhood, UserPlan, Coupon } from '@/types';
 import { Button, Input, Card } from '@/components/UI';
 import { ShieldCheck, ArrowLeft, AlertCircle, MapPin, CheckCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { MockService } from '@/services/mockService';
@@ -16,7 +16,9 @@ const Login: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [isRegister, setIsRegister] = useState(searchParams.get('mode') === 'register');
   const planParam = searchParams.get('plan');
-  
+  const [couponCodeIn, setCouponCodeIn] = useState(searchParams.get('coupon') || '');
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -37,6 +39,55 @@ const Login: React.FC = () => {
   // Recovery Password states
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+
+  useEffect(() => {
+    const couponUrl = searchParams.get('coupon');
+    if (couponUrl) {
+      const autoApply = async () => {
+        try {
+          const res = await MockService.validateCoupon(couponUrl.toUpperCase(), 'temp-register-id');
+          if (res.success && res.coupon) {
+            setAppliedCoupon(res.coupon);
+            console.log(`[Login] Cupom ${res.coupon.code} auto-aplicado via URL.`);
+          }
+        } catch (err) {
+          console.error("Erro ao auto-aplicar coupon da URL:", err);
+        }
+      };
+      autoApply();
+    }
+  }, [searchParams]);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponSuccess, setCouponSuccess] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+
+  const handleApplyCoupon = async () => {
+    if (!couponCodeIn.trim()) {
+      setCouponError("Por favor, digite o código do cupom.");
+      return;
+    }
+    
+    setIsValidating(true);
+    setCouponError(null);
+    setCouponSuccess(null);
+    
+    try {
+      // Usamos um ID temporário e seguro para simulação se o morador ainda não tiver criado a conta
+      const res = await MockService.validateCoupon(couponCodeIn, 'temp-register-id');
+      if (res.success && res.coupon) {
+        setAppliedCoupon(res.coupon);
+        setCouponSuccess(`Cupom ${res.coupon.code} aplicado com sucesso!`);
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(res.message);
+      }
+    } catch (err) {
+      console.error("Erro ao aplicar cupom no cadastro:", err);
+      setCouponError("Erro técnico ao validar o cupom.");
+    } finally {
+      setIsValidating(false);
+    }
+  };
 
   // Monitora se o usuário foi autenticado para redirecionar
   useEffect(() => {
@@ -85,7 +136,8 @@ const Login: React.FC = () => {
 
           if (planParam && (planParam === 'FAMILY' || planParam === 'PREMIUM')) {
               setRedirectingToPay(true);
-              const checkoutUrl = await PaymentService.createPreference(planParam, email, name, phone);
+              const activeCouponCode = appliedCoupon ? appliedCoupon.code : undefined;
+              const checkoutUrl = await PaymentService.createPreference(planParam, email, name, phone, activeCouponCode);
               window.location.href = checkoutUrl;
               return; 
           }

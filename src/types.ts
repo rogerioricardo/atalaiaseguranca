@@ -33,6 +33,21 @@ export interface User {
   banco?: string;
   pix?: string;
   cpf?: string;
+  promoActive?: boolean;
+  promoStart?: string;
+  promoEnd?: string;
+  promoCoupon?: string;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  active: boolean;
+  promotionalPrice: number;
+  trialDays: number;
+  maxUses: number;
+  usedCount: number;
+  createdAt?: string;
 }
 
 export interface Neighborhood {
