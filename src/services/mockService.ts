@@ -218,7 +218,11 @@ export const MockService = {
         address: p.address,
         approved: p.approved,
         lat: p.lat,
-        lng: p.lng
+        lng: p.lng,
+        promoActive: p.promo_active === true,
+        promoStart: p.promo_start,
+        promoEnd: p.promo_end,
+        promoCoupon: p.promo_coupon
     }));
   },
 
@@ -723,7 +727,18 @@ export const MockService = {
             .order('due_date', { ascending: false });
             
         if (error) throw error;
-        return data || [];
+        
+        // Enriquecer pagamentos com os dados de comprovante anexados localmente ou no banco
+        const enriched = (data || []).map((p: any) => {
+          const localReceipt = localStorage.getItem(`receipt_data_${p.id}`);
+          const localReceiptName = localStorage.getItem(`receipt_name_${p.id}`);
+          return {
+            ...p,
+            receipt_base64: p.receipt_base64 || localReceipt || null,
+            receipt_name: p.receipt_name || localReceiptName || null
+          };
+        });
+        return enriched;
     } catch (e) {
         console.error("[MockService] Error in getPayments:", e);
         return [];
@@ -772,19 +787,21 @@ export const MockService = {
     const cached = localStorage.getItem('atalaia_coupons');
     if (cached) {
       try { localCoupons = JSON.parse(cached); } catch (e) {}
-    } else {
-      localCoupons = [
-        {
-          id: "teste-7dias-1real-id",
-          code: "TESTE7DIAS1REAL",
-          active: true,
-          promotionalPrice: 1.00,
-          trialDays: 7,
-          maxUses: 1000,
-          usedCount: 0,
-          createdAt: new Date().toISOString()
-        }
-      ];
+    }
+
+    // Garantir que TESTE7DIAS5REAIS sempre exista na lista local contra caches velhos
+    const hasDefaultLocal = localCoupons.some(c => c.code.toUpperCase() === 'TESTE7DIAS5REAIS');
+    if (!hasDefaultLocal) {
+      localCoupons.push({
+        id: "teste-7dias-5reais-id",
+        code: "TESTE7DIAS5REAIS",
+        active: true,
+        promotionalPrice: 5.00,
+        trialDays: 7,
+        maxUses: 1000,
+        usedCount: 0,
+        createdAt: new Date().toISOString()
+      });
       localStorage.setItem('atalaia_coupons', JSON.stringify(localCoupons));
     }
 
@@ -803,14 +820,14 @@ export const MockService = {
             createdAt: c.created_at
           }));
           
-          // Se o TESTE7DIAS1REAL não estiver no banco, vamos inseri-lo ou mesclá-lo para que sempre exista
-          const hasDefault = dbCoupons.some(c => c.code.toUpperCase() === 'TESTE7DIAS1REAL');
+          // Se o TESTE7DIAS5REAIS não estiver no banco, vamos inseri-lo ou mesclá-lo para que sempre exista
+          const hasDefault = dbCoupons.some(c => c.code.toUpperCase() === 'TESTE7DIAS5REAIS');
           if (!hasDefault) {
              const defaultCoupon = {
-                id: "teste-7dias-1real-id",
-                code: "TESTE7DIAS1REAL",
+                id: "teste-7dias-5reais-id",
+                code: "TESTE7DIAS5REAIS",
                 active: true,
-                promotionalPrice: 1.00,
+                promotionalPrice: 5.00,
                 trialDays: 7,
                 maxUses: 1000,
                 usedCount: 0,
@@ -1048,6 +1065,115 @@ export const MockService = {
   },
 
   // --- REAL-TIME HELPER ---
+  manualConfirmPromoTrialPayment: async (userId: string, receiptName?: string, receiptBase64?: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const safeId = sanitizeUUID(userId);
+      if (!safeId) return { success: false, message: "ID do usuário inválido para operação." };
+      
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(startDate.getDate() + 7);
+      const refMonth = `${(startDate.getMonth() + 1).toString().padStart(2, '0')}/${startDate.getFullYear()}`;
+
+      // 1. Atualizar banco Supabase
+      if (isRealSupabase) {
+        const { error: profileErr } = await supabase.from('profiles').update({
+          plan: 'FAMILY',
+          promo_active: true,
+          promo_start: startDate.toISOString(),
+          promo_end: endDate.toISOString(),
+          promo_coupon: 'TESTE7DIAS5REAIS'
+        }).eq('id', safeId);
+        
+        if (profileErr) throw profileErr;
+
+        // Inserir registro de pagamento para não acusar inadimplência e aparecer em relatórios
+        const paymentPayload = {
+          user_id: safeId,
+          amount: 5.00,
+          due_date: startDate.toISOString().split('T')[0],
+          payment_date: startDate.toISOString(),
+          status: 'PAID',
+          reference_month: receiptName ? `${refMonth} (Anexo: ${receiptName})` : refMonth
+        };
+
+        try {
+          const { data, error } = await supabase.from('payments').insert([{
+            ...paymentPayload,
+            receipt_name: receiptName || null,
+            receipt_base64: receiptBase64 || null
+          }]).select();
+
+          if (!error && data && data[0]) {
+            const insertedId = data[0].id;
+            if (receiptBase64) localStorage.setItem(`receipt_data_${insertedId}`, receiptBase64);
+            if (receiptName) localStorage.setItem(`receipt_name_${insertedId}`, receiptName);
+          } else {
+            const { data: fallbackData } = await supabase.from('payments').insert([paymentPayload]).select();
+            if (fallbackData && fallbackData[0]) {
+              const insertedId = fallbackData[0].id;
+              if (receiptBase64) localStorage.setItem(`receipt_data_${insertedId}`, receiptBase64);
+              if (receiptName) localStorage.setItem(`receipt_name_${insertedId}`, receiptName);
+            }
+          }
+        } catch (err) {
+          const { data: fallbackData } = await supabase.from('payments').insert([paymentPayload]).select();
+          if (fallbackData && fallbackData[0]) {
+            const insertedId = fallbackData[0].id;
+            if (receiptBase64) localStorage.setItem(`receipt_data_${insertedId}`, receiptBase64);
+            if (receiptName) localStorage.setItem(`receipt_name_${insertedId}`, receiptName);
+          }
+        }
+      } else {
+        // Modo local mock
+        const mockPaymentId = `pay_${Date.now()}`;
+        if (receiptBase64) localStorage.setItem(`receipt_data_${mockPaymentId}`, receiptBase64);
+        if (receiptName) localStorage.setItem(`receipt_name_${mockPaymentId}`, receiptName);
+
+        const localPaymentsStr = localStorage.getItem('atalaia_local_payments') || '[]';
+        try {
+          const localPayments = JSON.parse(localPaymentsStr);
+          localPayments.push({
+            id: mockPaymentId,
+            user_id: safeId,
+            amount: 5.00,
+            due_date: startDate.toISOString().split('T')[0],
+            payment_date: startDate.toISOString(),
+            status: 'PAID',
+            reference_month: receiptName ? `${refMonth} (Anexo: ${receiptName})` : refMonth
+          });
+          localStorage.setItem('atalaia_local_payments', JSON.stringify(localPayments));
+        } catch(e) {}
+      }
+
+      // 2. Atualizar cache local do perfil
+      let parsed: any = {};
+      const cachedStr = localStorage.getItem(`atalaia_local_profile_${safeId}`);
+      if (cachedStr) {
+        try {
+          parsed = JSON.parse(cachedStr);
+        } catch (e) {}
+      }
+      parsed.plan = 'FAMILY';
+      parsed.promoActive = true;
+      parsed.promoStart = startDate.toISOString();
+      parsed.promoEnd = endDate.toISOString();
+      parsed.promoCoupon = 'TESTE7DIAS5REAIS';
+      localStorage.setItem(`atalaia_local_profile_${safeId}`, JSON.stringify(parsed));
+
+      // Desmarcar possível flag anterior de trial expirado
+      localStorage.removeItem(`atalaia_trial_expired_${userId}`);
+
+      // 3. Incrementar o Contador do Cupom
+      await MockService.incrementCouponUses('TESTE7DIAS5REAIS');
+
+      return { success: true, message: "Parabéns! O pagamento de R$ 5,00 foi confirmado e seu Plano Família de teste está ativo!" };
+    } catch (e: any) {
+      console.error("[MockService] Erro ao ativar promoção manualmente:", e);
+      return { success: false, message: e.message || "Erro técnico ao liberar plano." };
+    }
+  },
+
   subscribeToTable: (table: string, callback: () => void) => {
     return supabase
       .channel(`public:${table}`)

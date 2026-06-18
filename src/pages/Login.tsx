@@ -4,11 +4,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/context';
 import { UserRole, Neighborhood, UserPlan, Coupon } from '@/types';
 import { Button, Input, Card } from '@/components/UI';
-import { ShieldCheck, ArrowLeft, AlertCircle, MapPin, CheckCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { ShieldCheck, ArrowLeft, AlertCircle, MapPin, CheckCircle, RefreshCw, Loader2, Sparkles, Upload, FileText } from 'lucide-react';
 import { MockService } from '@/services/mockService';
 import { PaymentService } from '@/services/paymentService';
 import { SessionService } from '@/services/sessionService';
 import { supabase, isRealSupabase } from '@/lib/supabaseClient';
+import { motion } from 'motion/react';
 
 const Login: React.FC = () => {
   const { login, isAuthenticated, user, loading: authLoading } = useAuth();
@@ -35,6 +36,10 @@ const Login: React.FC = () => {
   // States to audit concurrent session security
   const [showActiveSessionModal, setShowActiveSessionModal] = useState(false);
   const [activeSessions, setActiveSessions] = useState<any[]>([]);
+  const [showPromoRedirectModal, setShowPromoRedirectModal] = useState(false);
+  const [isManualVerifying, setIsManualVerifying] = useState(false);
+  const [promoReceiptName, setPromoReceiptName] = useState('');
+  const [promoReceiptBase64, setPromoReceiptBase64] = useState('');
 
   // Recovery Password states
   const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -89,6 +94,54 @@ const Login: React.FC = () => {
     }
   };
 
+  const handleManualConfirmPayment = async () => {
+      let targetUserId = user?.id;
+      if (!targetUserId) {
+          const keys = Object.keys(localStorage);
+          for (const key of keys) {
+              if (key.startsWith('atalaia_local_profile_')) {
+                  try {
+                      const cached = JSON.parse(localStorage.getItem(key) || '');
+                      if (cached && cached.email === email) {
+                          targetUserId = cached.id;
+                          break;
+                      }
+                  } catch (e) {}
+              }
+          }
+      }
+      
+      if (!targetUserId) {
+          setError("Perfil de morador não localizado. Faça o login para concluir a ativação.");
+          setShowPromoRedirectModal(false);
+          return;
+      }
+
+      // EXIGIR COMPROVANTE E AVISAR CLIENTE
+      if (!promoReceiptBase64) {
+          setError("Por favor, anexe o comprovante de pagamento antes de prosseguir.");
+          return;
+      }
+
+      setIsManualVerifying(true);
+      try {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const res = await MockService.manualConfirmPromoTrialPayment(targetUserId, promoReceiptName, promoReceiptBase64);
+          if (res.success) {
+              setSuccess("Parabéns! Seu Plano Família de teste por R$ 5,00 foi ativado com sucesso!");
+              setShowPromoRedirectModal(false);
+              window.location.href = '/#/dashboard';
+              window.location.reload();
+          } else {
+              throw new Error(res.message);
+          }
+      } catch (error: any) {
+          console.error("Erro ao validar pagamento de R$ 5,00 no cadastro:", error);
+          setError(error.message || "Não foi possível validar o pagamento de R$ 5,00.");
+          setIsManualVerifying(false);
+      }
+  };
+
   // Monitora se o usuário foi autenticado para redirecionar
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -134,7 +187,12 @@ const Login: React.FC = () => {
           
           await login(email, password, role, name, selectedNeighborhoodId, phone, (planParam || 'FREE') as UserPlan);
 
-          if (planParam && (planParam === 'FAMILY' || planParam === 'PREMIUM')) {
+          if (planParam && (planParam === 'FAMILY' || planParam === 'PREMIUM' || planParam === 'PROMO')) {
+              if (planParam === 'PROMO') {
+                  setShowPromoRedirectModal(true);
+                  setLoading(false);
+                  return;
+              }
               setRedirectingToPay(true);
               const activeCouponCode = appliedCoupon ? appliedCoupon.code : undefined;
               const checkoutUrl = await PaymentService.createPreference(planParam, email, name, phone, activeCouponCode);
@@ -568,6 +626,132 @@ const Login: React.FC = () => {
                       </button>
                   </div>
               </div>
+          </div>
+      )}
+
+      {/* MODAL REDIRECIONAMENTO PAGAMENTO MERCACO PAGO DE R$ 1,00 */}
+      {showPromoRedirectModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-300">
+              <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="w-full max-w-md bg-zinc-950 border border-yellow-500/35 rounded-2xl p-6 md:p-8 shadow-[0_0_50px_rgba(234,179,8,0.15)] relative overflow-hidden text-left"
+              >
+                  <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-yellow-500/50 to-transparent" />
+                  
+                  <div className="w-14 h-14 bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 rounded-2xl flex items-center justify-center mx-auto mb-5 animate-pulse">
+                      <Sparkles size={26} />
+                  </div>
+                  
+                  <div className="text-center mb-6">
+                      <span className="text-[10px] text-yellow-500 font-extrabold uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
+                          ⚡ Cadastro Concluído!
+                      </span>
+                      <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">
+                          Ativar Seu Plano Família
+                      </h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed max-w-sm mx-auto">
+                          Seu cadastro na plataforma Atalaia foi realizado! Agora, ative seu plano de testes por apenas R$ 5,00.
+                      </p>
+                  </div>
+
+                  <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl mb-6 space-y-3">
+                      <div className="flex items-start gap-2.5 text-xs text-zinc-300">
+                          <span className="text-yellow-500 font-bold">1.</span>
+                          <span>Efetue o pagamento de <strong>R$ 5,00</strong> no ambiente oficial e seguro do Mercado Pago clicando no link abaixo.</span>
+                      </div>
+                      <div className="flex items-start gap-2.5 text-xs text-zinc-300">
+                          <span className="text-yellow-500 font-bold">2.</span>
+                          <span>Após o pagamento, anexe obrigatoriamente o comprovante abaixo e ative seu teste de 7 dias com recursos completos do Plano Família.</span>
+                      </div>
+                  </div>
+
+                  <div className="mb-6 flex flex-col items-center justify-center p-3.5 rounded-xl bg-black/40 border border-white/5 text-center">
+                      <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Valor das Vantagens (7 Dias)</span>
+                      <span className="text-3xl font-black text-yellow-500 mt-1">R$ 5,00</span>
+                  </div>
+
+                  {/* ANEXO DE COMPROVANTE MANDATÓRIO */}
+                  <div className="mb-6 p-4 bg-zinc-900/50 border border-white/5 rounded-xl space-y-3 text-left">
+                      <span className="text-[10px] uppercase font-bold text-yellow-500 tracking-wider block font-semibold">
+                          📎 Enviar Comprovante de R$ 5,00 (Obrigatório)
+                      </span>
+                      <div className="flex flex-col gap-2">
+                          <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-zinc-700 hover:border-yellow-500/40 rounded-xl cursor-pointer bg-black/40 hover:bg-zinc-950/65 transition-all text-center p-3 relative overflow-hidden group">
+                              {promoReceiptName ? (
+                                  <div className="flex flex-col items-center justify-center text-zinc-300">
+                                      <FileText className="text-yellow-500 mb-1" size={24} />
+                                      <span className="text-xs font-semibold truncate max-w-[200px]">{promoReceiptName}</span>
+                                      <span className="text-[9px] text-green-500 font-bold mt-1">Comprovante anexado! ✅</span>
+                                  </div>
+                              ) : (
+                                  <div className="flex flex-col items-center justify-center text-zinc-500">
+                                      <Upload className="text-zinc-600 group-hover:text-yellow-500 transition-colors mb-1 animate-bounce" size={24} />
+                                      <span className="text-xs font-bold text-zinc-400">Anexar Comprovante (JPG, PNG ou PDF)</span>
+                                      <span className="text-[9px] text-zinc-600 mt-0.5">Clique ou arraste o arquivo aqui</span>
+                                  </div>
+                              )}
+                              <input 
+                                  type="file" 
+                                  accept=".jpg,.jpeg,.png,image/jpeg,image/png,application/pdf" 
+                                  onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                          const reader = new FileReader();
+                                          reader.onloadend = () => {
+                                              setPromoReceiptName(file.name);
+                                              setPromoReceiptBase64(reader.result as string);
+                                          };
+                                          reader.readAsDataURL(file);
+                                      }
+                                  }} 
+                                  className="hidden" 
+                                  id="modal-receipt-upload-login"
+                              />
+                          </label>
+                      </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3 text-left">
+                      <a
+                          href="https://mpago.la/2EjAtCr"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full inline-flex items-center justify-center py-3.5 bg-zinc-900 border border-yellow-500/30 hover:bg-zinc-850 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all text-center font-sans font-bold"
+                      >
+                          💳 Abrir Link do Mercado Pago (R$ 5,00)
+                      </a>
+                      
+                      <button
+                          type="button"
+                          onClick={handleManualConfirmPayment}
+                          disabled={isManualVerifying}
+                          className="w-full inline-flex items-center justify-center py-3.5 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_0_20px_rgba(234,179,8,0.25)] text-center font-sans cursor-pointer font-bold"
+                      >
+                          {isManualVerifying ? (
+                              <>
+                                  <Loader2 className="animate-spin mr-2" size={16} />
+                                  Verificando Comprovante & Ativando...
+                              </>
+                          ) : (
+                              "✅ Já paguei R$ 5,00! Ativar Plano"
+                          )}
+                      </button>
+
+                      <button
+                          type="button"
+                          onClick={() => {
+                              setShowPromoRedirectModal(false);
+                              navigate('/welcome');
+                          }}
+                          disabled={isManualVerifying}
+                          className="w-full py-2 bg-transparent text-zinc-500 hover:text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all select-none text-center cursor-pointer font-sans"
+                      >
+                          Avançar para o Início Gratuito
+                      </button>
+                  </div>
+              </motion.div>
           </div>
       )}
     </div>

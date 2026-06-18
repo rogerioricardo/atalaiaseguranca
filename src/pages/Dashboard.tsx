@@ -13,7 +13,7 @@ import {
     Heart, DollarSign, Loader2, Navigation, FileText, 
     Shield, Star, Lock, Send, Search, CheckCircle, UserCheck, XCircle,
     Wrench, MessageSquare, DoorOpen, LightbulbOff, Eye, ShieldAlert, UserX,
-    VolumeX, Package, Droplet, Sparkles, Bell
+    VolumeX, Package, Droplet, Sparkles, Bell, Upload
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PaymentService } from '@/services/paymentService';
@@ -473,6 +473,11 @@ const Dashboard: React.FC = () => {
 
   // Upgrade Modal visibility
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [isPromoCheckoutLoading, setIsPromoCheckoutLoading] = useState(false);
+  const [showPromoRedirectModal, setShowPromoRedirectModal] = useState(false);
+  const [isManualVerifying, setIsManualVerifying] = useState(false);
+  const [promoReceiptName, setPromoReceiptName] = useState('');
+  const [promoReceiptBase64, setPromoReceiptBase64] = useState('');
   
   // POPUP FEEDBACK STATE
   const [feedback, setFeedback] = useState<{ msg: string, type: 'success' | 'error' } | null>(null);
@@ -619,6 +624,54 @@ const Dashboard: React.FC = () => {
       }
   };
 
+  const handlePromoCheckout = async () => {
+      if (!user) return;
+      setIsPromoCheckoutLoading(true);
+      try {
+          // Validamos e garantimos que o cupom promocional TESTE7DIAS5REAIS se aplica para o usuário
+          const res = await MockService.validateCoupon('TESTE7DIAS5REAIS', user.id);
+          if (!res.success) {
+              throw new Error(res.message || "Você não está elegível para esta oferta.");
+          }
+          setShowPromoRedirectModal(true);
+      } catch (error: any) {
+          console.error("Erro ao resgatar oferta de R$ 5,00:", error);
+          showFeedback(error.message || "Não foi possível processar a oferta promocional.", 'error');
+      } finally {
+          setIsPromoCheckoutLoading(false);
+      }
+  };
+
+  const handleManualConfirmPayment = async () => {
+      if (!user) return;
+      
+      // EXIGIR COMPROVANTE E AVISAR CLIENTE
+      if (!promoReceiptBase64) {
+          showFeedback("Por favor, anexe o comprovante de pagamento antes de prosseguir.", "error");
+          return;
+      }
+
+      setIsManualVerifying(true);
+      try {
+          // Pequeno delay de carregamento simulado para conferência de comprovante
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          const res = await MockService.manualConfirmPromoTrialPayment(user.id, promoReceiptName, promoReceiptBase64);
+          if (res.success) {
+              showFeedback("Pagamento de R$ 5,00 validado com sucesso! Plano Família de teste ativado.", "success");
+              setTimeout(() => {
+                  window.location.reload();
+              }, 2000);
+          } else {
+              throw new Error(res.message);
+          }
+      } catch (error: any) {
+          console.error("Erro ao validar pagamento manual de R$ 5,00:", error);
+          showFeedback(error.message || "Não foi possível validar seu pagamento.", 'error');
+          setIsManualVerifying(false);
+      }
+  };
+
   const executeRequestService = async (type: 'ESCORT' | 'EXTRA_ROUND' | 'TRAVEL_NOTICE') => {
       setRequestLoading(type);
       try {
@@ -651,6 +704,75 @@ const Dashboard: React.FC = () => {
       </div>
     </Card>
   );
+
+  const getDaysRemaining = () => {
+      if (!user || !user.promoEnd) return 0;
+      const promoEndMs = new Date(user.promoEnd).getTime();
+      const nowMs = new Date().getTime();
+      const diffMs = promoEndMs - nowMs;
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      return Math.max(0, diffDays);
+  };
+
+  const isTrialExpired = user?.role === UserRole.RESIDENT && (
+      localStorage.getItem(`atalaia_trial_expired_${user.id}`) === 'true' || 
+      (user.promoCoupon && !user.promoActive) ||
+      (user.promoEnd && new Date(user.promoEnd) < new Date())
+  );
+
+  if (user?.role === UserRole.RESIDENT && isTrialExpired) {
+      return (
+          <Layout>
+              <div className="flex flex-col items-center justify-center p-4 min-h-[70vh] text-center max-w-xl mx-auto animate-in fade-in duration-500">
+                  <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 text-red-500 rounded-2xl flex items-center justify-center mb-6 animate-pulse">
+                      <Lock size={32} />
+                  </div>
+                  <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-3">
+                      Seu Período de Testes Expirou
+                  </h2>
+                  <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+                      Seu período exclusivo de testes de 7 dias com funções superiores do <strong>Plano Família</strong> chegou ao fim. Para continuar desfrutando de recursos como câmeras ao vivo, patrulha interativa e alertas de pânico para sua família, ative um plano definitivo.
+                  </p>
+                  
+                  <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl mb-8 text-left space-y-3 w-full">
+                      <div className="flex items-center justify-between text-xs text-zinc-300">
+                          <span>Plano de Teste:</span>
+                          <span className="text-red-500 font-bold uppercase tracking-wide">Expirado / Bloqueado</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-zinc-300">
+                          <span>Status de Acesso:</span>
+                          <span>Apenas Planos Pagos Disponíveis</span>
+                      </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 w-full">
+                      <Button
+                          onClick={() => setShowUpgradeModal(true)}
+                          className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black uppercase text-xs tracking-wider py-4 rounded-xl shadow-lg cursor-pointer flex items-center justify-center"
+                      >
+                          💳 Ativar Plano Pago / Upgrade
+                      </Button>
+                      <Button
+                          variant="outline"
+                          onClick={() => {
+                              localStorage.clear();
+                              window.location.href = '/#/login';
+                              window.location.reload();
+                          }}
+                          className="w-full text-zinc-400 border-white/10 hover:bg-white/5 text-xs font-bold cursor-pointer"
+                      >
+                          Sair da Conta
+                      </Button>
+                  </div>
+              </div>
+              
+              <UpgradeModal 
+                  isOpen={showUpgradeModal} 
+                  onClose={() => setShowUpgradeModal(false)} 
+              />
+          </Layout>
+      );
+  }
 
   return (
     <Layout>
@@ -697,6 +819,31 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
+       {/* ACTIVE TRIAL COUNTDOWN WARNING BANNER */}
+      {user?.role === UserRole.RESIDENT && user?.promoActive && user?.promoEnd && (
+          <div className="mb-8 p-4 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border border-yellow-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4">
+              <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-yellow-500/15 border border-yellow-500/20 text-yellow-500 rounded-xl flex items-center justify-center shrink-0 animate-pulse">
+                      <Sparkles size={20} />
+                  </div>
+                  <div>
+                      <h4 className="font-bold text-sm text-yellow-500 flex items-center gap-1.5">
+                          Atalaia - Período de Testes do Plano Família
+                      </h4>
+                      <p className="text-xs text-zinc-300 mt-0.5">
+                          Você ainda tem <strong>{getDaysRemaining()} {getDaysRemaining() === 1 ? 'dia' : 'dias'}</strong> de teste para desfrutar de toda a segurança premium!
+                      </p>
+                  </div>
+              </div>
+              <Button
+                  onClick={() => setShowUpgradeModal(true)}
+                  className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shrink-0 cursor-pointer"
+              >
+                  Fixar Plano Definitivo
+              </Button>
+          </div>
+      )}
+
       {/* WARNING REMINDER: CONTRACT SIGNATURE PENDING */}
       {user?.role === UserRole.RESIDENT && !contractSigned && (
           <div className="mb-8 p-4 bg-yellow-500/10 border-2 border-dashed border-yellow-500/40 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-4">
@@ -715,6 +862,54 @@ const Dashboard: React.FC = () => {
               >
                   Assinar Agora
               </a>
+          </div>
+      )}
+
+      {/* PROMOTIONAL FAMILY PLAN TEST (Only for FREE Residents) */}
+      {user?.role === UserRole.RESIDENT && user?.plan === 'FREE' && (
+          <div className="mb-8 animate-in slide-in-from-top-4">
+              <Card className="p-6 bg-gradient-to-r from-yellow-500/10 via-amber-950/20 to-black/80 border-yellow-500/30 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden shadow-xl">
+                  <div className="absolute top-0 right-0 w-72 h-72 bg-yellow-500/10 rounded-full blur-[90px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                  
+                  <div className="flex items-start gap-4 relative z-10 w-full md:w-auto">
+                      <div className="p-3 bg-yellow-500/20 rounded-2xl border border-yellow-500/40 shrink-0 text-yellow-500 flex items-center justify-center w-16 h-16 animate-pulse">
+                          <Sparkles size={28} />
+                      </div>
+                      <div>
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                              <span className="text-[10px] text-yellow-500 font-extrabold uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/30 px-2 py-0.5 rounded-md inline-block">
+                                  ⚡ Oferta Exclusiva de Teste
+                              </span>
+                              <span className="text-[10px] text-atalaia-neon font-bold uppercase tracking-widest bg-atalaia-neon/10 border border-atalaia-neon/20 px-2 py-0.5 rounded-md inline-block">
+                                  Plano Família
+                              </span>
+                          </div>
+                          <h2 className="text-xl font-bold text-white mb-2">Experimente o Plano Família (7 Dias por R$ 5,00)</h2>
+                          <p className="text-zinc-300 text-sm max-w-xl leading-relaxed">
+                              Libere o acesso em tempo real a todas as câmeras do bairro, tenha chat com a vizinhança sem limites e ative alertas para sua família inteira.
+                          </p>
+                      </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto relative z-10 shrink-0">
+                      <div className="text-right hidden sm:block">
+                          <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest">Teste Completo</span>
+                          <span className="text-2xl font-black text-yellow-500">R$ 5,00</span>
+                      </div>
+                      <Button 
+                          id="btn-promo-family-trial"
+                          onClick={handlePromoCheckout} 
+                          disabled={isPromoCheckoutLoading} 
+                          className="bg-yellow-500 hover:bg-yellow-400 text-black font-black uppercase tracking-wider text-xs px-6 py-4 w-full sm:w-auto flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(234,179,8,0.3)] transition-all h-[48px]"
+                      >
+                          {isPromoCheckoutLoading ? (
+                              <><Loader2 className="animate-spin" size={16} /> Processando...</>
+                          ) : (
+                              <>🎟️ Resgatar 7 Dias por R$ 5,00</>
+                          )}
+                      </Button>
+                  </div>
+              </Card>
           </div>
       )}
 
@@ -1176,6 +1371,133 @@ const Dashboard: React.FC = () => {
                                 className="flex-1 py-2.5 rounded-xl bg-atalaia-neon text-black font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-atalaia-neon/15 cursor-pointer font-sans"
                             >
                                 Confirmar
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* MODAL REDIRECIONAMENTO PAGAMENTO MERCACO PAGO DE R$ 5,00 */}
+            {showPromoRedirectModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-300">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="w-full max-w-md bg-[#0a0a0a] border border-yellow-500/35 rounded-2xl p-6 md:p-8 shadow-[0_0_50px_rgba(234,179,8,0.15)] relative overflow-hidden text-left"
+                    >
+                        <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-yellow-500/50 to-transparent" />
+                        
+                        <div className="w-14 h-14 bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 rounded-2xl flex items-center justify-center mx-auto mb-5 animate-pulse">
+                            <Sparkles size={26} />
+                        </div>
+                        
+                        <div className="text-center mb-6">
+                            <span className="text-[10px] text-yellow-500 font-extrabold uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
+                                ⚡ Teste de 7 Dias por R$ 5,00
+                            </span>
+                            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">
+                                Ativar Plano Família
+                            </h3>
+                            <p className="text-xs text-zinc-400 leading-relaxed max-w-sm mx-auto">
+                                Você está a um passo de desbloquear o acesso total ao Plano Família por 7 dias por apenas R$ 5,00.
+                            </p>
+                        </div>
+
+                        <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl mb-6 space-y-3">
+                            <div className="flex items-start gap-2.5 text-xs text-zinc-300">
+                                <span className="text-yellow-500 font-bold">1.</span>
+                                <span>Efetue o pagamento de <strong>R$ 5,00</strong> no ambiente seguro do Mercado Pago clicando no link abaixo.</span>
+                            </div>
+                            <div className="flex items-start gap-2.5 text-xs text-zinc-300">
+                                <span className="text-yellow-500 font-bold">2.</span>
+                                <span>Anexe obrigatoriamente o comprovante de pagamento no campo logo abaixo. Seu plano de teste será liberado após o anexo do comprovante.</span>
+                            </div>
+                        </div>
+
+                        <div className="mb-6 flex flex-col items-center justify-center p-3.5 rounded-xl bg-black/40 border border-white/5 text-center">
+                            <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Valor do Teste</span>
+                            <span className="text-3xl font-black text-yellow-500 mt-1">R$ 5,00</span>
+                        </div>
+
+                        {/* ANEXO DE COMPROVANTE MANDATÓRIO */}
+                        <div className="mb-6 p-4 bg-zinc-900/50 border border-white/5 rounded-xl space-y-3">
+                            <span className="text-[10px] uppercase font-bold text-yellow-500 tracking-wider block font-semibold">
+                                📎 Enviar Comprovante de R$ 5,00 (Obrigatório)
+                            </span>
+                            <div className="flex flex-col gap-2">
+                                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-zinc-700 hover:border-yellow-500/40 rounded-xl cursor-pointer bg-black/40 hover:bg-zinc-950/65 transition-all text-center p-3 relative overflow-hidden group">
+                                    {promoReceiptName ? (
+                                        <div className="flex flex-col items-center justify-center text-zinc-300">
+                                            <FileText className="text-yellow-500 mb-1" size={24} />
+                                            <span className="text-xs font-semibold truncate max-w-[200px]">{promoReceiptName}</span>
+                                            <span className="text-[9px] text-green-500 font-bold mt-1">Comprovante anexado! ✅</span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center text-zinc-500">
+                                            <Upload className="text-zinc-600 group-hover:text-yellow-500 transition-colors mb-1 animate-bounce" size={24} />
+                                            <span className="text-xs font-bold text-zinc-400">Anexar Comprovante (JPG, PNG ou PDF)</span>
+                                            <span className="text-[9px] text-zinc-600 mt-0.5">Clique ou arraste o arquivo aqui</span>
+                                        </div>
+                                    )}
+                                    <input 
+                                        type="file" 
+                                        accept=".jpg,.jpeg,.png,image/jpeg,image/png,application/pdf" 
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                const reader = new FileReader();
+                                                reader.onloadend = () => {
+                                                    setPromoReceiptName(file.name);
+                                                    setPromoReceiptBase64(reader.result as string);
+                                                };
+                                                reader.readAsDataURL(file);
+                                            }
+                                        }} 
+                                        className="hidden" 
+                                        id="modal-receipt-upload"
+                                    />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                            <a
+                                href="https://mpago.la/2EjAtCr"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full inline-flex items-center justify-center py-3.5 bg-zinc-900 border border-yellow-500/30 hover:bg-zinc-850 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all text-center font-sans font-bold"
+                            >
+                                💳 Abrir Link do Mercado Pago (R$ 5,00)
+                            </a>
+                            
+                            <button
+                                type="button"
+                                onClick={handleManualConfirmPayment}
+                                disabled={isManualVerifying}
+                                className="w-full inline-flex items-center justify-center py-3.5 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_0_20px_rgba(234,179,8,0.25)] text-center font-sans cursor-pointer font-bold"
+                            >
+                                {isManualVerifying ? (
+                                    <>
+                                        <Loader2 className="animate-spin mr-2" size={16} />
+                                        Verificando Comprovante & Ativando...
+                                    </>
+                                ) : (
+                                    "✅ Já paguei R$ 5,00! Ativar Plano"
+                                )}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowPromoRedirectModal(false);
+                                    setPromoReceiptName('');
+                                    setPromoReceiptBase64('');
+                                }}
+                                disabled={isManualVerifying}
+                                className="w-full py-2 bg-transparent hover:bg-white/[0.02] text-zinc-500 hover:text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all select-none text-center cursor-pointer font-sans"
+                            >
+                                Voltar ao Painel
                             </button>
                         </div>
                     </motion.div>

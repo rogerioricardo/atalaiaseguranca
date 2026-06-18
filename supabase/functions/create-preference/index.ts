@@ -68,6 +68,9 @@ serve(async (req) => {
     } else if (planId === "PREMIUM") {
       title = "Atalaia - Plano Prêmio";
       price = 79.90;
+    } else if (planId === "PROMO" || planId === "TESTE_1REAL" || planId === "PROMO_1REAL" || planId === "TESTE7DIAS1REAL") {
+      title = "Atalaia - Plano de Teste";
+      price = 1.00;
     } else {
       title = `Atalaia - Plano ${planId}`;
       price = 39.90; 

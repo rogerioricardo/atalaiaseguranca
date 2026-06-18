@@ -26,7 +26,8 @@ import {
   TrendingUp,
   Sliders,
   UserCheck,
-  Trash2
+  Trash2,
+  FileText
 } from 'lucide-react';
 import { UserRole, Coupon } from '@/types';
 
@@ -38,6 +39,8 @@ interface Payment {
   dueDate: string;
   status: 'PAID' | 'PENDING' | 'OVERDUE';
   plan: string;
+  receipt_base64?: string | null;
+  receipt_name?: string | null;
 }
 
 interface MPTransaction {
@@ -77,7 +80,7 @@ const FinancialAdmin: React.FC = () => {
   
   // Estados para Formulário de Cupons
   const [couponCode, setCouponCode] = useState('');
-  const [couponPrice, setCouponPrice] = useState('1,00');
+  const [couponPrice, setCouponPrice] = useState('5,00');
   const [couponDays, setCouponDays] = useState('7');
   const [couponMaxUses, setCouponMaxUses] = useState('1000');
   const [couponActive, setCouponActive] = useState(true);
@@ -85,6 +88,7 @@ const FinancialAdmin: React.FC = () => {
 
   // Estado para simulação de expiração diária
   const [expiringUsers, setExpiringUsers] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState<{ userName: string, amount: number, name: string, base64: string } | null>(null);
 
   const loadCouponsData = async () => {
     setLoadingCoupons(true);
@@ -850,13 +854,14 @@ const FinancialAdmin: React.FC = () => {
                       <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Valor</th>
                       <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Vencimento</th>
                       <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Status</th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Comprovante</th>
                       <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {loading ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-20 text-center text-gray-500">
+                        <td colSpan={8} className="px-6 py-20 text-center text-gray-500">
                           <div className="flex flex-col items-center gap-3">
                             <RefreshCw size={24} className="animate-spin text-atalaia-neon" />
                             <span>Carregando dados financeiros...</span>
@@ -865,7 +870,7 @@ const FinancialAdmin: React.FC = () => {
                       </tr>
                     ) : filteredPayments.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-20 text-center text-gray-500">Nenhum registro encontrado.</td>
+                        <td colSpan={8} className="px-6 py-20 text-center text-gray-500">Nenhum registro encontrado.</td>
                       </tr>
                     ) : (
                       filteredPayments.map((payment) => (
@@ -908,6 +913,25 @@ const FinancialAdmin: React.FC = () => {
                             >
                               {payment.status === 'PAID' ? 'Pago' : payment.status === 'OVERDUE' ? 'Vencido' : 'Pendente'}
                             </Badge>
+                          </td>
+                          <td className="px-6 py-4">
+                            {(payment.receipt_base64 || localStorage.getItem(`receipt_data_${payment.id}`)) ? (
+                              <button
+                                onClick={() => {
+                                  setSelectedReceipt({
+                                    userName: payment.userName || "Morador",
+                                    amount: payment.amount,
+                                    name: payment.receipt_name || localStorage.getItem(`receipt_name_${payment.id}`) || "comprovante.png",
+                                    base64: payment.receipt_base64 || localStorage.getItem(`receipt_data_${payment.id}`) || ""
+                                  });
+                                }}
+                                className="px-2.5 py-1 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/20 transition-all font-bold text-[10px] cursor-pointer inline-flex items-center gap-1.5"
+                              >
+                                <FileText size={12} className="inline mr-1" /> Ver Recibo
+                              </button>
+                            ) : (
+                              <span className="text-zinc-500 text-[11px] italic">Sem anexo</span>
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex gap-2">
@@ -1298,6 +1322,78 @@ const FinancialAdmin: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* VISUALIZAÇÃO DE COMPROVANTE */}
+      {selectedReceipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-yellow-500/30 to-transparent" />
+            
+            <div className="flex justify-between items-center mb-4 border-b border-white/5 pb-3">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-yellow-500 tracking-wider">Comprovante de Teste</span>
+                <h3 className="text-lg font-black text-white">{selectedReceipt.userName}</h3>
+              </div>
+              <button 
+                onClick={() => setSelectedReceipt(null)}
+                className="p-1 px-3 text-xs bg-zinc-900 border border-white/10 text-white rounded-lg hover:bg-zinc-850 transition-colors uppercase font-bold cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <div className="p-3 bg-white/[0.02] border border-white/5 rounded-xl mb-4 text-xs flex justify-between items-center text-zinc-300 font-sans">
+              <div>
+                <span className="text-zinc-500">Arquivo:</span> <strong className="text-white ml-1">{selectedReceipt.name}</strong>
+              </div>
+              <div>
+                <span className="text-zinc-500">Valor Pago:</span> <strong className="text-yellow-500 ml-1">R$ {selectedReceipt.amount.toFixed(2)}</strong>
+              </div>
+            </div>
+
+            <div className="flex-1 bg-black rounded-lg border border-white/5 overflow-auto flex items-center justify-center p-4 min-h-[300px]">
+              {selectedReceipt.base64.startsWith('data:application/pdf') || selectedReceipt.name.toLowerCase().endsWith('.pdf') ? (
+                <div className="text-center p-6 space-y-3">
+                  <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl flex items-center justify-center mx-auto mb-2">
+                    <FileText size={28} />
+                  </div>
+                  <p className="text-xs text-zinc-400 font-bold">Documento PDF Incorporado</p>
+                  <a 
+                    href={selectedReceipt.base64} 
+                    download={selectedReceipt.name}
+                    className="inline-flex items-center justify-center px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md font-sans"
+                  >
+                    💾 Baixar PDF para Visualizar
+                  </a>
+                </div>
+              ) : (
+                <img 
+                  referrerPolicy="no-referrer"
+                  src={selectedReceipt.base64} 
+                  alt="Comprovante de pagamento" 
+                  className="max-w-full max-h-[50vh] object-contain rounded border border-white/5 shadow"
+                />
+              )}
+            </div>
+
+            <div className="mt-4 flex gap-2 justify-end font-sans">
+              <a 
+                href={selectedReceipt.base64} 
+                download={selectedReceipt.name}
+                className="px-4 py-2 bg-zinc-900 border border-white/10 text-white hover:bg-zinc-850 rounded-xl text-xs uppercase font-bold tracking-wider text-center transition-all flex items-center justify-center gap-1.5"
+              >
+                💾 Baixar Arquivo
+              </a>
+              <button 
+                onClick={() => setSelectedReceipt(null)}
+                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl text-xs uppercase font-bold tracking-wider transition-all cursor-pointer"
+              >
+                Concluído
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };

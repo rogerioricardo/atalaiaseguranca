@@ -6,7 +6,7 @@ export enum UserRole {
   RESIDENT = 'RESIDENT'
 }
 
-export type UserPlan = 'FREE' | 'FAMILY' | 'PREMIUM';
+export type UserPlan = 'FREE' | 'FAMILY' | 'PREMIUM' | 'PROMO';
 
 export interface User {
   id: string;

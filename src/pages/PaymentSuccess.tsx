@@ -15,7 +15,7 @@ const PaymentSuccess: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const rawPlanId = searchParams.get('plan');
   const couponCode = searchParams.get('coupon');
-  const planId = couponCode ? 'FAMILY' : (rawPlanId || 'FAMILY').toUpperCase();
+  const planId = (couponCode || (rawPlanId && rawPlanId.toUpperCase() === 'PROMO')) ? 'FAMILY' : (rawPlanId || 'FAMILY').toUpperCase();
 
   useEffect(() => {
       const processPayment = async () => {
@@ -30,8 +30,9 @@ const PaymentSuccess: React.FC = () => {
               const payDate = new Date();
               const refMonth = `${(payDate.getMonth() + 1).toString().padStart(2, '0')}/${payDate.getFullYear()}`;
 
-              if (couponCode) {
-                  const validateRes = await MockService.validateCoupon(couponCode, user.id);
+              if (couponCode || (rawPlanId && rawPlanId.toUpperCase() === 'PROMO')) {
+                  const activeCoupon = couponCode || 'TESTE7DIAS1REAL';
+                  const validateRes = await MockService.validateCoupon(activeCoupon, user.id);
                   if (validateRes.success && validateRes.coupon) {
                       amount = validateRes.coupon.promotionalPrice;
                       const startDate = new Date();
@@ -63,7 +64,7 @@ const PaymentSuccess: React.FC = () => {
 
                       await MockService.incrementCouponUses(validateRes.coupon.code);
                   } else {
-                      await MockService.updateUserPlan(user.id, planId);
+                      await MockService.updateUserPlan(user.id, 'FAMILY');
                   }
               } else {
                   await MockService.updateUserPlan(user.id, planId);

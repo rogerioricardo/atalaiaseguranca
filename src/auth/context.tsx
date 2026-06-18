@@ -244,8 +244,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   mappedUser.promoActive = false;
                   mappedUser.promoStart = undefined;
                   mappedUser.promoEnd = undefined;
-                  mappedUser.promoCoupon = undefined;
+                  mappedUser.promoCoupon = 'TESTE7DIAS5REAIS';
                   
+                  // Salvar flag de expiração no cache local
+                  localStorage.setItem(`atalaia_trial_expired_${userId}`, 'true');
+
                   if (isRealSupabase && isIdUuid) {
                       const expireProfile = async () => {
                           try {
@@ -254,7 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                   promo_active: false,
                                   promo_start: null,
                                   promo_end: null,
-                                  promo_coupon: null
+                                  promo_coupon: 'TESTE7DIAS5REAIS'
                               }).eq('id', userId);
                           } catch (err) {
                               console.error("[Promo Expire] Erro ao rebaixar perfil no Supabase:", err);
@@ -271,7 +274,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                           parsed.promoActive = false;
                           parsed.promoStart = undefined;
                           parsed.promoEnd = undefined;
-                          parsed.promoCoupon = undefined;
+                          parsed.promoCoupon = 'TESTE7DIAS5REAIS';
                           localStorage.setItem(`atalaia_local_profile_${userId}`, JSON.stringify(parsed));
                       } catch (e) {}
                   }
@@ -281,10 +284,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   localStorage.setItem(`atalaia_cached_role_${mappedUser.id}`, mappedUser.role);
               }
               
-              setUser({
-                  ...mappedUser,
-                  ...localCachedUser
-              });
+              const mergedUser = {
+                  ...localCachedUser,
+                  ...mappedUser
+              };
+
+              // Sincronizar cache local com os dados reais do banco de dados para evitar reaparecimento do banner
+              try {
+                  localStorage.setItem(`atalaia_local_profile_${mappedUser.id}`, JSON.stringify(mergedUser));
+              } catch (err) {
+                  console.error("[Auth] Erro ao sincronizar cache local:", err);
+              }
+              
+              setUser(mergedUser);
               console.log("[Auth] Perfil carregado com sucesso. Role:", mappedUser.role);
               
               if (triggerNotify) {
@@ -478,7 +490,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           filter: `id=eq.${user.id}` 
       }, (payload) => {
           console.log("[Auth] Perfil atualizado em tempo real:", payload.new);
-          setUser(mapProfile(payload.new));
+          const mapped = mapProfile(payload.new);
+          try {
+              localStorage.setItem(`atalaia_local_profile_${user.id}`, JSON.stringify(mapped));
+          } catch (err) {
+              console.error("[Auth Realtime] Erro ao sincronizar cache local:", err);
+          }
+          setUser(mapped);
       })
       .subscribe();
 
