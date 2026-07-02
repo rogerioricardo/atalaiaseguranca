@@ -41,6 +41,9 @@ interface Payment {
   plan: string;
   receipt_base64?: string | null;
   receipt_name?: string | null;
+  has_attachment?: boolean;
+  user_id?: string;
+  reference_month?: string | null;
 }
 
 interface MPTransaction {
@@ -89,6 +92,76 @@ const FinancialAdmin: React.FC = () => {
   // Estado para simulação de expiração diária
   const [expiringUsers, setExpiringUsers] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<{ userName: string, amount: number, name: string, base64: string } | null>(null);
+  const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
+
+  const handleFetchAndActionReceipt = async (payment: any, action: 'view' | 'download') => {
+    setLoadingReceiptId(payment.id);
+    try {
+      let base64 = payment.receipt_base64;
+      let name = payment.receipt_name || "comprovante.png";
+
+      if (!base64 && payment.id) {
+        const { data: dataRow } = await supabase
+          .from('system_settings')
+          .select('value')
+          .eq('key', `receipt_data_${payment.id}`)
+          .maybeSingle();
+
+        if (dataRow && dataRow.value) {
+          base64 = dataRow.value;
+        }
+      }
+
+      if (!base64 && payment.user_id) {
+        const { data: userReceiptIdRow } = await supabase
+          .from('system_settings')
+          .select('value')
+          .eq('key', `user_receipt_id_${payment.user_id}`)
+          .maybeSingle();
+
+        if (userReceiptIdRow && userReceiptIdRow.value) {
+          const pId = userReceiptIdRow.value;
+          const { data: dataRow } = await supabase
+            .from('system_settings')
+            .select('value')
+            .eq('key', `receipt_data_${pId}`)
+            .maybeSingle();
+          if (dataRow && dataRow.value) {
+            base64 = dataRow.value;
+          }
+        }
+      }
+
+      if (!base64 && payment.id) {
+        base64 = localStorage.getItem(`receipt_data_${payment.id}`) || null;
+      }
+
+      if (!base64) {
+        throw new Error("Comprovante não encontrado. O morador precisa anexá-lo novamente.");
+      }
+
+      if (action === 'view') {
+        setSelectedReceipt({
+          userName: payment.userName || "Morador",
+          amount: payment.amount,
+          name: name,
+          base64: base64
+        });
+      } else {
+        const a = document.createElement('a');
+        a.href = base64;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Erro ao ler comprovante: " + (err.message || err));
+    } finally {
+      setLoadingReceiptId(null);
+    }
+  };
 
   const loadCouponsData = async () => {
     setLoadingCoupons(true);
@@ -298,15 +371,26 @@ const FinancialAdmin: React.FC = () => {
       if (realPayments.length === 0) {
         setPayments([]);
       } else {
-        const formattedPayments: Payment[] = realPayments.map(p => ({
-          id: p.id,
-          userName: p.profiles?.name || 'Desconhecido',
-          neighborhoodName: hoodMap.get(p.profiles?.neighborhood_id || '') || 'Geral',
-          amount: Number(p.amount),
-          dueDate: p.due_date,
-          status: p.status,
-          plan: p.profiles?.plan === 'PREMIUM' ? 'Prêmio' : p.profiles?.plan === 'FAMILY' ? 'Família' : 'Padrão'
-        }));
+        const formattedPayments: Payment[] = realPayments.map(p => {
+          const match = p.reference_month?.match(/\(Anexo:\s*(.*?)\)/);
+          const hasAttachment = !!(p.receipt_base64 || p.receipt_name || localStorage.getItem(`receipt_data_${p.id}`) || match);
+          const receiptName = p.receipt_name || localStorage.getItem(`receipt_name_${p.id}`) || (match ? match[1] : null) || "comprovante.png";
+          
+          return {
+            id: p.id,
+            userName: p.profiles?.name || 'Desconhecido',
+            neighborhoodName: hoodMap.get(p.profiles?.neighborhood_id || '') || 'Geral',
+            amount: Number(p.amount),
+            dueDate: p.due_date,
+            status: p.status,
+            plan: p.profiles?.plan === 'PREMIUM' ? 'Prêmio' : p.profiles?.plan === 'FAMILY' ? 'Família' : 'Padrão',
+            receipt_base64: p.receipt_base64 || localStorage.getItem(`receipt_data_${p.id}`) || null,
+            receipt_name: receiptName,
+            has_attachment: hasAttachment,
+            reference_month: p.reference_month,
+            user_id: p.user_id
+          };
+        });
         setPayments(formattedPayments);
       }
     } catch (error) {
@@ -915,20 +999,28 @@ const FinancialAdmin: React.FC = () => {
                             </Badge>
                           </td>
                           <td className="px-6 py-4">
-                            {(payment.receipt_base64 || localStorage.getItem(`receipt_data_${payment.id}`)) ? (
-                              <button
-                                onClick={() => {
-                                  setSelectedReceipt({
-                                    userName: payment.userName || "Morador",
-                                    amount: payment.amount,
-                                    name: payment.receipt_name || localStorage.getItem(`receipt_name_${payment.id}`) || "comprovante.png",
-                                    base64: payment.receipt_base64 || localStorage.getItem(`receipt_data_${payment.id}`) || ""
-                                  });
-                                }}
-                                className="px-2.5 py-1 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/20 transition-all font-bold text-[10px] cursor-pointer inline-flex items-center gap-1.5"
-                              >
-                                <FileText size={12} className="inline mr-1" /> Ver Recibo
-                              </button>
+                            {payment.has_attachment ? (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  disabled={loadingReceiptId === payment.id}
+                                  onClick={() => handleFetchAndActionReceipt(payment, 'view')}
+                                  className="px-2 py-1 rounded bg-zinc-950 border border-white/10 text-white hover:bg-zinc-900 disabled:opacity-55 transition-all font-bold text-[10px] cursor-pointer inline-flex items-center gap-1"
+                                >
+                                  {loadingReceiptId === payment.id ? (
+                                    <span className="w-3 h-3 rounded-full border border-t-transparent border-white animate-spin"></span>
+                                  ) : (
+                                    <FileText size={11} />
+                                  )}
+                                  Ver
+                                </button>
+                                <button
+                                  disabled={loadingReceiptId === payment.id}
+                                  onClick={() => handleFetchAndActionReceipt(payment, 'download')}
+                                  className="px-2 py-1 rounded bg-yellow-500 hover:bg-yellow-400 disabled:opacity-55 text-black transition-all font-bold text-[10px] cursor-pointer inline-flex items-center gap-1"
+                                >
+                                  {loadingReceiptId === payment.id ? "⏱️..." : "💾 Baixar"}
+                                </button>
+                              </div>
                             ) : (
                               <span className="text-zinc-500 text-[11px] italic">Sem anexo</span>
                             )}

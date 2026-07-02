@@ -4,11 +4,207 @@ import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Zap, MessageSquare, Users, MapPin, Bell, Clock, BarChart3, MessageCircle, Menu, X, Lock, CreditCard, Smartphone, Download, Printer, Video, Check, Wifi, XCircle, FileText, Scan, AlertTriangle, Star, Shield, Heart, Eye, Loader2 } from 'lucide-react';
 import { Button, Modal, Badge } from '@/components/UI';
 import { MockService } from '@/services/mockService';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+
+// Fix Leaflet Default Icon in React using CDN URLs
+const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
+const shadowUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: iconUrl,
+    shadowUrl: shadowUrl,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+});
+if (typeof window !== 'undefined') {
+  L.Marker.prototype.options.icon = DefaultIcon;
+}
+
+// Custom Camera Icon for map markers (Green pins showing camera locations)
+const CameraIcon = L.divIcon({
+    className: 'custom-camera-marker',
+    html: `<div style="background-color: #00FF66; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px rgba(0,255,102,0.6); border: 2px solid #000;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>
+           </div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
+});
+
+interface FitBoundsProps {
+  cameras: any[];
+}
+
+const FitBounds: React.FC<FitBoundsProps> = ({ cameras }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!cameras || cameras.length === 0) return;
+
+    const validCameras = cameras.filter(cam => 
+      typeof cam.lat === 'number' && 
+      typeof cam.lng === 'number'
+    );
+    if (validCameras.length === 0) return;
+
+    const bounds = L.latLngBounds(validCameras.map(cam => [cam.lat, cam.lng]));
+    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+  }, [cameras, map]);
+
+  return null;
+};
+
+const getEstadoSigla = (estado?: string): string => {
+  if (!estado) return 'SC';
+  const name = estado.toLowerCase().trim();
+  if (name.includes('santa catarina')) return 'SC';
+  if (name.includes('são paulo') || name.includes('sao paulo')) return 'SP';
+  if (name.includes('rio de janeiro')) return 'RJ';
+  if (name.includes('paraná') || name.includes('parana')) return 'PR';
+  if (name.includes('rio grande do sul')) return 'RS';
+  if (name.includes('minas gerais')) return 'MG';
+  if (name.includes('bahia')) return 'BA';
+  if (name.includes('goiás') || name.includes('goias')) return 'GO';
+  if (name.includes('ceará') || name.includes('ceara')) return 'CE';
+  if (name.includes('pernambuco')) return 'PE';
+  if (name.includes('espírito santo') || name.includes('espirito santo')) return 'ES';
+  if (name.includes('distrito federal')) return 'DF';
+  if (name.includes('mato grosso do sul')) return 'MS';
+  if (name.includes('mato grosso')) return 'MT';
+  if (name.includes('amazonas')) return 'AM';
+  if (name.includes('pará') || name.includes('para')) return 'PA';
+  if (name.includes('maranhão') || name.includes('maranhao')) return 'MA';
+  if (name.includes('paraíba') || name.includes('paraiba')) return 'PB';
+  if (name.includes('rio grande do norte')) return 'RN';
+  if (name.includes('alagoas')) return 'AL';
+  if (name.includes('sergipe')) return 'SE';
+  if (name.includes('rondônia') || name.includes('rondonia')) return 'RO';
+  if (name.includes('tocantins')) return 'TO';
+  if (name.includes('piauí') || name.includes('piaui')) return 'PI';
+  if (name.includes('acre')) return 'AC';
+  if (name.includes('amapá') || name.includes('amapa')) return 'AP';
+  if (name.includes('roraima')) return 'RR';
+  return estado;
+};
+
+interface CameraPopupProps {
+  cam: any;
+  neighborhoodName: string;
+}
+
+const CameraPopup: React.FC<CameraPopupProps> = ({ cam, neighborhoodName }) => {
+  const [locInfo, setLocInfo] = useState<{ bairro: string; cidade: string; estado: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const loadLocation = async () => {
+      if (!cam.lat || !cam.lng) return;
+      
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${cam.lat}&lon=${cam.lng}&zoom=14&addressdetails=1`, {
+          headers: {
+            'User-Agent': 'AtalaiaSecurityApp/1.0',
+            'Accept-Language': 'pt-BR'
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (active) {
+            const addr = data.address || {};
+            const bairro = addr.suburb || addr.neighbourhood || addr.quarter || addr.residential || neighborhoodName || 'Bairro Monitorado';
+            const cidade = addr.city || addr.town || addr.village || addr.municipality || 'Florianópolis';
+            const estado = addr.state || 'Santa Catarina';
+            const estadoSigla = getEstadoSigla(estado);
+            setLocInfo({
+              bairro,
+              cidade,
+              estado: estadoSigla
+            });
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Geocoding fetch failed:", err);
+      }
+      
+      if (active) {
+        setLocInfo({
+          bairro: neighborhoodName || 'Bairro Monitorado',
+          cidade: 'Florianópolis',
+          estado: 'SC'
+        });
+        setLoading(false);
+      }
+    };
+
+    loadLocation();
+    return () => {
+      active = false;
+    };
+  }, [cam.lat, cam.lng, neighborhoodName]);
+
+  if (loading) {
+    return (
+      <div className="p-2 min-w-[220px] flex flex-col items-center justify-center h-20">
+        <Loader2 className="animate-spin text-emerald-500 mb-2" size={20} />
+        <span className="text-xs text-gray-400">Carregando localização...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-2 min-w-[220px]">
+      <div className="flex items-center gap-2 mb-2">
+        <Video size={16} className="text-emerald-500 animate-pulse shrink-0" />
+        <div className="flex flex-col">
+          <strong className="text-sm font-bold text-zinc-900 leading-tight">
+            {locInfo?.bairro}
+          </strong>
+          <span className="text-xs text-zinc-600 font-medium">
+            {locInfo?.cidade} - {locInfo?.estado}
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-medium mb-3">
+        <MapPin size={12} className="text-zinc-400" />
+        <span>Poste Atalaia de Segurança</span>
+      </div>
+      <div className="bg-zinc-50 rounded-lg p-2.5 border border-zinc-200 text-center">
+        <p className="text-[10px] text-zinc-500 font-extrabold flex items-center justify-center gap-1 uppercase">
+          <Lock size={12} className="text-zinc-600" /> Acesso Restrito
+        </p>
+        <p className="text-[9px] text-zinc-400 mt-1 leading-tight">
+          Imagens ao vivo disponíveis exclusivamente para moradores cadastrados na plataforma.
+        </p>
+      </div>
+    </div>
+  );
+};
 
 const Landing: React.FC = () => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [plateModalOpen, setPlateModalOpen] = useState(false);
+  const [cameras, setCameras] = useState<any[]>([]);
+  const [neighborhoods, setNeighborhoods] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [allCameras, allHoods] = await Promise.all([
+          MockService.getAllSystemCameras(),
+          MockService.getNeighborhoods()
+        ]);
+        setCameras(allCameras);
+        setNeighborhoods(allHoods);
+      } catch (e) {
+        console.error("[Landing] Error fetching system data:", e);
+      }
+    };
+    fetchData();
+  }, []);
   
   // State for WhatsApp Animation
   const [startWaAnimation, setStartWaAnimation] = useState(false);
@@ -130,6 +326,7 @@ const Landing: React.FC = () => {
             <div className="hidden md:flex items-center space-x-8 text-sm font-medium">
               <button onClick={() => scrollToSection('como-funciona')} className="text-gray-300 hover:text-white transition-colors">Como funciona</button>
               <button onClick={() => scrollToSection('funcionalidades')} className="text-gray-300 hover:text-white transition-colors">Funcionalidades</button>
+              <button onClick={() => scrollToSection('mapa-cameras')} className="text-gray-300 hover:text-white transition-colors">Mapa de Câmeras</button>
               <button onClick={() => scrollToSection('planos')} className="text-gray-300 hover:text-white transition-colors">Planos</button>
               <button onClick={() => setPlateModalOpen(true)} className="flex items-center gap-2 text-atalaia-neon hover:text-white transition-colors border border-atalaia-neon/30 px-3 py-1.5 rounded-full hover:bg-atalaia-neon hover:border-atalaia-neon hover:text-black">
                   <Printer size={14} /> Imprimir Placa
@@ -165,13 +362,14 @@ const Landing: React.FC = () => {
         </div>
 
         {mobileMenuOpen && (
-          <div className="md:hidden absolute top-20 left-0 w-full bg-[#040404] border-b border-white/5 px-4 py-6 flex flex-col gap-4 shadow-2xl animate-in slide-in-from-top-5">
-             <button onClick={() => scrollToSection('como-funciona')} className="text-left text-base font-medium text-gray-300 hover:text-atalaia-neon py-2">Como funciona</button>
-             <button onClick={() => scrollToSection('funcionalidades')} className="text-left text-base font-medium text-gray-300 hover:text-atalaia-neon py-2">Funcionalidades</button>
-             <button onClick={() => scrollToSection('planos')} className="text-left text-base font-medium text-gray-300 hover:text-atalaia-neon py-2">Planos</button>
-             <button onClick={() => { setPlateModalOpen(true); setMobileMenuOpen(false); }} className="text-left text-base font-medium text-atalaia-neon py-2 flex items-center gap-2">
-                 <Printer size={18} /> Imprimir Placa de Segurança
-             </button>
+            <div className="md:hidden absolute top-20 left-0 w-full bg-[#040404] border-b border-white/5 px-4 py-6 flex flex-col gap-4 shadow-2xl animate-in slide-in-from-top-5">
+               <button onClick={() => scrollToSection('como-funciona')} className="text-left text-base font-medium text-gray-300 hover:text-atalaia-neon py-2">Como funciona</button>
+               <button onClick={() => scrollToSection('funcionalidades')} className="text-left text-base font-medium text-gray-300 hover:text-atalaia-neon py-2">Funcionalidades</button>
+               <button onClick={() => scrollToSection('mapa-cameras')} className="text-left text-base font-medium text-gray-300 hover:text-atalaia-neon py-2">Mapa de Câmeras</button>
+               <button onClick={() => scrollToSection('planos')} className="text-left text-base font-medium text-gray-300 hover:text-atalaia-neon py-2">Planos</button>
+               <button onClick={() => { setPlateModalOpen(true); setMobileMenuOpen(false); }} className="text-left text-base font-medium text-atalaia-neon py-2 flex items-center gap-2">
+                   <Printer size={18} /> Imprimir Placa de Segurança
+               </button>
 
              {/* BOTÃO DE DESTAQUE MOBILE DO APLICATIVO */}
              <a 
@@ -280,6 +478,61 @@ const Landing: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Seção Mapa de Câmeras em Tempo Real para Visitantes */}
+      <section id="mapa-cameras" className="py-16 md:py-24 bg-[#040404] border-t border-b border-white/5 print:hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center mb-12">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-atalaia-neon/10 border border-atalaia-neon/30 text-atalaia-neon text-xs font-bold uppercase tracking-wider mb-4">
+            <Video size={14} className="animate-pulse" /> Cobertura em Tempo Real
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+            Nossa Rede de Monitoramento
+          </h2>
+          <p className="text-gray-400 max-w-2xl mx-auto">
+            Veja no mapa os pontos onde já temos câmeras de vigilância ativa instaladas em postes de monitoramento Atalaia.
+          </p>
+        </div>
+
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="h-[450px] md:h-[550px] rounded-3xl overflow-hidden border border-white/10 relative z-0 shadow-[0_0_50px_rgba(0,255,102,0.05)]">
+            {cameras.length === 0 ? (
+              <div className="w-full h-full bg-[#080808] flex items-center justify-center text-center p-4">
+                <div className="max-w-md">
+                  <Loader2 className="animate-spin text-atalaia-neon mx-auto mb-4" size={32} />
+                  <p className="text-gray-400 font-medium">Buscando mapa de postes e câmeras de segurança...</p>
+                </div>
+              </div>
+            ) : (
+              <MapContainer 
+                center={cameras[0]?.lat && cameras[0]?.lng ? [cameras[0].lat, cameras[0].lng] : [-27.5969, -48.5495]} 
+                zoom={13} 
+                style={{ height: '100%', width: '100%', background: '#0a0a0a' }}
+                scrollWheelZoom={false}
+              >
+                <TileLayer
+                  attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                  url='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                />
+                <FitBounds cameras={cameras} />
+                {cameras.map((cam) => cam.lat && cam.lng && (
+                  <Marker 
+                    key={`landing-cam-${cam.id}`} 
+                    position={[cam.lat, cam.lng]} 
+                    icon={CameraIcon}
+                  >
+                    <Popup className="text-black">
+                      <CameraPopup 
+                        cam={cam} 
+                        neighborhoodName={neighborhoods.find(h => h.id === cam.neighborhoodId)?.name || ''} 
+                      />
+                    </Popup>
+                  </Marker>
+                ))}
+              </MapContainer>
+            )}
+          </div>
         </div>
       </section>
 

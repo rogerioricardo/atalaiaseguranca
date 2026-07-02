@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/auth/context';
-import { UserRole, Alert, Neighborhood, Notification, User, ServiceRequest, SupportTicket } from '@/types';
+import { UserRole, Alert, Neighborhood, Notification, User, ServiceRequest, SupportTicket, Camera } from '@/types';
 import { Card, Badge, Button, Modal, Input } from '@/components/UI';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { ContractSignature } from '@/components/ContractSignature';
@@ -13,11 +13,179 @@ import {
     Heart, DollarSign, Loader2, Navigation, FileText, 
     Shield, Star, Lock, Send, Search, CheckCircle, UserCheck, XCircle,
     Wrench, MessageSquare, DoorOpen, LightbulbOff, Eye, ShieldAlert, UserX,
-    VolumeX, Package, Droplet, Sparkles, Bell, Upload
+    VolumeX, Package, Droplet, Sparkles, Bell, Upload, Globe
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PaymentService } from '@/services/paymentService';
 import { motion, AnimatePresence } from 'motion/react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+
+// Fix Leaflet Default Icon in React using CDN URLs
+const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
+const shadowUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: iconUrl,
+    shadowUrl: shadowUrl,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+});
+if (typeof window !== 'undefined') {
+  L.Marker.prototype.options.icon = DefaultIcon;
+}
+
+// Custom Camera Icon for map markers
+const CameraIcon = L.divIcon({
+    className: 'custom-camera-marker',
+    html: `<div style="background-color: #00FF66; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px rgba(0,255,102,0.6); border: 2px solid #000;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>
+           </div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
+});
+
+// SATELLITE LAYER CONFIGURATION
+const SATELLITE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const SATELLITE_ATTRIBUTION = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
+
+const MapResizer = () => {
+    const map = useMap();
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            map.invalidateSize();
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [map]);
+    return null;
+};
+
+const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ cam, onUpgrade }) => {
+  const [showLive, setShowLive] = useState(false);
+  const { user } = useAuth();
+  const isFreeResident = user?.plan === 'FREE' && user?.role === UserRole.RESIDENT;
+
+  return (
+    <div className="min-w-[280px]">
+      <div className="flex items-center gap-2 mb-1">
+          <Video size={16} />
+          <strong className="text-sm">Câmera: {cam.name}</strong>
+      </div>
+      <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] text-green-600 font-bold animate-pulse">● EM OPERAÇÃO</span>
+          <span className="text-[9px] text-gray-400 font-mono">{cam.lat?.toFixed(4)}, {cam.lng?.toFixed(4)}</span>
+      </div>
+      
+      <div className="w-full aspect-video bg-black rounded-lg overflow-hidden border border-gray-200 shadow-inner mt-1 relative">
+          {showLive ? (
+              isFreeResident ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 px-4 text-center">
+                    <Lock className="text-atalaia-neon/40 mb-2" size={24} />
+                    <h4 className="text-white font-bold text-[10px] uppercase mb-1">Acesso Bloqueado</h4>
+                    <p className="text-[8px] text-gray-500 mb-2">
+                        Requer assinatura para monitorar.
+                    </p>
+                    <div className="flex flex-col gap-1 w-full">
+                        <button 
+                            onClick={onUpgrade}
+                            className="bg-yellow-600 text-white text-[8px] font-black py-1 rounded uppercase"
+                        >
+                            Plano Família (R$ 39,90)
+                        </button>
+                        <button 
+                            onClick={onUpgrade}
+                            className="bg-atalaia-neon text-black text-[8px] font-black py-1 rounded uppercase"
+                        >
+                            Plano Prêmio (R$ 79,90)
+                        </button>
+                    </div>
+                </div>
+              ) : cam.iframeCode.trim().startsWith('<') ? (
+                  <iframe 
+                      srcDoc={`
+                          <html>
+                              <head>
+                                  <style>
+                                      body { margin: 0; padding: 0; background: black; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
+                                      video, iframe { width: 100%; height: 100%; object-fit: contain; border: none; }
+                                  </style>
+                              </head>
+                              <body>${cam.iframeCode}</body>
+                          </html>
+                      `}
+                      className="w-full h-full border-0"
+                      allowFullScreen
+                  />
+              ) : (cam.iframeCode.trim().toLowerCase().startsWith('http://') || (cam.iframeCode.trim().startsWith('<') && cam.iframeCode.toLowerCase().includes('src="http://'))) ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 border border-amber-500/20 px-4 text-center">
+                    <AlertTriangle className="text-amber-500 mb-1" size={20} />
+                    <h4 className="text-white font-bold text-[9px] uppercase mb-1">Conteúdo Inseguro</h4>
+                    <p className="text-[7px] text-gray-500 leading-tight mb-2">
+                        O navegador bloqueia esse link <code className="text-amber-500">http</code> por segurança dentro do mapa.
+                    </p>
+                    <button 
+                        onClick={() => {
+                            const url = cam.iframeCode.trim().startsWith('<') 
+                                ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
+                                : cam.iframeCode;
+                            window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+                        }}
+                        className="px-2 py-1 bg-atalaia-neon border border-black rounded-md text-[8px] font-black text-black hover:scale-105 transition-transform shadow-[0_0_10px_rgba(0,255,102,0.4)]"
+                    >
+                        ABRIR MONITOR HTTP
+                    </button>
+                </div>
+              ) : (
+                  <div className="relative w-full h-full group/map-cam">
+                      <iframe 
+                          src={cam.iframeCode} 
+                          title={cam.name}
+                          className="w-full h-full border-0" 
+                          allowFullScreen 
+                          referrerPolicy="no-referrer"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/map-cam:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                          <button 
+                              onClick={() => {
+                                  const url = cam.iframeCode.trim().startsWith('<') 
+                                      ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
+                                      : cam.iframeCode;
+                                  window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+                              }}
+                              className="pointer-events-auto bg-atalaia-neon text-black px-2 py-1 rounded text-[8px] font-black uppercase shadow-lg transform active:scale-95 transition-all"
+                          >
+                              Monitor Externo
+                          </button>
+                      </div>
+                  </div>
+              )
+          ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                  {cam.locationPhotoUrl ? (
+                      <img src={cam.locationPhotoUrl} className="w-full h-full object-cover" alt="Local do Poste" />
+                  ) : (
+                      <div className="text-center p-4">
+                          <MapPin className="mx-auto text-gray-300 mb-2" size={24} />
+                          <p className="text-gray-400 text-[10px] font-bold uppercase">Foto do poste não disponível</p>
+                      </div>
+                  )}
+              </div>
+          )}
+          
+          <button 
+            onClick={() => setShowLive(!showLive)}
+            className="absolute bottom-2 right-2 bg-black/60 hover:bg-black/80 text-white text-[9px] font-bold px-2 py-1 rounded backdrop-blur-sm border border-white/20 transition-all z-10"
+          >
+            {showLive ? 'Ver Foto do Poste' : (isFreeResident ? 'Desbloquear Câmera' : 'Ver Câmera ao Vivo')}
+          </button>
+      </div>
+      <div className="mt-2 text-[9px] text-gray-500 italic text-center">
+          {showLive ? (isFreeResident ? '🔒 Plano Premium Requerido' : 'Monitoramento em tempo real Atalaia') : 'Localização física do poste de monitoramento'}
+      </div>
+    </div>
+  );
+};
 
 // --- SUB-COMPONENT: SCR TACTICAL DASHBOARD ---
 const SCRDashboard = ({ user, neighborhood }: { user: User, neighborhood?: Neighborhood }) => {
@@ -461,6 +629,7 @@ const Dashboard: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [myNeighborhood, setMyNeighborhood] = useState<Neighborhood | undefined>();
+  const [cameras, setCameras] = useState<Camera[]>([]);
   
   // Donation State
   const [donationAmount, setDonationAmount] = useState('10.00');
@@ -493,6 +662,220 @@ const Dashboard: React.FC = () => {
   const [notifToDelete, setNotifToDelete] = useState<string | null>(null);
   const [notifUserToReject, setNotifUserToReject] = useState<{ notifId: string, pendingUserId: string } | null>(null);
   const [serviceToRequest, setServiceToRequest] = useState<'ESCORT' | 'EXTRA_ROUND' | 'TRAVEL_NOTICE' | null>(null);
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
+
+  const handleDownloadReceipt = async () => {
+    if (!user?.id) return;
+    setDownloadingReceipt(true);
+    try {
+      // 1. Procurar no banco de dados por um pagamento desse usuário
+      const { data: userPayments, error: dbError } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('payment_date', { ascending: false });
+
+      if (dbError) throw dbError;
+
+      if (!userPayments || userPayments.length === 0) {
+        throw new Error("Comprovante de pagamento não encontrado no histórico.");
+      }
+
+      // Procurar algum p que tenha anexo ou pegar o mais recente
+      const matchMonth = userPayments.find(p => p.reference_month?.includes("(Anexo:"));
+      const paymentWithReceipt = userPayments.find(p => p.receipt_base64 || p.receipt_name) || matchMonth || userPayments[0];
+
+      let receiptName = paymentWithReceipt.receipt_name || "comprovante.png";
+      let receiptBase64 = paymentWithReceipt.receipt_base64;
+
+      const match = paymentWithReceipt.reference_month?.match(/\(Anexo:\s*(.*?)\)/);
+      if (match && (!receiptName || receiptName === "comprovante.png")) {
+        receiptName = match[1];
+      }
+
+      // Se não tiver o base64 direto, tenta ler do localStorage como fallback de cache
+      if (!receiptBase64) {
+        receiptBase64 = localStorage.getItem(`receipt_data_${paymentWithReceipt.id}`) || null;
+      }
+      if (receiptName === "comprovante.png") {
+        receiptName = localStorage.getItem(`receipt_name_${paymentWithReceipt.id}`) || "comprovante.png";
+      }
+
+      // Se ainda não tiver o base64, buscar nas configurações gerais (system_settings)
+      if (!receiptBase64) {
+        try {
+          const { data: dataRow } = await supabase
+            .from('system_settings')
+            .select('value')
+            .eq('key', `receipt_data_${paymentWithReceipt.id}`)
+            .maybeSingle();
+          if (dataRow && dataRow.value) {
+            receiptBase64 = dataRow.value;
+          }
+        } catch (e) {}
+      }
+      if (!receiptBase64) {
+        try {
+          const { data: userReceiptIdRow } = await supabase
+            .from('system_settings')
+            .select('value')
+            .eq('key', `user_receipt_id_${user.id}`)
+            .maybeSingle();
+          if (userReceiptIdRow && userReceiptIdRow.value) {
+            const pId = userReceiptIdRow.value;
+            const { data: dataRow } = await supabase
+              .from('system_settings')
+              .select('value')
+              .eq('key', `receipt_data_${pId}`)
+              .maybeSingle();
+            if (dataRow && dataRow.value) {
+              receiptBase64 = dataRow.value;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (receiptName === "comprovante.png") {
+        try {
+          const { data: rowName } = await supabase
+            .from('system_settings')
+            .select('value')
+            .eq('key', `receipt_name_${paymentWithReceipt.id}`)
+            .maybeSingle();
+          if (rowName && rowName.value) {
+            receiptName = rowName.value;
+          }
+        } catch (e) {}
+      }
+
+      // 2. Se não possuir o base64, vamos tentar acessar o bucket 'receipts' do Supabase
+      if (!receiptBase64) {
+        try {
+          const { data: blob, error: storageError } = await supabase
+            .storage
+            .from('receipts')
+            .download(`${user.id}/${receiptName}`);
+
+          if (storageError) {
+            // Tenta outro padrão comum de bucket caso exista
+            const { data: blobAlt, error: storageErrorAlt } = await supabase
+              .storage
+              .from('payments')
+              .download(receiptName);
+            
+            if (storageErrorAlt) throw storageError; // repassa o erro original
+            if (blobAlt) {
+              const url = window.URL.createObjectURL(blobAlt);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = receiptName;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              window.URL.revokeObjectURL(url);
+              return;
+            }
+          }
+
+          if (blob) {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = receiptName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            return;
+          }
+        } catch (storageErr: any) {
+          console.warn("Storage bucket error, falling back to database payload:", storageErr);
+        }
+      }
+
+      // 3. Se obtivemos o base64, disparamos o download automático do base64
+      if (receiptBase64) {
+        const a = document.createElement('a');
+        a.href = receiptBase64;
+        a.download = receiptName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        throw new Error("Não foi possível carregar o arquivo ou dados do comprovante.");
+      }
+    } catch (err: any) {
+      console.error("Erro ao baixar o comprovante:", err);
+      // fallback mock download in case database is empty or bucket not created
+      try {
+        const fallbackBase64 = localStorage.getItem(`receipt_data_${user.id}`);
+        const fallbackName = localStorage.getItem(`receipt_name_${user.id}`) || "comprovante.png";
+        if (fallbackBase64) {
+          const a = document.createElement('a');
+          a.href = fallbackBase64;
+          a.download = fallbackName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } else {
+          alert("Não foi possível recuperar o comprovante do banco nem do armazenamento: " + (err.message || err));
+        }
+      } catch (e) {
+        alert("Erro no download: " + (err.message || err));
+      }
+    } finally {
+      setDownloadingReceipt(false);
+    }
+  };
+
+  // Sincronização em segundo plano de comprovantes locais para a nuvem globalmente compartilhada
+  useEffect(() => {
+    const syncLocalReceiptsToDB = async () => {
+      if (user?.role === 'RESIDENT') {
+        try {
+          const { data: userPayments } = await supabase
+            .from('payments')
+            .select('id')
+            .eq('user_id', user.id);
+
+          if (userPayments && userPayments.length > 0) {
+            for (const payment of userPayments) {
+              const localData = localStorage.getItem(`receipt_data_${payment.id}`);
+              const localName = localStorage.getItem(`receipt_name_${payment.id}`) || "comprovante.png";
+
+              if (localData) {
+                const { data: existingRow } = await supabase
+                  .from('system_settings')
+                  .select('key')
+                  .eq('key', `receipt_data_${payment.id}`)
+                  .maybeSingle();
+
+                if (!existingRow) {
+                  await supabase.from('system_settings').upsert([{
+                    key: `receipt_data_${payment.id}`,
+                    value: localData
+                  }]);
+                  await supabase.from('system_settings').upsert([{
+                    key: `receipt_name_${payment.id}`,
+                    value: localName
+                  }]);
+                  await supabase.from('system_settings').upsert([{
+                    key: `user_receipt_id_${user.id}`,
+                    value: payment.id
+                  }]);
+                  console.log(`[Sync] Comprovante ${payment.id} sincronizado com sucesso.`);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.warn("[Sync] Erro na sincronização de comprovantes:", error);
+        }
+      }
+    };
+
+    if (user) syncLocalReceiptsToDB();
+  }, [user]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -529,6 +912,13 @@ const Dashboard: React.FC = () => {
           const myNotifs = await MockService.getNotifications(user.id);
           setNotifications(myNotifs.filter(n => !n.read));
         }
+
+        // Fetch All System Cameras
+        const allCameras = await MockService.getAllSystemCameras();
+        const filteredCameras = user?.role === UserRole.ADMIN
+          ? allCameras
+          : allCameras.filter(c => c.neighborhoodId === user?.neighborhoodId);
+        setCameras(filteredCameras);
     } catch (e: any) {
         console.error("[Dashboard] Error fetching data:", e);
     }
@@ -541,12 +931,14 @@ const Dashboard: React.FC = () => {
     const subNotifs = MockService.subscribeToTable('notifications', fetchData);
     const subHoods = MockService.subscribeToTable('neighborhoods', fetchData);
     const subTickets = MockService.subscribeToTable('support_tickets', fetchData);
+    const subCameras = MockService.subscribeToTable('cameras', fetchData);
 
     return () => {
         supabase.removeChannel(subAlerts);
         supabase.removeChannel(subNotifs);
         supabase.removeChannel(subHoods);
         supabase.removeChannel(subTickets);
+        supabase.removeChannel(subCameras);
     };
   }, [user, fetchData]);
 
@@ -835,12 +1227,31 @@ const Dashboard: React.FC = () => {
                       </p>
                   </div>
               </div>
-              <Button
-                  onClick={() => setShowUpgradeModal(true)}
-                  className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shrink-0 cursor-pointer"
-              >
-                  Fixar Plano Definitivo
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                      onClick={handleDownloadReceipt}
+                      disabled={downloadingReceipt}
+                      className="px-4 py-2 bg-zinc-900 border border-white/10 hover:border-zinc-800 text-zinc-300 hover:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                      {downloadingReceipt ? (
+                          <>
+                              <Loader2 size={13} className="animate-spin text-yellow-500" />
+                              Buscando...
+                          </>
+                      ) : (
+                          <>
+                              <FileText size={13} className="text-yellow-500" />
+                              Baixar Comprovante
+                          </>
+                      )}
+                  </button>
+                  <Button
+                      onClick={() => setShowUpgradeModal(true)}
+                      className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shrink-0 cursor-pointer"
+                  >
+                      Fixar Plano Definitivo
+                  </Button>
+              </div>
           </div>
       )}
 
@@ -1192,50 +1603,47 @@ const Dashboard: React.FC = () => {
           </div>
         </Card>
 
-        {/* Quick Camera Access */}
-        <Card className="p-6 flex flex-col">
-          <h2 className="text-xl font-bold flex items-center gap-2 mb-6">
-            <Video className="text-atalaia-neon" size={20} />
-            Visualização Rápida
-          </h2>
+        {/* Real-time Camera Map Card */}
+        <Card className="p-6 flex flex-col h-[480px]">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Video className="text-atalaia-neon" size={20} />
+              Câmeras em Tempo Real
+            </h2>
+            <Button variant="outline" className="text-xs px-2 py-1 h-auto" onClick={() => navigate('/map')}>
+              Ver Mapa Completo
+            </Button>
+          </div>
           
-          <div className="flex-1 flex flex-col items-center justify-center bg-black/60 rounded-lg border border-dashed border-gray-700 min-h-[200px]">
-             {user?.plan === 'FREE' && user?.role === UserRole.RESIDENT ? (
-                 <div className="text-center px-6 py-8">
-                     <Lock className="text-atalaia-neon/30 mx-auto mb-4" size={40} />
-                     <h3 className="text-white font-bold mb-2">Monitoramento VIP Indisponível</h3>
-                     <p className="text-gray-400 text-sm mb-6 max-w-xs mx-auto">
-                         Para visualizar as câmeras do seu bairro, você precisa de uma assinatura ativa.
-                     </p>
-                     <div className="flex flex-col gap-2">
-                        <Button 
-                            className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold"
-                            onClick={() => setShowUpgradeModal(true)}
-                        >
-                            Assinar Plano Família (R$ 39,90)
-                        </Button>
-                        <Button 
-                            variant="outline"
-                            className="text-atalaia-neon border-atalaia-neon/20"
-                            onClick={() => setShowUpgradeModal(true)}
-                        >
-                            Assinar Plano Prêmio (R$ 79,90)
-                        </Button>
-                     </div>
-                 </div>
-             ) : myNeighborhood ? (
-                 <div className="text-center">
-                     <p className="text-gray-400 mb-4">Câmera Principal: {myNeighborhood.name}</p>
-                     <Button onClick={() => navigate('/cameras')}>Abrir Monitoramento</Button>
-                 </div>
-             ) : user?.role === UserRole.ADMIN ? (
-                 <div className="text-center">
-                     <p className="text-gray-400 mb-4">Você tem acesso global.</p>
-                     <Button onClick={() => navigate('/cameras')}>Gerenciar Câmeras</Button>
-                 </div>
-             ) : (
-                 <p className="text-gray-500">Nenhuma câmera vinculada.</p>
-             )}
+          <div className="flex-1 rounded-xl overflow-hidden border border-zinc-800 relative z-0 min-h-[300px]">
+            {cameras.length === 0 ? (
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-center p-4">
+                <p className="text-gray-400">Nenhuma câmera disponível na sua região.</p>
+              </div>
+            ) : (
+              <MapContainer 
+                center={user?.lat && user?.lng ? [user.lat, user.lng] : myNeighborhood?.lat && myNeighborhood?.lng ? [myNeighborhood.lat, myNeighborhood.lng] : [-27.5969, -48.5495]} 
+                zoom={14} 
+                style={{ height: '100%', width: '100%', background: '#0a0a0a' }}
+                scrollWheelZoom={true}
+              >
+                <MapResizer />
+                <TileLayer
+                  attribution={SATELLITE_ATTRIBUTION}
+                  url={SATELLITE_URL}
+                />
+                
+                {cameras.map((cam) => (
+                  cam.lat && cam.lng && (
+                    <Marker key={`cam-${cam.id}`} position={[cam.lat, cam.lng]} icon={CameraIcon}>
+                      <Popup className="text-black" minWidth={300}>
+                        <CameraPopupContent cam={cam} onUpgrade={() => setShowUpgradeModal(true)} />
+                      </Popup>
+                    </Marker>
+                  )
+                ))}
+              </MapContainer>
+            )}
           </div>
         </Card>
       </div>

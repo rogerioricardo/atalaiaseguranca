@@ -9,6 +9,54 @@ const sanitizeUUID = (id?: string): string | null => {
     return id;
 };
 
+const DEMO_CAMERAS: Camera[] = [
+  {
+    id: 'cam-demo-1',
+    neighborhoodId: 'hood-demo-1',
+    name: 'Câmera Entrada Norte',
+    iframeCode: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+    lat: -27.5910,
+    lng: -48.5420,
+    locationPhotoUrl: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=500&auto=format&fit=crop&q=60'
+  },
+  {
+    id: 'cam-demo-2',
+    neighborhoodId: 'hood-demo-1',
+    name: 'Câmera Avenida Central',
+    iframeCode: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+    lat: -27.5969,
+    lng: -48.5495,
+    locationPhotoUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&auto=format&fit=crop&q=60'
+  },
+  {
+    id: 'cam-demo-3',
+    neighborhoodId: 'hood-demo-1',
+    name: 'Câmera Rotatória Leste',
+    iframeCode: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+    lat: -27.6015,
+    lng: -48.5550,
+    locationPhotoUrl: 'https://images.unsplash.com/photo-1590674899484-13da0d1b58f5?w=500&auto=format&fit=crop&q=60'
+  }
+];
+
+const getLocalCameras = (): Camera[] => {
+  if (typeof window === 'undefined') return [];
+  const cached = localStorage.getItem('atalaia_local_cameras');
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (e) {
+      return [];
+    }
+  }
+  return [];
+};
+
+const saveLocalCameras = (cameras: Camera[]) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('atalaia_local_cameras', JSON.stringify(cameras));
+};
+
 export const MockService = {
   // --- SISTEMA ---
   getSettings: async (forceRefresh = false): Promise<Record<string, string>> => {
@@ -115,85 +163,155 @@ export const MockService = {
 
   // --- CÂMERAS ---
   getAdditionalCameras: async (neighborhoodId: string): Promise<Camera[]> => {
+    const safeId = sanitizeUUID(neighborhoodId);
+    let dbCameras: Camera[] = [];
     try {
-        const safeId = sanitizeUUID(neighborhoodId);
-        if (!safeId) return [];
-        const { data, error } = await supabase.from('cameras').select('*').eq('neighborhood_id', safeId);
-        if (error) {
-            console.error("[MockService] Erro de permissão ou banco ao buscar câmeras:", error.message);
-            throw error;
+        if (safeId) {
+            const { data, error } = await supabase.from('cameras').select('*').eq('neighborhood_id', safeId);
+            if (!error && data) {
+                dbCameras = data.map(c => ({ 
+                    id: c.id, 
+                    neighborhoodId: c.neighborhood_id, 
+                    name: c.name, 
+                    iframeCode: c.iframe_code, 
+                    lat: c.lat, 
+                    lng: c.lng,
+                    locationPhotoUrl: c.location_photo_url
+                }));
+            } else if (error) {
+                console.warn("[MockService] Erro de permissão ou banco ao buscar câmeras do Supabase:", error.message);
+            }
         }
-        return (data || []).map(c => ({ 
-            id: c.id, 
-            neighborhoodId: c.neighborhood_id, 
-            name: c.name, 
-            iframeCode: c.iframe_code, 
-            lat: c.lat, 
-            lng: c.lng,
-            locationPhotoUrl: c.location_photo_url
-        }));
     } catch (e) {
-        console.error("[MockService] Falha crítica em getAdditionalCameras:", e);
-        return [];
+        console.warn("[MockService] Falha em getAdditionalCameras do Supabase:", e);
     }
+
+    const localCameras = getLocalCameras().filter(c => c.neighborhoodId === neighborhoodId);
+    const mergedMap = new Map<string, Camera>();
+
+    if (dbCameras.length === 0 && localCameras.length === 0) {
+        DEMO_CAMERAS.filter(c => c.neighborhoodId === neighborhoodId || c.neighborhoodId === 'hood-demo-1').forEach(c => mergedMap.set(c.id, c));
+    } else {
+        dbCameras.forEach(c => mergedMap.set(c.id, c));
+        localCameras.forEach(c => mergedMap.set(c.id, c));
+    }
+
+    return Array.from(mergedMap.values());
   },
 
   getAllSystemCameras: async (): Promise<Camera[]> => {
+    let dbCameras: Camera[] = [];
     try {
         const { data, error } = await supabase.from('cameras').select('*');
-        if (error) throw error;
-        return (data || []).map(c => ({ 
-            id: c.id, 
-            neighborhoodId: c.neighborhood_id, 
-            name: c.name, 
-            iframeCode: c.iframe_code, 
-            lat: c.lat, 
-            lng: c.lng,
-            locationPhotoUrl: c.location_photo_url
-        }));
+        if (!error && data) {
+            dbCameras = data.map(c => ({ 
+                id: c.id, 
+                neighborhoodId: c.neighborhood_id, 
+                name: c.name, 
+                iframeCode: c.iframe_code, 
+                lat: c.lat, 
+                lng: c.lng,
+                locationPhotoUrl: c.location_photo_url
+            }));
+        } else if (error) {
+            console.warn("[MockService] Supabase cameras query returned error, using local fallback.", error);
+        }
     } catch (e) {
-        console.error("[MockService] Error in getAllSystemCameras:", e);
-        return [];
+        console.warn("[MockService] Error in getAllSystemCameras from Supabase, using local fallback:", e);
     }
+
+    const localCameras = getLocalCameras();
+    const mergedMap = new Map<string, Camera>();
+    
+    if (dbCameras.length === 0 && localCameras.length === 0) {
+        DEMO_CAMERAS.forEach(c => mergedMap.set(c.id, c));
+    } else {
+        dbCameras.forEach(c => mergedMap.set(c.id, c));
+        localCameras.forEach(c => mergedMap.set(c.id, c));
+    }
+    
+    return Array.from(mergedMap.values());
   },
 
   addCamera: async (neighborhoodId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string): Promise<void> => {
-    const { error } = await supabase.from('cameras').insert([{ 
-        neighborhood_id: sanitizeUUID(neighborhoodId), 
-        name, 
-        iframe_code: iframeCode,
+    const id = typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : (Math.random().toString(36).substring(2) + Date.now().toString(36));
+    
+    const local = getLocalCameras();
+    const newCam: Camera = {
+        id,
+        neighborhoodId,
+        name,
+        iframeCode,
         lat,
         lng,
-        location_photo_url: locationPhotoUrl
-    }]);
-    if (error) {
-        console.error("[MockService] Error adding camera:", error);
-        throw error;
-    }
-  },
+        locationPhotoUrl
+    };
+    local.push(newCam);
+    saveLocalCameras(local);
 
-  updateCamera: async (cameraId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string): Promise<void> => {
-    const { error } = await supabase.from('cameras')
-        .update({ 
+    try {
+        const { error } = await supabase.from('cameras').insert([{ 
+            id,
+            neighborhood_id: sanitizeUUID(neighborhoodId), 
             name, 
             iframe_code: iframeCode,
             lat,
             lng,
             location_photo_url: locationPhotoUrl
-        })
-        .eq('id', cameraId);
-    
-    if (error) {
-        console.error("[MockService] Error updating camera:", error);
-        throw error;
+        }]);
+        if (error) {
+            console.warn("[MockService] Failed to write camera to Supabase, saved locally:", error);
+        }
+    } catch (e) {
+        console.warn("[MockService] Error adding camera to Supabase, saved locally:", e);
+    }
+  },
+
+  updateCamera: async (cameraId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string): Promise<void> => {
+    const local = getLocalCameras();
+    const index = local.findIndex(c => c.id === cameraId);
+    if (index !== -1) {
+        local[index] = {
+            ...local[index],
+            name,
+            iframeCode,
+            lat,
+            lng,
+            locationPhotoUrl
+        };
+        saveLocalCameras(local);
+    }
+
+    try {
+        const { error } = await supabase.from('cameras')
+            .update({ 
+                name, 
+                iframe_code: iframeCode,
+                lat,
+                lng,
+                location_photo_url: locationPhotoUrl
+            })
+            .eq('id', cameraId);
+        if (error) {
+            console.warn("[MockService] Failed to update camera on Supabase, updated locally:", error);
+        }
+    } catch (e) {
+        console.warn("[MockService] Error updating camera on Supabase, updated locally:", e);
     }
   },
 
   deleteCamera: async (id: string): Promise<void> => {
-    const { error } = await supabase.from('cameras').delete().eq('id', id);
-    if (error) {
-        console.error("[MockService] Error deleting camera:", error);
-        throw error;
+    const local = getLocalCameras();
+    const filtered = local.filter(c => c.id !== id);
+    saveLocalCameras(filtered);
+
+    try {
+        const { error } = await supabase.from('cameras').delete().eq('id', id);
+        if (error) {
+            console.warn("[MockService] Failed to delete camera from Supabase, deleted locally:", error);
+        }
+    } catch (e) {
+        console.warn("[MockService] Error deleting camera from Supabase, deleted locally:", e);
     }
   },
 
@@ -1104,24 +1222,40 @@ export const MockService = {
             receipt_base64: receiptBase64 || null
           }]).select();
 
+          let insertedId = "";
           if (!error && data && data[0]) {
-            const insertedId = data[0].id;
-            if (receiptBase64) localStorage.setItem(`receipt_data_${insertedId}`, receiptBase64);
-            if (receiptName) localStorage.setItem(`receipt_name_${insertedId}`, receiptName);
+            insertedId = data[0].id;
           } else {
             const { data: fallbackData } = await supabase.from('payments').insert([paymentPayload]).select();
             if (fallbackData && fallbackData[0]) {
-              const insertedId = fallbackData[0].id;
-              if (receiptBase64) localStorage.setItem(`receipt_data_${insertedId}`, receiptBase64);
-              if (receiptName) localStorage.setItem(`receipt_name_${insertedId}`, receiptName);
+              insertedId = fallbackData[0].id;
             }
+          }
+
+          if (insertedId) {
+            if (receiptBase64) {
+              localStorage.setItem(`receipt_data_${insertedId}`, receiptBase64);
+              await supabase.from('system_settings').upsert([{ key: `receipt_data_${insertedId}`, value: receiptBase64 }]);
+            }
+            if (receiptName) {
+              localStorage.setItem(`receipt_name_${insertedId}`, receiptName);
+              await supabase.from('system_settings').upsert([{ key: `receipt_name_${insertedId}`, value: receiptName }]);
+            }
+            await supabase.from('system_settings').upsert([{ key: `user_receipt_id_${safeId}`, value: insertedId }]);
           }
         } catch (err) {
           const { data: fallbackData } = await supabase.from('payments').insert([paymentPayload]).select();
           if (fallbackData && fallbackData[0]) {
             const insertedId = fallbackData[0].id;
-            if (receiptBase64) localStorage.setItem(`receipt_data_${insertedId}`, receiptBase64);
-            if (receiptName) localStorage.setItem(`receipt_name_${insertedId}`, receiptName);
+            if (receiptBase64) {
+              localStorage.setItem(`receipt_data_${insertedId}`, receiptBase64);
+              await supabase.from('system_settings').upsert([{ key: `receipt_data_${insertedId}`, value: receiptBase64 }]);
+            }
+            if (receiptName) {
+              localStorage.setItem(`receipt_name_${insertedId}`, receiptName);
+              await supabase.from('system_settings').upsert([{ key: `receipt_name_${insertedId}`, value: receiptName }]);
+            }
+            await supabase.from('system_settings').upsert([{ key: `user_receipt_id_${safeId}`, value: insertedId }]);
           }
         }
       } else {

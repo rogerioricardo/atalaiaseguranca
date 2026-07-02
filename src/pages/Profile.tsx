@@ -4,9 +4,10 @@ import Layout from '../components/Layout';
 import { useAuth } from '@/auth/context';
 import { Card, Input, Button } from '../components/UI';
 import { MockService } from '../services/mockService';
-import { Save, User as UserIcon, Camera, Home, MapPin, CheckCircle, Loader2, AlertCircle, Smartphone, Laptop, Monitor, Trash2, LogOut, Sparkles, Upload, Building, CreditCard, Sliders, Check } from 'lucide-react';
+import { Save, User as UserIcon, Camera, Home, MapPin, CheckCircle, Loader2, AlertCircle, Smartphone, Laptop, Monitor, Trash2, LogOut, Sparkles, Upload, Building, CreditCard, Sliders, Check, FileText } from 'lucide-react';
 import { SessionService } from '../services/sessionService';
 import { UserRole } from '@/types';
+import { supabase } from '@/lib/supabaseClient';
 
 const Profile: React.FC = () => {
   const { user, updateProfile } = useAuth();
@@ -15,6 +16,114 @@ const Profile: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
+
+  const handleDownloadReceipt = async () => {
+    if (!user?.id) return;
+    setDownloadingReceipt(true);
+    try {
+      // 1. Procurar no banco de dados por um pagamento desse usuário que possua comprovante
+      const { data: userPayments, error: dbError } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('payment_date', { ascending: false });
+
+      if (dbError) throw dbError;
+
+      const paymentWithReceipt = userPayments?.find(p => p.receipt_base64 || p.receipt_name);
+
+      if (!paymentWithReceipt) {
+        throw new Error("Comprovante de pagamento não encontrado no histórico.");
+      }
+
+      const receiptName = paymentWithReceipt.receipt_name || "comprovante.png";
+      let receiptBase64 = paymentWithReceipt.receipt_base64;
+
+      // Se não tiver o base64 direto, tenta ler do localStorage como fallback de cache
+      if (!receiptBase64) {
+        receiptBase64 = localStorage.getItem(`receipt_data_${paymentWithReceipt.id}`) || null;
+      }
+
+      // 2. Se não possuir o base64, vamos tentar acessar o bucket 'receipts' do Supabase
+      if (!receiptBase64) {
+        try {
+          const { data: blob, error: storageError } = await supabase
+            .storage
+            .from('receipts')
+            .download(`${user.id}/${receiptName}`);
+
+          if (storageError) {
+            // Tenta outro padrão comum de bucket caso exista
+            const { data: blobAlt, error: storageErrorAlt } = await supabase
+              .storage
+              .from('payments')
+              .download(receiptName);
+            
+            if (storageErrorAlt) throw storageError; // repassa o erro original
+            if (blobAlt) {
+              const url = window.URL.createObjectURL(blobAlt);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = receiptName;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              window.URL.revokeObjectURL(url);
+              return;
+            }
+          }
+
+          if (blob) {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = receiptName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            return;
+          }
+        } catch (storageErr: any) {
+          console.warn("Storage bucket error, falling back to database payload:", storageErr);
+        }
+      }
+
+      // 3. Se obtivemos o base64, disparamos o download automático do base64
+      if (receiptBase64) {
+        const a = document.createElement('a');
+        a.href = receiptBase64;
+        a.download = receiptName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        throw new Error("Não foi possível carregar o arquivo ou dados do comprovante.");
+      }
+    } catch (err: any) {
+      console.error("Erro ao baixar o comprovante:", err);
+      // fallback mock download in case database is empty or bucket not created
+      try {
+        const fallbackBase64 = localStorage.getItem(`receipt_data_${user.id}`);
+        const fallbackName = localStorage.getItem(`receipt_name_${user.id}`) || "comprovante.png";
+        if (fallbackBase64) {
+          const a = document.createElement('a');
+          a.href = fallbackBase64;
+          a.download = fallbackName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } else {
+          alert("Não foi possível recuperar o comprovante do banco nem do armazenamento: " + (err.message || err));
+        }
+      } catch (e) {
+        alert("Erro no download: " + (err.message || err));
+      }
+    } finally {
+      setDownloadingReceipt(false);
+    }
+  };
 
   // Active user sessions states
   const [sessions, setSessions] = useState<any[]>([]);
@@ -321,6 +430,29 @@ const Profile: React.FC = () => {
                                     {user?.plan === 'FREE' ? 'Gratuito' : user?.plan === 'FAMILY' ? 'Família' : 'Prêmio'}
                                 </span>
                             </div>
+                            {user?.role === 'RESIDENT' && (user?.plan === 'FAMILY' || user?.promoActive) && (
+                                <div className="mt-2.5">
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadReceipt}
+                                        disabled={downloadingReceipt}
+                                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-yellow-500/10 border border-yellow-500/20 hover:bg-yellow-500 text-yellow-500 hover:text-black rounded-lg text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                                    >
+                                        {downloadingReceipt ? (
+                                            <>
+                                                <Loader2 size={13} className="animate-spin" />
+                                                Buscando...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <FileText size={13} />
+                                                Baixar Comprovante
+                                            </>
+                                        )}
+                                    </button>
+                                    <p className="text-[9px] text-zinc-500 mt-1 italic text-center">Buscado seguro no bucket ou banco Supabase</p>
+                                </div>
+                            )}
                         </div>
                         <div>
                             <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest">E-mail de Acesso</label>

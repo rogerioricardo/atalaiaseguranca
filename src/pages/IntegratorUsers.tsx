@@ -9,7 +9,7 @@ import { Card, Button, Input, Modal, Badge } from '../components/UI';
 import { 
     Trash2, MapPin, Users, Search, 
     Edit2, Loader2, Wrench, CheckCircle, Smartphone, Mail, RefreshCw, Filter, Database, AlertTriangle,
-    Star, Upload, Check, Settings, Building, CreditCard, Sparkles, AlertCircle, Sliders
+    Star, Upload, Check, Settings, Building, CreditCard, Sparkles, AlertCircle, Sliders, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -21,6 +21,78 @@ const IntegratorUsers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [adminFilterHood, setAdminFilterHood] = useState('');
   const [filterTab, setFilterTab] = useState<'all' | 'trial' | 'subscribed' | 'free'>('all');
+  const [payments, setPayments] = useState<any[]>([]);
+  const [selectedReceipt, setSelectedReceipt] = useState<{ userName: string, amount: number, name: string, base64: string } | null>(null);
+  const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
+
+  const handleFetchAndActionReceipt = async (payment: any, resident: any, action: 'view' | 'download') => {
+    setLoadingReceiptId(payment.id);
+    try {
+      let base64 = payment.receipt_base64;
+      let name = payment.receipt_name || "comprovante.png";
+
+      if (!base64 && payment.id) {
+        const { data: dataRow } = await supabase
+          .from('system_settings')
+          .select('value')
+          .eq('key', `receipt_data_${payment.id}`)
+          .maybeSingle();
+
+        if (dataRow && dataRow.value) {
+          base64 = dataRow.value;
+        }
+      }
+
+      if (!base64 && payment.user_id) {
+        const { data: userReceiptIdRow } = await supabase
+          .from('system_settings')
+          .select('value')
+          .eq('key', `user_receipt_id_${payment.user_id}`)
+          .maybeSingle();
+
+        if (userReceiptIdRow && userReceiptIdRow.value) {
+          const pId = userReceiptIdRow.value;
+          const { data: dataRow } = await supabase
+            .from('system_settings')
+            .select('value')
+            .eq('key', `receipt_data_${pId}`)
+            .maybeSingle();
+          if (dataRow && dataRow.value) {
+            base64 = dataRow.value;
+          }
+        }
+      }
+
+      if (!base64 && payment.id) {
+        base64 = localStorage.getItem(`receipt_data_${payment.id}`) || null;
+      }
+
+      if (!base64) {
+        throw new Error("Comprovante não encontrado. O morador precisa anexá-lo novamente.");
+      }
+
+      if (action === 'view') {
+        setSelectedReceipt({
+          userName: resident.name,
+          amount: payment.amount || 5.00,
+          name: name,
+          base64: base64
+        });
+      } else {
+        const a = document.createElement('a');
+        a.href = base64;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Erro ao ler comprovante: " + (err.message || err));
+    } finally {
+      setLoadingReceiptId(null);
+    }
+  };
   
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -53,6 +125,20 @@ const IntegratorUsers: React.FC = () => {
         const targetHoodId = user?.role === UserRole.INTEGRATOR ? user.neighborhoodId : undefined;
         const allUsers = await MockService.getUsers(targetHoodId);
         setResidents(allUsers);
+
+        // Fetch payments for checking promotion receipts
+        const allPayments = await MockService.getPayments();
+        const enrichedPayments = allPayments.map(p => {
+          const match = p.reference_month?.match(/\(Anexo:\s*(.*?)\)/);
+          const hasAttachment = !!(p.receipt_base64 || p.receipt_name || localStorage.getItem(`receipt_data_${p.id}`) || match);
+          const receiptName = p.receipt_name || localStorage.getItem(`receipt_name_${p.id}`) || (match ? match[1] : null) || "comprovante.png";
+          return {
+            ...p,
+            receipt_name: receiptName,
+            has_attachment: hasAttachment
+          };
+        });
+        setPayments(enrichedPayments);
     } catch (e) {
         console.error(e);
     } finally {
@@ -65,10 +151,12 @@ const IntegratorUsers: React.FC = () => {
 
     const subProfiles = MockService.subscribeToTable('profiles', fetchData);
     const subHoods = MockService.subscribeToTable('neighborhoods', fetchData);
+    const subPayments = MockService.subscribeToTable('payments', fetchData);
 
     return () => {
         supabase.removeChannel(subProfiles);
         supabase.removeChannel(subHoods);
+        supabase.removeChannel(subPayments);
     };
   }, [fetchData, user]);
 
@@ -314,6 +402,44 @@ const IntegratorUsers: React.FC = () => {
                                                 <span>Começo: {resident.promoStart ? new Date(resident.promoStart).toLocaleDateString('pt-BR') : '-'}</span>
                                                 <span>Expira: {resident.promoEnd ? new Date(resident.promoEnd).toLocaleDateString('pt-BR') : '-'}</span>
                                             </div>
+
+                                            {(() => {
+                                                const residentPayment = payments.find(p => p.user_id === resident.id && p.has_attachment);
+                                                if (residentPayment) {
+                                                    const base64 = "";
+                                                    const name = residentPayment.receipt_name || "comprovante.png";
+                                                    return (
+                                                        <div className="mt-3 flex gap-2">
+                                                            <button
+                                                                disabled={loadingReceiptId === residentPayment.id}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleFetchAndActionReceipt(residentPayment, resident, 'view');
+                                                                }}
+                                                                className="flex-[4] py-1.5 px-2 bg-zinc-950 hover:bg-zinc-900 border border-white/10 text-white disabled:opacity-55 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 transition-all duration-200 cursor-pointer animate-in fade-in"
+                                                            >
+                                                                {loadingReceiptId === residentPayment.id ? (
+                                                                    <span className="w-3.5 h-3.5 rounded-full border border-t-transparent border-yellow-500 animate-spin"></span>
+                                                                ) : (
+                                                                    <FileText size={12} className="text-yellow-500" />
+                                                                )}
+                                                                Ver
+                                                            </button>
+                                                            <button
+                                                                disabled={loadingReceiptId === residentPayment.id}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleFetchAndActionReceipt(residentPayment, resident, 'download');
+                                                                }}
+                                                                className="flex-[6] py-1.5 px-2 bg-yellow-500 hover:bg-yellow-400 text-black disabled:opacity-55 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 transition-all duration-200 cursor-pointer shadow-md"
+                                                            >
+                                                                {loadingReceiptId === residentPayment.id ? "⏱️..." : "💾 Baixar"}
+                                                             </button>
+                                                         </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
                                         </div>
                                     </div>
                                 )}
@@ -413,6 +539,77 @@ const IntegratorUsers: React.FC = () => {
              )}
          </AnimatePresence>
        </div>
+          {/* VISUALIZAÇÃO DE COMPROVANTE */}
+          {selectedReceipt && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+              <div className="w-full max-w-2xl bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden flex flex-col max-h-[85vh]">
+                <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-yellow-500/30 to-transparent" />
+                
+                <div className="flex justify-between items-center mb-4 border-b border-white/5 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-yellow-500 tracking-wider">Comprovante de Teste</span>
+                    <h3 className="text-lg font-black text-white">{selectedReceipt.userName}</h3>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedReceipt(null)}
+                    className="p-1 px-3 text-xs bg-zinc-900 border border-white/10 text-white rounded-lg hover:bg-zinc-800 transition-colors uppercase font-bold cursor-pointer font-sans"
+                  >
+                    Fechar
+                  </button>
+                </div>
+
+                <div className="p-3 bg-white/[0.02] border border-white/5 rounded-xl mb-4 text-xs flex justify-between items-center text-zinc-300 font-sans">
+                  <div>
+                    <span className="text-zinc-500">Arquivo:</span> <strong className="text-white ml-2">{selectedReceipt.name}</strong>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500">Valor Pago:</span> <strong className="text-yellow-500 ml-2">R$ {selectedReceipt.amount.toFixed(2)}</strong>
+                  </div>
+                </div>
+
+                <div className="flex-1 bg-black rounded-lg border border-white/5 overflow-auto flex items-center justify-center p-4 min-h-[300px]">
+                  {selectedReceipt.base64.startsWith('data:application/pdf') || selectedReceipt.name.toLowerCase().endsWith('.pdf') ? (
+                    <div className="text-center p-6 space-y-3">
+                      <div className="w-12 h-12 bg-red-400/10 border border-red-500/20 text-red-500 rounded-xl flex items-center justify-center mx-auto mb-2">
+                        <FileText size={28} />
+                      </div>
+                      <p className="text-xs text-zinc-400 font-bold">Documento PDF Incorporado</p>
+                      <a 
+                        href={selectedReceipt.base64} 
+                        download={selectedReceipt.name}
+                        className="inline-flex items-center justify-center px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md font-sans"
+                      >
+                        💾 Baixar PDF para Visualizar
+                      </a>
+                    </div>
+                  ) : (
+                    <img 
+                      referrerPolicy="no-referrer"
+                      src={selectedReceipt.base64} 
+                      alt="Comprovante de pagamento" 
+                      className="max-w-full max-h-[50vh] object-contain rounded border border-white/5 shadow"
+                    />
+                  )}
+                </div>
+
+                <div className="mt-4 flex gap-2 justify-end font-sans">
+                  <a 
+                    href={selectedReceipt.base64} 
+                    download={selectedReceipt.name}
+                    className="px-4 py-2 bg-zinc-900 border border-white/10 text-white hover:bg-zinc-800 rounded-xl text-xs uppercase font-bold tracking-wider text-center transition-all flex items-center justify-center gap-1.5"
+                  >
+                    💾 Baixar Arquivo
+                  </a>
+                  <button 
+                    onClick={() => setSelectedReceipt(null)}
+                    className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black rounded-xl text-xs uppercase font-bold tracking-wider transition-all cursor-pointer shadow-md"
+                  >
+                    Concluído
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
     </Layout>
   );
 };
