@@ -20,6 +20,7 @@ import Documentation from '@/pages/Documentation';
 import Terms from '@/pages/Terms';
 import Privacy from '@/pages/Privacy';
 import ResetPassword from '@/pages/ResetPassword';
+import CollaborativeNetwork from '@/pages/CollaborativeNetwork';
 import { ShieldCheck, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/UI';
 
@@ -108,6 +109,7 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/colaborativa" element={<CollaborativeNetwork />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/docs" element={<Documentation />} />
       <Route path="/terms" element={<Terms />} />

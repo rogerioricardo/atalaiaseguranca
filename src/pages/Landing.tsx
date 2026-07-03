@@ -481,6 +481,31 @@ const Landing: React.FC = () => {
         </div>
       </section>
 
+      {/* Seção Rede Colaborativa (Banner) */}
+      <section className="py-24 bg-[#010101] border-y border-white/5 relative overflow-hidden font-sans print:hidden">
+        <div className="absolute top-0 right-1/4 w-[400px] h-[400px] bg-atalaia-neon/5 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-0 left-1/4 w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
+        
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="bg-[#040404] border border-white/10 rounded-3xl p-10 md:p-14 text-center shadow-2xl relative overflow-hidden group hover:border-atalaia-neon/30 transition-colors">
+            <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=1200&auto=format&fit=crop&q=60')] opacity-5 mix-blend-luminosity bg-cover bg-center pointer-events-none" />
+            
+            <div className="relative z-10 flex flex-col items-center">
+              <div className="w-16 h-16 rounded-2xl bg-[#111] border border-atalaia-neon/30 text-atalaia-neon flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(0,255,102,0.15)] group-hover:scale-110 transition-transform">
+                <ShieldCheck size={32} />
+              </div>
+              <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">Rede Colaborativa Atalaia</h2>
+              <p className="text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed text-lg">
+                Sua câmera pode proteger toda a comunidade. Descubra como compartilhar voluntariamente imagens de áreas públicas e ajudar equipes de segurança, bombeiros e vizinhos em situações de emergência.
+              </p>
+              <button onClick={() => navigate('/colaborativa')} className="px-8 py-4 bg-atalaia-neon text-black font-bold uppercase tracking-wide rounded-xl hover:bg-emerald-400 transition-colors flex items-center gap-2 shadow-[0_0_20px_rgba(0,255,102,0.3)]">
+                Conhecer o Programa <ShieldCheck size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Seção Mapa de Câmeras em Tempo Real para Visitantes */}
       <section id="mapa-cameras" className="py-16 md:py-24 bg-[#040404] border-t border-b border-white/5 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center mb-12">
