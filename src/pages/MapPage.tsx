@@ -6,7 +6,7 @@ import { MockService } from '../services/mockService';
 import { User, Neighborhood, UserRole, Camera } from '../types';
 import L from 'leaflet';
 import { useAuth } from '@/auth/context';
-import { Video, MapPin, Globe, Lock, AlertTriangle } from 'lucide-react';
+import { Video, MapPin, Globe, Lock, AlertTriangle, Wrench } from 'lucide-react';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { supabase } from '../lib/supabaseClient';
 
@@ -107,6 +107,20 @@ const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ 
                         </button>
                     </div>
                 </div>
+              ) : !cam.iframeCode || cam.iframeCode.trim() === '' ? (
+                  <div className="w-full h-full relative flex flex-col items-center justify-center bg-[#0a0a0a] text-center overflow-hidden p-2">
+                      {cam.maintenancePhotoUrl ? (
+                          <>
+                             <img src={cam.maintenancePhotoUrl} alt="Manutenção" className="absolute inset-0 w-full h-full object-cover" />
+                          </>
+                      ) : (
+                          <>
+                              <Wrench className="text-gray-500 mb-1 animate-pulse" size={24} />
+                              <h4 className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Em Manutenção</h4>
+                              <p className="text-[8px] text-gray-500 mt-1 max-w-[150px]">Em breve estará transmitindo.</p>
+                          </>
+                      )}
+                  </div>
               ) : cam.iframeCode.trim().startsWith('<') ? (
                   <iframe 
                       srcDoc={`
@@ -120,8 +134,8 @@ const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ 
                               <body>${cam.iframeCode}</body>
                           </html>
                       `}
-                      className="w-full h-full border-0"
-                      allowFullScreen
+                      className="w-full h-full border-0 pointer-events-none"
+                          allowFullScreen
                   />
               ) : (cam.iframeCode.trim().toLowerCase().startsWith('http://') || (cam.iframeCode.trim().startsWith('<') && cam.iframeCode.toLowerCase().includes('src="http://'))) ? (
                 <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 border border-amber-500/20 px-4 text-center">
@@ -135,7 +149,7 @@ const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ 
                             const url = cam.iframeCode.trim().startsWith('<') 
                                 ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
                                 : cam.iframeCode;
-                            window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+                            try { window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes'); } catch (e) { console.warn("Invalid URL", e); }
                         }}
                         className="px-2 py-1 bg-atalaia-neon border border-black rounded-md text-[8px] font-black text-black hover:scale-105 transition-transform shadow-[0_0_10px_rgba(0,255,102,0.4)]"
                     >
@@ -147,7 +161,7 @@ const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ 
                       <iframe 
                           src={cam.iframeCode} 
                           title={cam.name}
-                          className="w-full h-full border-0" 
+                          className="w-full h-full border-0 pointer-events-none"
                           allowFullScreen 
                           referrerPolicy="no-referrer"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -158,7 +172,7 @@ const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ 
                                   const url = cam.iframeCode.trim().startsWith('<') 
                                       ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
                                       : cam.iframeCode;
-                                  window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+                                  try { window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes'); } catch (e) { console.warn("Invalid URL", e); }
                               }}
                               className="pointer-events-auto bg-atalaia-neon text-black px-2 py-1 rounded text-[8px] font-black uppercase shadow-lg transform active:scale-95 transition-all"
                           >
@@ -270,6 +284,12 @@ const MapPage: React.FC = () => {
                 <TileLayer
                     attribution={SATELLITE_ATTRIBUTION}
                     url={SATELLITE_URL}
+                />
+                <TileLayer
+                    url='https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'
+                />
+                <TileLayer
+                    url='https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}'
                 />
 
                 {/* User Markers */}

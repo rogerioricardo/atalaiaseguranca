@@ -9,7 +9,7 @@ import {
     Video, Plus, Trash2, Search, MapPin, 
     AlertTriangle, Shield, CheckCircle, Info, ExternalLink,
     ChevronRight, Camera as CameraIcon, Loader2, Edit2, X, Lock,
-    Maximize2, Clock
+    Maximize2, Clock, Wrench
 } from 'lucide-react';
 import { Card, Button, Input, Badge } from '@/components/UI';
 import { UpgradeModal } from '@/components/UpgradeModal';
@@ -42,17 +42,43 @@ interface CameraStreamPlayerProps {
   id: string;
   onExpand: () => void;
   isModal?: boolean;
+  maintenancePhotoUrl?: string;
 }
 
 // Player de streaming memoizado que assegura que o iframe nunca re-renderize a menos que suas propriedades de conexão mudem
-const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ iframeCode, name, id, onExpand, isModal = false }) => {
+const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ iframeCode, name, id, onExpand, isModal = false, maintenancePhotoUrl }) => {
+  if (!iframeCode || iframeCode.trim() === '') {
+    return (
+      <div className="relative w-full h-full group/video-container flex flex-col items-center justify-center bg-[#0a0a0a] text-center overflow-hidden">
+        {maintenancePhotoUrl ? (
+           <>
+             <img src={maintenancePhotoUrl} alt="Câmera em manutenção" className="absolute inset-0 w-full h-full object-cover" />
+           </>
+        ) : (
+           <div className="p-4 flex flex-col items-center justify-center">
+             <Wrench className="text-gray-500 mb-2 animate-pulse" size={32} />
+             <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest">Câmera em Manutenção</h3>
+             <p className="text-xs text-gray-500 mt-2 max-w-[250px]">Em breve estará transmitindo.</p>
+           </div>
+        )}
+        <button 
+          onClick={(e) => { e.stopPropagation(); onExpand(); }} 
+          className={`absolute top-2 right-2 p-1.5 bg-black/60 rounded flex items-center justify-center text-white/50 hover:text-white hover:bg-black/80 transition-colors z-30 ${isModal ? 'hidden' : 'opacity-0 group-hover/video-container:opacity-100'}`}
+          title="Expandir câmera"
+        >
+          <Maximize2 size={16} />
+        </button>
+      </div>
+    );
+  }
+
   const isHttp = iframeCode.trim().toLowerCase().startsWith('http://') || (iframeCode.trim().startsWith('<') && iframeCode.toLowerCase().includes('src="http://'));
 
   const handleOpenHttp = () => {
     const url = iframeCode.trim().startsWith('<') 
       ? iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
       : iframeCode;
-    window.open(url, `cam_${id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+    try { window.open(url, `cam_${id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes'); } catch (e) { console.warn("Invalid URL", e); }
   };
 
   // Garante autoplay nos formatos de link padrão e oculta barra de controles (play/stop/progress)
@@ -167,25 +193,20 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ ifra
             </html>
           `}
           title={name}
-          className="w-full h-full border-0 absolute inset-0"
+          className="w-full h-full border-0 absolute inset-0 pointer-events-none"
           allowFullScreen
           scrolling="no"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         />
         {!isModal && (
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/video-container:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 pointer-events-none z-10">
-            <Button 
-              className="pointer-events-auto bg-atalaia-neon text-black font-black text-[10px] px-3.5 h-8 gap-1.5 shadow-[0_0_20px_rgba(0,255,102,0.4)] hover:scale-105 transition-all text-xs animate-fade-in"
-              onClick={onExpand}
-            >
-              <Maximize2 size={12} strokeWidth={2.5} /> EXPANDIR E MONITORAR
-            </Button>
+            
             <Button 
               variant="outline"
               className="pointer-events-auto bg-black/70 border-white/10 text-[10px] px-3 h-7 gap-1 hover:bg-black text-white hover:text-atalaia-neon transition-all"
-              onClick={handleOpenHttp}
+              onClick={onExpand}
             >
-              <ExternalLink size={11} /> MONITOR POPUP
+              <Maximize2 size={11} /> MONITOR POPUP
             </Button>
           </div>
         )}
@@ -219,8 +240,8 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ ifra
       <iframe 
         src={enhancedSrc} 
         title={name}
-        className="w-full h-full border-0 absolute inset-0" 
-        allowFullScreen 
+        className="w-full h-full border-0 absolute inset-0 pointer-events-none"
+         allowFullScreen 
         referrerPolicy="no-referrer"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         loading="eager"
@@ -228,12 +249,7 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ ifra
       />
       {!isModal && (
         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/video-container:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 pointer-events-none z-10">
-          <Button 
-            className="pointer-events-auto bg-atalaia-neon text-black font-black text-[10px] px-3.5 h-8 gap-1.5 shadow-[0_0_20px_rgba(0,255,102,0.4)] hover:scale-105 transition-all text-xs"
-            onClick={onExpand}
-          >
-            <Maximize2 size={12} strokeWidth={2.5} /> EXPANDIR E MONITORAR
-          </Button>
+          
           <Button 
             variant="outline"
             className="pointer-events-auto bg-black/70 border-white/10 text-[10px] px-3 h-7 gap-1 hover:bg-black text-white hover:text-atalaia-neon transition-all"
@@ -255,6 +271,8 @@ const Cameras: React.FC = () => {
   const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [hoodSearchTerm, setHoodSearchTerm] = useState('');
+  const [manageHoodSearchTerm, setManageHoodSearchTerm] = useState('');
   const [selectedNeighborhoodId, setSelectedNeighborhoodId] = useState<string>('');
   
   // States for adding/editing camera
@@ -264,7 +282,9 @@ const Cameras: React.FC = () => {
   const [newCameraLat, setNewCameraLat] = useState('');
   const [newCameraLng, setNewCameraLng] = useState('');
   const [newCameraPhoto, setNewCameraPhoto] = useState('');
+  const [newMaintenancePhoto, setNewMaintenancePhoto] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isUploadingMaintenance, setIsUploadingMaintenance] = useState(false);
   const [editingCameraId, setEditingCameraId] = useState<string | null>(null);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [supportMessage, setSupportMessage] = useState('');
@@ -279,16 +299,73 @@ const Cameras: React.FC = () => {
   const [addingHood, setAddingHood] = useState(false);
   const [cameraToDelete, setCameraToDelete] = useState<Camera | null>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = (event) => {
+              const img = new Image();
+              img.src = event.target?.result as string;
+              img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  const MAX_WIDTH = 800;
+                  const MAX_HEIGHT = 800;
+                  let width = img.width;
+                  let height = img.height;
+
+                  if (width > height) {
+                      if (width > MAX_WIDTH) {
+                          height *= MAX_WIDTH / width;
+                          width = MAX_WIDTH;
+                      }
+                  } else {
+                      if (height > MAX_HEIGHT) {
+                          width *= MAX_HEIGHT / height;
+                          height = MAX_HEIGHT;
+                      }
+                  }
+
+                  canvas.width = width;
+                  canvas.height = height;
+                  const ctx = canvas.getContext('2d');
+                  ctx?.drawImage(img, 0, 0, width, height);
+                  resolve(canvas.toDataURL('image/jpeg', 0.7));
+              };
+              img.onerror = (err) => reject(err);
+          };
+          reader.onerror = (err) => reject(err);
+      });
+  };
+
+  const handleMaintenanceFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setIsUploadingMaintenance(true);
+          try {
+              const compressedBase64 = await compressImage(file);
+              setNewMaintenancePhoto(compressedBase64);
+          } catch (err) {
+              console.error("Erro ao comprimir imagem:", err);
+              alert("Erro ao processar a imagem. Tente uma imagem menor.");
+          } finally {
+              setIsUploadingMaintenance(false);
+          }
+      }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
           setIsUploading(true);
-          const reader = new FileReader();
-          reader.onloadend = () => {
-              setNewCameraPhoto(reader.result as string);
+          try {
+              const compressedBase64 = await compressImage(file);
+              setNewCameraPhoto(compressedBase64);
+          } catch (err) {
+              console.error("Erro ao comprimir imagem:", err);
+              alert("Erro ao processar a imagem. Tente uma imagem menor.");
+          } finally {
               setIsUploading(false);
-          };
-          reader.readAsDataURL(file);
+          }
       }
   };
 
@@ -299,6 +376,7 @@ const Cameras: React.FC = () => {
       setNewCameraLat(cam.lat?.toString() || '');
       setNewCameraLng(cam.lng?.toString() || '');
       setNewCameraPhoto(cam.locationPhotoUrl || '');
+      setNewMaintenancePhoto(cam.maintenancePhotoUrl || '');
       
       // Select the neighborhood of the camera being edited
       setSelectedManageHoodId(cam.neighborhoodId);
@@ -311,6 +389,7 @@ const Cameras: React.FC = () => {
       setNewCameraLat('');
       setNewCameraLng('');
       setNewCameraPhoto('');
+      setNewMaintenancePhoto('');
   };
 
   const handleSendSupport = async (e: React.FormEvent) => {
@@ -467,26 +546,39 @@ const Cameras: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Grid: Cameras List */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
-                {user?.role === UserRole.ADMIN && (
-                    <Button 
-                        variant={selectedNeighborhoodId === '' ? 'primary' : 'outline'}
-                        onClick={() => setSelectedNeighborhoodId('')}
-                        className="whitespace-nowrap px-4 py-2 text-xs"
-                    >
-                        Todas
-                    </Button>
-                )}
-                {managedNeighborhoods.map(hood => (
-                    <Button
-                        key={hood.id}
-                        variant={selectedNeighborhoodId === hood.id ? 'primary' : 'outline'}
-                        onClick={() => setSelectedNeighborhoodId(hood.id)}
-                        className="whitespace-nowrap px-4 py-2 text-xs"
-                    >
-                        {hood.name}
-                    </Button>
-                ))}
+            {/* Filtro de Bairros */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-4">
+               <div className="relative min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={14} />
+                  <input 
+                      type="text" 
+                      placeholder="Filtrar bairros..." 
+                      className="w-full bg-black/60 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:outline-none focus:border-atalaia-neon/50 transition-colors"
+                      value={hoodSearchTerm}
+                      onChange={e => setHoodSearchTerm(e.target.value)}
+                  />
+               </div>
+               <div className="flex-1 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  {user?.role === UserRole.ADMIN && (
+                      <Button 
+                          variant={selectedNeighborhoodId === '' ? 'primary' : 'outline'}
+                          onClick={() => setSelectedNeighborhoodId('')}
+                          className="whitespace-nowrap px-4 py-2 text-xs"
+                      >
+                          Todas
+                      </Button>
+                  )}
+                  {managedNeighborhoods.filter(h => h.name.toLowerCase().includes(hoodSearchTerm.toLowerCase())).map(hood => (
+                      <Button
+                          key={hood.id}
+                          variant={selectedNeighborhoodId === hood.id ? 'primary' : 'outline'}
+                          onClick={() => setSelectedNeighborhoodId(hood.id)}
+                          className="whitespace-nowrap px-4 py-2 text-xs"
+                      >
+                          {hood.name}
+                      </Button>
+                  ))}
+               </div>
             </div>
 
             {loading ? (
@@ -528,7 +620,7 @@ const Cameras: React.FC = () => {
                                  </div>
                              </div>
                          ) : (
-                             <CameraStreamPlayer
+                             <CameraStreamPlayer maintenancePhotoUrl={cam.maintenancePhotoUrl}
                                  iframeCode={cam.iframeCode}
                                  name={cam.name}
                                  id={cam.id}
@@ -568,7 +660,7 @@ const Cameras: React.FC = () => {
                                                     const url = cam.iframeCode.trim().startsWith('<') 
                                                         ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
                                                         : cam.iframeCode;
-                                                    window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+                                                    try { window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes'); } catch (e) { console.warn("Invalid URL", e); }
                                                 }}
                                                 className="flex items-center justify-center gap-1.5 h-8 bg-atalaia-neon text-black text-[10px] font-black shadow-[0_0_15px_rgba(0,255,102,0.3)] hover:scale-105 transition-transform"
                                             >
@@ -604,7 +696,7 @@ const Cameras: React.FC = () => {
                                                  const url = cam.iframeCode.trim().startsWith('<') 
                                                      ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
                                                      : cam.iframeCode;
-                                                 window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
+                                                 try { window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes'); } catch (e) { console.warn("Invalid URL", e); }
                                              }}
                                          >
                                              <ExternalLink size={11} /> MONITOR POPUP
@@ -617,27 +709,7 @@ const Cameras: React.FC = () => {
                              <Badge color="green" className="text-[8px] px-1.5 animate-pulse">LIVE</Badge>
                              <Badge color="blue" className="text-[8px] px-1.5 bg-black/50 backdrop-blur-sm border-white/20">HD</Badge>
                          </div>
-                         <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all pointer-events-auto z-10">
-                             <button 
-                                onClick={() => setSelectedCameraForModal(cam)}
-                                className="p-1.5 bg-gradient-to-r from-atalaia-neon to-emerald-500 hover:scale-105 text-black rounded-lg shadow-[0_0_15px_rgba(0,255,102,0.4)] transition-all flex items-center justify-center"
-                                title="Expandir Visualização"
-                             >
-                                <Maximize2 size={12} strokeWidth={2.5} />
-                             </button>
-                             <button 
-                                onClick={() => {
-                                    const url = cam.iframeCode.trim().startsWith('<') 
-                                        ? cam.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
-                                        : cam.iframeCode;
-                                    window.open(url, `cam_${cam.id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes');
-                                }}
-                                className="p-1.5 bg-black/75 hover:bg-black text-white hover:text-atalaia-neon border border-white/10 rounded-lg transition-all flex items-center justify-center"
-                                title="Abrir Monitor Externo Compacto"
-                             >
-                                <ExternalLink size={12} />
-                             </button>
-                         </div>
+                         
                       </div>
                       <div className="p-4 bg-gradient-to-b from-transparent to-black/20">
                         <div className="flex items-center justify-between">
@@ -752,6 +824,17 @@ const Cameras: React.FC = () => {
                                 </div>
                             )}
 
+                            <div className="relative mb-2">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={14} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar bairro para gerenciar..." 
+                                    className="w-full bg-black/60 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:outline-none focus:border-atalaia-neon/50 transition-colors"
+                                    value={manageHoodSearchTerm}
+                                    onChange={e => setManageHoodSearchTerm(e.target.value)}
+                                    disabled={user?.role === UserRole.INTEGRATOR}
+                                />
+                            </div>
                             <select 
                                 value={selectedManageHoodId}
                                 onChange={(e) => setSelectedManageHoodId(e.target.value)}
@@ -759,7 +842,7 @@ const Cameras: React.FC = () => {
                                 className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-atalaia-neon/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                             >
                                 <option value="">Selecione um bairro</option>
-                                {managedNeighborhoods.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                                {managedNeighborhoods.filter(h => h.name.toLowerCase().includes(manageHoodSearchTerm.toLowerCase())).map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                             </select>
                         </div>
 
@@ -771,10 +854,10 @@ const Cameras: React.FC = () => {
                                     const lng = newCameraLng ? parseFloat(newCameraLng) : undefined;
                                     
                                     if (editingCameraId) {
-                                        await MockService.updateCamera(editingCameraId, newCameraName, newCameraCode, lat, lng, newCameraPhoto);
+                                        await MockService.updateCamera(editingCameraId, newCameraName, newCameraCode, lat, lng, newCameraPhoto, newMaintenancePhoto, selectedManageHoodId);
                                         alert('Câmera atualizada com sucesso!');
                                     } else {
-                                        await MockService.addCamera(selectedManageHoodId, newCameraName, newCameraCode, lat, lng, newCameraPhoto); 
+                                        await MockService.addCamera(selectedManageHoodId, newCameraName, newCameraCode, lat, lng, newCameraPhoto, newMaintenancePhoto); 
                                         alert('Câmera adicionada com sucesso!');
                                     }
                                     
@@ -802,7 +885,7 @@ const Cameras: React.FC = () => {
                                 </div>
                                 <Input label="Nome da Câmera" value={newCameraName} onChange={e => setNewCameraName(e.target.value)} placeholder="Ex: Câmera Rua X" required />
                                 <div className="space-y-1">
-                                    <Input label="Código Iframe ou Link" value={newCameraCode} onChange={e => setNewCameraCode(e.target.value)} placeholder="https://... ou <iframe... />" required />
+                                    <Input label="Código Iframe ou Link" value={newCameraCode} onChange={e => setNewCameraCode(e.target.value)} placeholder="https://... ou <iframe... />" />
                                     <p className="text-[9px] text-amber-500/80 px-1 leading-tight">
                                         💡 <strong>Atenção MisterServer / Servidores Locais:</strong> Browsers modernos bloqueiam links <code className="bg-black/40 px-1">http://</code> por segurança em sites seguros. Se sua câmera não aparecer, use o botão de <strong>Monitor Externo</strong> que aparecerá no card, ou configure SSL (HTTPS) no seu servidor.
                                     </p>
@@ -824,6 +907,22 @@ const Cameras: React.FC = () => {
                                         {newCameraPhoto && (
                                             <div className="w-12 h-12 rounded-lg overflow-hidden border border-atalaia-neon/30">
                                                 <img src={newCameraPhoto} className="w-full h-full object-cover" alt="Preview" />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest pl-1">Capa de Manutenção</label>
+                                    <div className="flex items-center gap-4">
+                                        <label className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-black border border-white/10 rounded-xl cursor-pointer hover:border-atalaia-neon/50 transition-all text-xs font-bold text-gray-400">
+                                            {isUploadingMaintenance ? <Loader2 className="animate-spin" size={16} /> : <CameraIcon size={16} />}
+                                            {newMaintenancePhoto ? 'Capa Selecionada' : 'Fazer Upload da Capa'}
+                                            <input type="file" className="hidden" accept="image/*" onChange={handleMaintenanceFileChange} />
+                                        </label>
+                                        {newMaintenancePhoto && (
+                                            <div className="w-12 h-12 rounded-lg overflow-hidden border border-atalaia-neon/30">
+                                                <img src={newMaintenancePhoto} className="w-full h-full object-cover" alt="Preview Manutenção" />
                                             </div>
                                         )}
                                     </div>
@@ -982,7 +1081,7 @@ const Cameras: React.FC = () => {
 
               {/* Feed de Vídeo Ampliado */}
               <div className="flex-1 min-h-[300px] bg-black relative flex items-center justify-center">
-                 <CameraStreamPlayer
+                 <CameraStreamPlayer maintenancePhotoUrl={selectedCameraForModal.maintenancePhotoUrl}
                      iframeCode={selectedCameraForModal.iframeCode}
                      name={selectedCameraForModal.name}
                      id={selectedCameraForModal.id}
@@ -1012,7 +1111,7 @@ const Cameras: React.FC = () => {
                             const url = selectedCameraForModal.iframeCode.trim().startsWith('<') 
                                 ? selectedCameraForModal.iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
                                 : selectedCameraForModal.iframeCode;
-                            window.open(url, `cam_${selectedCameraForModal.id}`, '_blank');
+                            try { window.open(url, `cam_${selectedCameraForModal.id}`, '_blank'); } catch (e) { console.warn("Invalid URL", e); }
                         }}
                     >
                         ABRIR EM NOVA ABA INTEIRA

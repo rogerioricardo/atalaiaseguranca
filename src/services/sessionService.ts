@@ -129,7 +129,7 @@ export const SessionService = {
       });
 
       if (error) {
-        console.error("[SessionService] Error pushing user_sessions row:", error);
+        console.warn("[SessionService] Could not push user_sessions row (likely no db config):", error);
         throw error;
       }
 
@@ -151,7 +151,7 @@ export const SessionService = {
 
       return token;
     } catch (error) {
-      console.error("[SessionService] Critical error registering DB session:", error);
+      console.warn("[SessionService] Could not register DB session (fallback mode):", error);
       return token; // fallback token to avoid blocking login flow
     }
   },
@@ -196,7 +196,7 @@ export const SessionService = {
         isCurrent: s.token === currentToken,
       }));
     } catch (e) {
-      console.error("[SessionService] Error fetching user_sessions:", e);
+      console.warn("[SessionService] Error fetching user_sessions:", e);
       return [];
     }
   },
@@ -214,7 +214,7 @@ export const SessionService = {
 
     const { error } = await supabase.from('user_sessions').delete().eq('id', sessionId);
     if (error) {
-      console.error("[SessionService] Error deleting session in DB:", error);
+      console.warn("[SessionService] Error deleting session in DB:", error);
       throw error;
     }
   },
@@ -240,7 +240,7 @@ export const SessionService = {
       .not('token', 'eq', currentToken);
 
     if (error) {
-      console.error("[SessionService] Error terminating other sessions in DB:", error);
+      console.warn("[SessionService] Error terminating other sessions in DB:", error);
       throw error;
     }
   },

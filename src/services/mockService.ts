@@ -176,7 +176,8 @@ export const MockService = {
                     iframeCode: c.iframe_code, 
                     lat: c.lat, 
                     lng: c.lng,
-                    locationPhotoUrl: c.location_photo_url
+                    locationPhotoUrl: c.location_photo_url,
+                    maintenancePhotoUrl: c.maintenance_photo_url
                 }));
             } else if (error) {
                 console.warn("[MockService] Erro de permissão ou banco ao buscar câmeras do Supabase:", error.message);
@@ -211,7 +212,8 @@ export const MockService = {
                 iframeCode: c.iframe_code, 
                 lat: c.lat, 
                 lng: c.lng,
-                locationPhotoUrl: c.location_photo_url
+                locationPhotoUrl: c.location_photo_url,
+                maintenancePhotoUrl: c.maintenance_photo_url
             }));
         } else if (error) {
             console.warn("[MockService] Supabase cameras query returned error, using local fallback.", error);
@@ -233,7 +235,7 @@ export const MockService = {
     return Array.from(mergedMap.values());
   },
 
-  addCamera: async (neighborhoodId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string): Promise<void> => {
+  addCamera: async (neighborhoodId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string, maintenancePhotoUrl?: string): Promise<void> => {
     const id = typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : (Math.random().toString(36).substring(2) + Date.now().toString(36));
     
     const local = getLocalCameras();
@@ -244,7 +246,8 @@ export const MockService = {
         iframeCode,
         lat,
         lng,
-        locationPhotoUrl
+        locationPhotoUrl,
+        maintenancePhotoUrl
     };
     local.push(newCam);
     saveLocalCameras(local);
@@ -257,7 +260,8 @@ export const MockService = {
             iframe_code: iframeCode,
             lat,
             lng,
-            location_photo_url: locationPhotoUrl
+            location_photo_url: locationPhotoUrl,
+            maintenance_photo_url: maintenancePhotoUrl
         }]);
         if (error) {
             console.warn("[MockService] Failed to write camera to Supabase, saved locally:", error);
@@ -267,7 +271,7 @@ export const MockService = {
     }
   },
 
-  updateCamera: async (cameraId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string): Promise<void> => {
+  updateCamera: async (cameraId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string, maintenancePhotoUrl?: string, neighborhoodId?: string): Promise<void> => {
     const local = getLocalCameras();
     const index = local.findIndex(c => c.id === cameraId);
     if (index !== -1) {
@@ -277,10 +281,22 @@ export const MockService = {
             iframeCode,
             lat,
             lng,
-            locationPhotoUrl
+            locationPhotoUrl,
+            maintenancePhotoUrl
         };
-        saveLocalCameras(local);
+    } else if (neighborhoodId) {
+        local.push({
+            id: cameraId,
+            neighborhoodId: neighborhoodId,
+            name,
+            iframeCode,
+            lat,
+            lng,
+            locationPhotoUrl,
+            maintenancePhotoUrl
+        });
     }
+    saveLocalCameras(local);
 
     try {
         const { error } = await supabase.from('cameras')
@@ -289,7 +305,8 @@ export const MockService = {
                 iframe_code: iframeCode,
                 lat,
                 lng,
-                location_photo_url: locationPhotoUrl
+                location_photo_url: locationPhotoUrl,
+                maintenance_photo_url: maintenancePhotoUrl
             })
             .eq('id', cameraId);
         if (error) {

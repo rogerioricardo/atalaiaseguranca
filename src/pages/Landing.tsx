@@ -155,28 +155,29 @@ const CameraPopup: React.FC<CameraPopupProps> = ({ cam, neighborhoodName }) => {
   }
 
   return (
-    <div className="p-2 min-w-[220px]">
-      <div className="flex items-center gap-2 mb-2">
-        <Video size={16} className="text-emerald-500 animate-pulse shrink-0" />
-        <div className="flex flex-col">
-          <strong className="text-sm font-bold text-zinc-900 leading-tight">
+    <div className="w-[240px] p-1 flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <Video size={18} className="text-emerald-500 animate-pulse shrink-0" />
+        <div className="flex flex-col overflow-hidden">
+          <strong className="text-sm font-bold text-zinc-900 leading-tight truncate">
             {locInfo?.bairro}
           </strong>
-          <span className="text-xs text-zinc-600 font-medium">
+          <span className="text-xs text-zinc-600 font-medium truncate">
             {locInfo?.cidade} - {locInfo?.estado}
           </span>
         </div>
       </div>
-      <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-medium mb-3">
-        <MapPin size={12} className="text-zinc-400" />
-        <span>Poste Atalaia de Segurança</span>
+      <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-medium">
+        <MapPin size={12} className="text-zinc-400 shrink-0" />
+        <span className="truncate">Poste Atalaia de Segurança</span>
       </div>
-      <div className="bg-zinc-50 rounded-lg p-2.5 border border-zinc-200 text-center">
-        <p className="text-[10px] text-zinc-500 font-extrabold flex items-center justify-center gap-1 uppercase">
-          <Lock size={12} className="text-zinc-600" /> Acesso Restrito
+      <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/60 rounded-md p-2.5 border border-emerald-200/80 text-center mt-1 w-full box-border shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-emerald-400 to-emerald-500"></div>
+        <p className="text-[10px] text-emerald-800 font-extrabold flex items-center justify-center gap-1.5 uppercase mb-1 tracking-wide">
+          <ShieldCheck size={14} className="text-emerald-500 animate-pulse drop-shadow-sm" /> ACESSO RESTRITO
         </p>
-        <p className="text-[9px] text-zinc-400 mt-1 leading-tight">
-          Imagens ao vivo disponíveis exclusivamente para moradores cadastrados na plataforma.
+        <p className="text-[9px] text-emerald-700/90 leading-relaxed m-0 font-medium whitespace-normal break-words">
+          Imagens ao vivo exclusivas para moradores cadastrados na plataforma.
         </p>
       </div>
     </div>
@@ -539,6 +540,12 @@ const Landing: React.FC = () => {
                 <TileLayer
                   attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
                   url='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                />
+                <TileLayer
+                  url='https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'
+                />
+                <TileLayer
+                  url='https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}'
                 />
                 <FitBounds cameras={cameras} />
                 {cameras.map((cam) => cam.lat && cam.lng && (

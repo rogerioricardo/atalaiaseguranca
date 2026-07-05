@@ -68,6 +68,7 @@ export interface Camera {
   lat?: number;
   lng?: number;
   locationPhotoUrl?: string;
+  maintenancePhotoUrl?: string;
 }
 
 export interface SupportTicket {
