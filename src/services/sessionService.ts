@@ -1,3 +1,4 @@
+import { MockService } from './mockService';
 import { supabase, isRealSupabase } from '../lib/supabaseClient';
 import { UserSession } from '../types';
 
@@ -98,7 +99,7 @@ export const SessionService = {
         const body = `Uma nova conexão foi registrada de um dispositivo ${os} (${browser}) com IP ${ipAddress}. Todas as sessões anteriores foram desconectadas.`;
         
         // Push notification simulation in chat or notification bar
-        const { MockService } = await import('./mockService');
+        
         const settings = await MockService.getSettings();
         if (settings['template_broadcast_prefix']) {
           const numbers = [localStorage.getItem('user_last_phone') || ''];
@@ -135,7 +136,7 @@ export const SessionService = {
 
       // Notify user of new login via integrated notification center & whatsapp
       try {
-        const { MockService } = await import('./mockService');
+        
         const userProfiles = await MockService.getUsers();
         const fullUser = userProfiles.find(u => u.id === userId);
         
