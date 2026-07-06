@@ -261,6 +261,8 @@ const SCRDashboard = ({ user, neighborhood }: { user: User, neighborhood?: Neigh
             if (pendingAction.type === 'CHECKIN') {
                  if ('geolocation' in navigator) {
                     navigator.geolocation.getCurrentPosition(async (position) => {
+                        try {
+                            
                         await MockService.registerPatrol(
                             user.id,
                             user.neighborhoodId!,
@@ -269,8 +271,13 @@ const SCRDashboard = ({ user, neighborhood }: { user: User, neighborhood?: Neigh
                             position.coords.longitude,
                             targetUserId
                         );
-                        showToast(`Check-in de ronda concluído! ${targetUser ? `Notificação enviada para o WhatsApp de ${targetUser.name}.` : ''}`, 'success');
-                        setPatrolLoading(false);
+                        
+                            showToast(`Check-in de ronda concluído! ${targetUser ? `Notificação enviada para o WhatsApp de ${targetUser.name}.` : ''}`, 'success');
+                        } catch (err: any) {
+                            showToast("Erro ao registrar ronda: " + (err.message || 'Falha desconhecida'), 'error');
+                        } finally {
+                            setPatrolLoading(false);
+                        }
                     }, (error) => {
                         showToast("Erro ao obter GPS: " + error.message, 'error');
                         setPatrolLoading(false);
@@ -280,16 +287,21 @@ const SCRDashboard = ({ user, neighborhood }: { user: User, neighborhood?: Neigh
                     setPatrolLoading(false);
                 }
             } else if (pendingAction.type === 'LOG') {
-                await MockService.registerPatrol(
-                    user.id, 
-                    user.neighborhoodId!, 
-                    `OCORRÊNCIA: ${pendingAction.note}`,
-                    undefined,
-                    undefined,
-                    targetUserId
-                );
-                showToast(`Registro inserido! ${targetUser ? `Alerta WhatsApp disparado para ${targetUser.name}.` : 'Ocorrência geral registrada.'}`, 'success');
-                setPatrolLoading(false);
+                try {
+                    await MockService.registerPatrol(
+                        user.id, 
+                        user.neighborhoodId!, 
+                        `OCORRÊNCIA: ${pendingAction.note}`,
+                        undefined,
+                        undefined,
+                        targetUserId
+                    );
+                    showToast(`Registro inserido! ${targetUser ? `Alerta WhatsApp disparado para ${targetUser.name}.` : 'Ocorrência geral registrada.'}`, 'success');
+                } catch (err: any) {
+                    showToast("Erro ao registrar ocorrência: " + (err.message || 'Falha desconhecida'), 'error');
+                } finally {
+                    setPatrolLoading(false);
+                }
                 
                 // Refresh local timeline
                 const alerts = await MockService.getAlerts(user.neighborhoodId);

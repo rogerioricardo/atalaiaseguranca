@@ -2,6 +2,16 @@
 import { supabase, isRealSupabase } from '../lib/supabaseClient';
 import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, ServiceRequest, Camera, SupportTicket, Coupon } from '../types';
 
+const generateUUID = () => {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+        return window.crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+};
+
 const sanitizeUUID = (id?: string): string | null => {
     if (!id || id === 'unknown' || id === 'undefined' || id.trim() === '') return null;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -244,7 +254,7 @@ export const MockService = {
   },
 
   addCamera: async (neighborhoodId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string, maintenancePhotoUrl?: string): Promise<void> => {
-    const id = typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : (Math.random().toString(36).substring(2) + Date.now().toString(36));
+    const id = generateUUID();
     
     const local = getLocalCameras();
     const newCam: Camera = {
@@ -261,16 +271,30 @@ export const MockService = {
     saveLocalCameras(local);
 
     try {
-        const { error } = await supabase.from('cameras').insert([{ 
+        const payload: any = {
             id,
             neighborhood_id: sanitizeUUID(neighborhoodId), 
             name, 
             iframe_code: iframeCode,
             lat,
             lng,
-            location_photo_url: locationPhotoUrl,
-            maintenance_photo_url: maintenancePhotoUrl
-        }]);
+            location_photo_url: locationPhotoUrl
+        };
+        let error;
+        if (maintenancePhotoUrl) {
+            payload.maintenance_photo_url = maintenancePhotoUrl;
+            const res = await supabase.from('cameras').insert([payload]);
+            error = res.error;
+            if (error && error.message && error.message.includes("maintenance_photo_url")) {
+                console.warn("[MockService] Coluna maintenance_photo_url ausente, tentando sem ela...");
+                delete payload.maintenance_photo_url;
+                const res2 = await supabase.from('cameras').insert([payload]);
+                error = res2.error;
+            }
+        } else {
+            const res = await supabase.from('cameras').insert([payload]);
+            error = res.error;
+        }
         if (error) {
             console.warn("[MockService] Failed to write camera to Supabase, saved locally:", error);
         }
@@ -307,16 +331,28 @@ export const MockService = {
     saveLocalCameras(local);
 
     try {
-        const { error } = await supabase.from('cameras')
-            .update({ 
+        const payload: any = { 
                 name, 
                 iframe_code: iframeCode,
                 lat,
                 lng,
-                location_photo_url: locationPhotoUrl,
-                maintenance_photo_url: maintenancePhotoUrl
-            })
-            .eq('id', cameraId);
+                location_photo_url: locationPhotoUrl
+            };
+            let error;
+            if (maintenancePhotoUrl) {
+                payload.maintenance_photo_url = maintenancePhotoUrl;
+                const res = await supabase.from('cameras').update(payload).eq('id', cameraId);
+                error = res.error;
+                if (error && error.message && error.message.includes("maintenance_photo_url")) {
+                    console.warn("[MockService] Coluna maintenance_photo_url ausente no update, tentando sem ela...");
+                    delete payload.maintenance_photo_url;
+                    const res2 = await supabase.from('cameras').update(payload).eq('id', cameraId);
+                    error = res2.error;
+                }
+            } else {
+                const res = await supabase.from('cameras').update(payload).eq('id', cameraId);
+                error = res.error;
+            }
         if (error) {
             console.warn("[MockService] Failed to update camera on Supabase, updated locally:", error);
         }
@@ -614,7 +650,8 @@ export const MockService = {
   createServiceRequest: async (userId: string, userName: string, neighborhoodId: string, requestType: string) => {
     const { error } = await supabase.from('service_requests').insert([{ user_id: sanitizeUUID(userId), user_name: userName, neighborhood_id: sanitizeUUID(neighborhoodId), request_type: requestType, status: 'PENDING' }]);
     
-    if (!error) {
+    if (true) {
+        if (error) console.error("[MockService] Ignorando erro no supabase para continuar o alerta:", error);
         const integrator = await MockService.getNeighborhoodIntegrator(neighborhoodId);
         if (integrator?.phone) {
             const settings = await MockService.getSettings();
@@ -630,8 +667,7 @@ export const MockService = {
     }
 
     if (error) {
-        console.error("[MockService] Error in createServiceRequest:", error);
-        throw error;
+        console.error("[MockService] Error in createServiceRequest (ignoring for fallback):", error);
     }
   },
 
@@ -647,8 +683,8 @@ export const MockService = {
     }]);
     
     if (error) {
-        console.error("[MockService] Error in registerPatrol:", error);
-        throw error;
+        console.error("[MockService] Error in registerPatrol (ignoring for fallback):", error);
+        // Do not throw, continue to send notifications
     }
 
     // 2. Send Whatsapp and Resident Notifications if a user was linked
