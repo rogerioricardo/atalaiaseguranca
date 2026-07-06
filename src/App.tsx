@@ -192,6 +192,19 @@ const AppRoutes = () => {
 const VersionChecker = () => {
   useEffect(() => {
     let checking = false;
+    
+    // Unregister any active Service Workers to avoid aggressive caching
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+          registration.unregister();
+          console.log('ServiceWorker desregistrado com sucesso:', registration);
+        }
+      }).catch(function(err) {
+        console.error('Falha ao desregistrar Service Worker:', err);
+      });
+    }
+
     const checkVersion = async () => {
       if (checking) return;
       checking = true;
