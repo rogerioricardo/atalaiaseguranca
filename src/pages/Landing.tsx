@@ -193,16 +193,14 @@ const Landing: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const [allCameras, allHoods] = await Promise.all([
-          MockService.getAllSystemCameras(),
-          MockService.getNeighborhoods()
-        ]);
-        setCameras(allCameras);
-        setNeighborhoods(allHoods);
-      } catch (e) {
-        console.error("[Landing] Error fetching system data:", e);
-      }
+      // Fetch independently so a failure or hang in one doesn't block the other
+      MockService.getAllSystemCameras()
+        .then(setCameras)
+        .catch(e => console.error("[Landing] Error fetching cameras:", e));
+
+      MockService.getNeighborhoods()
+        .then(setNeighborhoods)
+        .catch(e => console.error("[Landing] Error fetching neighborhoods:", e));
     };
     fetchData();
   }, []);

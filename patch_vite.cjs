@@ -1,4 +1,7 @@
-import { defineConfig } from 'vite';
+const fs = require('fs');
+let content = fs.readFileSync('vite.config.ts', 'utf8');
+
+const replacement = `import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -45,3 +48,6 @@ export default defineConfig({
     host: true
   }
 });
+`;
+
+fs.writeFileSync('vite.config.ts', replacement);

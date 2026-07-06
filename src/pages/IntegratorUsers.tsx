@@ -20,7 +20,7 @@ const IntegratorUsers: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [adminFilterHood, setAdminFilterHood] = useState('');
-  const [filterTab, setFilterTab] = useState<'all' | 'trial' | 'subscribed' | 'free'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'team' | 'trial' | 'subscribed' | 'free'>('all');
   const [payments, setPayments] = useState<any[]>([]);
   const [selectedReceipt, setSelectedReceipt] = useState<{ userName: string, amount: number, name: string, base64: string } | null>(null);
   const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
@@ -193,7 +193,11 @@ const IntegratorUsers: React.FC = () => {
       const matchesHood = adminFilterHood ? r.neighborhoodId === adminFilterHood : true;
       
       let matchesTab = true;
-      if (filterTab === 'trial') {
+      if (filterTab === 'all') {
+          matchesTab = r.role === UserRole.RESIDENT;
+      } else if (filterTab === 'team') {
+          matchesTab = r.role !== UserRole.RESIDENT;
+      } else if (filterTab === 'trial') {
           matchesTab = !!(r.role === UserRole.RESIDENT && r.promoActive && r.promoEnd);
       } else if (filterTab === 'subscribed') {
           matchesTab = !!(r.role === UserRole.RESIDENT && !r.promoActive && (r.plan === 'FAMILY' || r.plan === 'PREMIUM'));
@@ -299,7 +303,17 @@ const IntegratorUsers: React.FC = () => {
                         : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10'
                 }`}
             >
-                Todos ({residents.length})
+                Moradores ({totalResidents})
+            </button>
+            <button
+                onClick={() => setFilterTab('team')}
+                className={`py-2.5 px-4 rounded-xl text-xs uppercase tracking-widest font-bold transition-all ${
+                    filterTab === 'team'
+                        ? 'bg-blue-500 text-black font-black'
+                        : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                }`}
+            >
+                Equipe ({residents.length - totalResidents})
             </button>
             <button
                 onClick={() => setFilterTab('trial')}

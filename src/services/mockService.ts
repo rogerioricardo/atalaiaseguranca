@@ -41,20 +41,28 @@ const DEMO_CAMERAS: Camera[] = [
 
 const getLocalCameras = (): Camera[] => {
   if (typeof window === 'undefined') return [];
-  const cached = localStorage.getItem('atalaia_local_cameras');
-  if (cached) {
-    try {
-      return JSON.parse(cached);
-    } catch (e) {
-      return [];
+  try {
+    const cached = localStorage.getItem('atalaia_local_cameras');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        return [];
+      }
     }
+  } catch (err) {
+    console.warn("localStorage is not accessible");
   }
   return [];
 };
 
 const saveLocalCameras = (cameras: Camera[]) => {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('atalaia_local_cameras', JSON.stringify(cameras));
+  try {
+    localStorage.setItem('atalaia_local_cameras', JSON.stringify(cameras));
+  } catch (err) {
+    console.warn("localStorage is not accessible");
+  }
 };
 
 export const MockService = {
@@ -113,7 +121,7 @@ export const MockService = {
     try {
         const { data, error } = await supabase.from('neighborhoods').select('*').order('name');
         if (error) {
-            console.error("[MockService] Error fetching neighborhoods:", error);
+            console.error("[MockService] Error fetching neighborhoods:", JSON.stringify(error));
             throw error;
         }
         return (data || []).map(n => ({ 
@@ -125,7 +133,7 @@ export const MockService = {
             lng: n.lng 
         }));
     } catch (e) { 
-        console.error("[MockService] Catch in getNeighborhoods:", e);
+        console.error("[MockService] Catch in getNeighborhoods:", e instanceof Error ? e.message : JSON.stringify(e));
         return []; 
     }
   },

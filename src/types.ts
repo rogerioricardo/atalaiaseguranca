@@ -176,3 +176,7 @@ export interface UserSession {
     isCurrent?: boolean;
 }
 
+
+declare global {
+  const __APP_VERSION__: number;
+}
