@@ -22,7 +22,7 @@ const DEMO_USERS: Record<string, any> = {
         role: UserRole.RESIDENT,
         plan: 'PREMIUM',
         approved: true,
-        neighborhood_id: 'any-hood-id'
+        neighborhood_id: 'hood-demo-1'
     },
     'scr@atalaia.com': {
         id: 'demo-scr-id',
@@ -31,7 +31,7 @@ const DEMO_USERS: Record<string, any> = {
         role: UserRole.SCR,
         plan: 'PREMIUM',
         approved: true,
-        neighborhood_id: 'any-hood-id'
+        neighborhood_id: 'hood-demo-1'
     },
     'integrador@atalaia.com': {
         id: 'demo-integrator-id',
@@ -40,7 +40,7 @@ const DEMO_USERS: Record<string, any> = {
         role: UserRole.INTEGRATOR,
         plan: 'PREMIUM',
         approved: true,
-        neighborhood_id: 'any-hood-id'
+        neighborhood_id: 'hood-demo-1'
     }
 };
 

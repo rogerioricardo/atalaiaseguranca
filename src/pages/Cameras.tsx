@@ -9,7 +9,7 @@ import {
     Video, Plus, Trash2, Search, MapPin, 
     AlertTriangle, Shield, CheckCircle, Info, ExternalLink,
     ChevronRight, Camera as CameraIcon, Loader2, Edit2, X, Lock,
-    Maximize2, Clock, Wrench
+    Maximize2, Clock, Wrench, RefreshCw
 } from 'lucide-react';
 import { Card, Button, Input, Badge } from '@/components/UI';
 import { UpgradeModal } from '@/components/UpgradeModal';
@@ -45,220 +45,184 @@ interface CameraStreamPlayerProps {
   maintenancePhotoUrl?: string;
 }
 
-// Player de streaming memoizado que assegura que o iframe nunca re-renderize a menos que suas propriedades de conexão mudem
+// Player de streaming que foca em reprodução em tempo real e em modo limpo (sem controles/textos), com a opção de popup no hover
 const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ iframeCode, name, id, onExpand, isModal = false, maintenancePhotoUrl }) => {
   if (!iframeCode || iframeCode.trim() === '') {
     return (
-      <div className="relative w-full h-full group/video-container flex flex-col items-center justify-center bg-[#0a0a0a] text-center overflow-hidden">
+      <div className="relative w-full h-full group/video-container flex flex-col items-center justify-center bg-[#0a0a0a] text-center overflow-hidden rounded-2xl border border-white/5">
         {maintenancePhotoUrl ? (
-           <>
-             <img src={maintenancePhotoUrl} alt="Câmera em manutenção" className="absolute inset-0 w-full h-full object-cover" />
-           </>
+           <img src={maintenancePhotoUrl} alt="Câmera em manutenção" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
            <div className="p-4 flex flex-col items-center justify-center">
              <Wrench className="text-gray-500 mb-2 animate-pulse" size={32} />
-             <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest">Câmera em Manutenção</h3>
-             <p className="text-xs text-gray-500 mt-2 max-w-[250px]">Em breve estará transmitindo.</p>
+             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Câmera em Manutenção</h3>
+             <p className="text-xs text-gray-600 mt-2 max-w-[250px]">Em breve estará transmitindo.</p>
            </div>
         )}
-        <button 
-          onClick={(e) => { e.stopPropagation(); onExpand(); }} 
-          className={`absolute top-2 right-2 p-1.5 bg-black/60 rounded flex items-center justify-center text-white/50 hover:text-white hover:bg-black/80 transition-colors z-30 ${isModal ? 'hidden' : 'opacity-0 group-hover/video-container:opacity-100'}`}
-          title="Expandir câmera"
-        >
-          <Maximize2 size={16} />
-        </button>
       </div>
     );
   }
 
-  const isHttp = iframeCode.trim().toLowerCase().startsWith('http://') || (iframeCode.trim().startsWith('<') && iframeCode.toLowerCase().includes('src="http://'));
+  const cleanIframeCode = iframeCode.trim();
 
-  const handleOpenHttp = () => {
-    const url = iframeCode.trim().startsWith('<') 
-      ? iframeCode.match(/src="([^"]+)"/)?.[1] || '' 
-      : iframeCode;
-    try { window.open(url, `cam_${id}`, 'width=640,height=480,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes'); } catch (e) { console.warn("Invalid URL", e); }
-  };
-
-  // Garante autoplay nos formatos de link padrão e oculta barra de controles (play/stop/progress)
-  let enhancedSrc = iframeCode.trim();
-  if (!enhancedSrc.startsWith('<')) {
-    try {
-      const url = new URL(enhancedSrc);
-      if (url.hostname.includes('youtube.com') || url.hostname.includes('youtu.be')) {
-        url.searchParams.set('autoplay', '1');
-        url.searchParams.set('mute', '1');
-        url.searchParams.set('muted', '1');
-        url.searchParams.set('playsinline', '1');
-        url.searchParams.set('loop', '1');
-        url.searchParams.set('controls', '0'); // Oculta botões de play/pause/progresso do YouTube
-        url.searchParams.set('showinfo', '0');
-        url.searchParams.set('rel', '0');
-        const videoId = url.pathname.split('/').pop();
-        if (videoId) {
-          url.searchParams.set('playlist', videoId);
-        }
-      } else {
-        url.searchParams.set('autoplay', '1');
-        url.searchParams.set('mute', '1');
-        url.searchParams.set('muted', '1');
-        url.searchParams.set('playsinline', '1');
-        url.searchParams.set('loop', '1');
-        url.searchParams.set('controls', '0'); // Desativa controles em outras plataformas (como Vimeo)
-        url.searchParams.set('background', '1'); // Oculta chrome de player em Vimeo
-      }
-      enhancedSrc = url.toString();
-    } catch (e) {
-      const separator = enhancedSrc.includes('?') ? '&' : '?';
-      enhancedSrc = `${enhancedSrc}${separator}autoplay=1&mute=1&muted=1&playsinline=1&loop=1&controls=0`;
+  // Tenta extrair a URL de um código iframe caso tenha sido fornecido em HTML
+  const isHtmlCode = cleanIframeCode.startsWith('<');
+  let urlFromCode = '';
+  if (isHtmlCode) {
+    const srcMatch = cleanIframeCode.match(/src=["']([^"']+)["']/i);
+    if (srcMatch) {
+      urlFromCode = srcMatch[1];
     }
   }
 
-  if (iframeCode.trim().startsWith('<') && !iframeCode.toLowerCase().includes('src="http://')) {
-    // Tenta injetar atributos de autoplay/muted/loop/playsinline diretamente e remove "controls" caso presente
-    let processedIframeCode = iframeCode;
-    processedIframeCode = processedIframeCode.replace(/<video([^>]*)>/gi, (match, attrs) => {
-      let cleanAttrs = attrs.replace(/\b(autoplay|muted|playsinline|loop|controls)\b/gi, '');
-      return `<video ${cleanAttrs} autoplay="true" muted="true" playsinline="true" loop="true">`;
-    });
+  // Define a URL final de reprodução
+  let rawUrl = urlFromCode || cleanIframeCode;
 
-    return (
-      <div className="relative w-full h-full group/video-container">
-        <iframe 
-          srcDoc={`
-            <html>
-              <head>
-                <style>
-                  body { margin: 0; padding: 0; background: black; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
-                  video, iframe { width: 100%; height: 100%; object-fit: contain; border: none; }
-                  /* Css para forçar a ocultação de botões nativos de vídeo (play/stop/barra) */
-                  video::-webkit-media-controls { display: none !important; }
-                  video::-webkit-media-controls-panel { display: none !important; }
-                  video::-webkit-media-controls-play-button { display: none !important; }
-                  video::-webkit-media-controls-start-playback-button { display: none !important; }
-                </style>
-              </head>
-              <body>
-                ${processedIframeCode}
-                <script>
-                  window.addEventListener('load', function() {
-                    function forcePlay() {
-                      var videos = document.querySelectorAll('video');
-                      videos.forEach(function(vid) {
-                        vid.muted = true;
-                        vid.playsInline = true;
-                        vid.loop = true;
-                        vid.controls = false; // Desativa controles via código
-                        vid.removeAttribute('controls');
-                        vid.setAttribute('autoplay', 'autoplay');
-                        vid.setAttribute('muted', 'muted');
-                        vid.setAttribute('playsinline', 'playsinline');
-                        vid.setAttribute('loop', 'loop');
-                        
-                        var p = vid.play();
-                        if (p !== undefined) {
-                          p.catch(function(e) {
-                            console.log('Autoplay deferred:', e);
-                          });
-                        }
-                      });
-
-                      var iframes = document.querySelectorAll('iframe');
-                      iframes.forEach(function(ifr) {
-                        try {
-                          var src = ifr.getAttribute('src') || '';
-                          if (src && !src.includes('autoplay=')) {
-                            var sep = src.includes('?') ? '&' : '?';
-                            ifr.setAttribute('src', src + sep + 'autoplay=1&mute=1&muted=1&playsinline=1&loop=1&controls=0');
-                          }
-                        } catch(err) {}
-                      });
-                    }
-
-                    forcePlay();
-                    setTimeout(forcePlay, 1000);
-                    setTimeout(forcePlay, 3000);
-
-                    var clickTrigger = function() {
-                      forcePlay();
-                      document.removeEventListener('click', clickTrigger);
-                      document.removeEventListener('touchstart', clickTrigger);
-                    };
-                    document.addEventListener('click', clickTrigger);
-                    document.addEventListener('touchstart', clickTrigger);
-                  });
-                </script>
-              </body>
-            </html>
-          `}
-          title={name}
-          className="w-full h-full border-0 absolute inset-0 pointer-events-none"
-          allowFullScreen
-          scrolling="no"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        />
-        {!isModal && (
-          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/video-container:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 pointer-events-none z-10">
-            
-            <Button 
-              variant="outline"
-              className="pointer-events-auto bg-black/70 border-white/10 text-[10px] px-3 h-7 gap-1 hover:bg-black text-white hover:text-atalaia-neon transition-all"
-              onClick={onExpand}
-            >
-              <Maximize2 size={11} /> MONITOR POPUP
-            </Button>
-          </div>
-        )}
-      </div>
-    );
+  // Se for um link de plataforma conhecida, atualiza para HTTPS automaticamente para prevenir bloqueios de conteúdo misto
+  if (rawUrl.includes('youtube.com') || rawUrl.includes('youtu.be') || rawUrl.includes('vimeo.com') || rawUrl.includes('rtsp.me')) {
+    rawUrl = rawUrl.replace(/^http:\/\//gi, 'https://');
   }
 
-  if (isHttp) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 border border-amber-500/20 px-6 text-center animate-fade-in">
-        <AlertTriangle className="text-amber-500 mb-2" size={24} />
-        <h4 className="text-white font-bold text-[10px] uppercase mb-1">Link Inseguro (HTTP)</h4>
-        <p className="text-[9px] text-gray-400 leading-tight mb-3">
-          O navegador bloqueia conteúdo <code className="text-amber-500">http://</code> por segurança.
-          <br/>Use o botão do Monitor Externo.
-        </p>
-        <div className="flex flex-col gap-2 w-full max-w-[180px] pointer-events-auto z-10">
-          <Button 
-            onClick={handleOpenHttp}
-            className="flex items-center justify-center gap-1.5 h-8 bg-atalaia-neon text-black text-[10px] font-black shadow-[0_0_15px_rgba(0,255,102,0.3)] hover:scale-105 transition-transform"
-          >
-            <ExternalLink size={12} /> {isModal ? 'ABRIR MONITOR COMPACTO (HTTP)' : 'MONITOR EXTERNO HTTP'}
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  // Gera a URL ultra-clean com parâmetros para reprodução automática, sem controles, sem timelines e sem marcas
+  const getCleanStreamUrl = (urlStr: string) => {
+    let url = urlStr;
+    try {
+      // Se for URL normal do YouTube, converte para embed
+      if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
+        let videoId = '';
+        if (url.includes('youtube.com/watch')) {
+          const urlParams = new URLSearchParams(url.split('?')[1] || '');
+          videoId = urlParams.get('v') || '';
+        } else {
+          videoId = url.split('/').pop()?.split('?')[0] || '';
+        }
+        if (videoId) {
+          url = `https://www.youtube.com/embed/${videoId}`;
+        }
+      }
+
+      const urlObj = new URL(url);
+      if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
+        urlObj.searchParams.set('autoplay', '1');
+        urlObj.searchParams.set('mute', '1');
+        urlObj.searchParams.set('muted', '1');
+        urlObj.searchParams.set('controls', '0');
+        urlObj.searchParams.set('showinfo', '0');
+        urlObj.searchParams.set('rel', '0');
+        urlObj.searchParams.set('modestbranding', '1');
+        urlObj.searchParams.set('iv_load_policy', '3');
+        urlObj.searchParams.set('playsinline', '1');
+        urlObj.searchParams.set('loop', '1');
+        const videoId = urlObj.pathname.split('/').pop();
+        if (videoId) {
+          urlObj.searchParams.set('playlist', videoId);
+        }
+      } else if (urlObj.hostname.includes('vimeo.com')) {
+        urlObj.searchParams.set('autoplay', '1');
+        urlObj.searchParams.set('mute', '1');
+        urlObj.searchParams.set('muted', '1');
+        urlObj.searchParams.set('background', '1'); // Oculta todos os controles e força reprodução direta de fundo
+        urlObj.searchParams.set('loop', '1');
+        urlObj.searchParams.set('playsinline', '1');
+        urlObj.searchParams.set('controls', '0');
+      } else {
+        urlObj.searchParams.set('autoplay', '1');
+        urlObj.searchParams.set('mute', '1');
+        urlObj.searchParams.set('muted', '1');
+        urlObj.searchParams.set('controls', '0');
+      }
+      url = urlObj.toString();
+    } catch (e) {
+      const separator = url.includes('?') ? '&' : '?';
+      url = `${url}${separator}autoplay=1&mute=1&muted=1&controls=0&playsinline=1&loop=1`;
+    }
+    return url;
+  };
+
+  const cleanStreamUrl = getCleanStreamUrl(rawUrl);
+
+  const handleOpenHttp = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try { 
+      window.open(rawUrl, `cam_${id}`, 'width=800,height=600,menubar=no,status=no,location=no,toolbar=no,scrollbars=no,resizable=yes'); 
+    } catch (err) { 
+      console.warn("Invalid URL", err); 
+    }
+  };
+
+  const isCustomVideoOrScript = isHtmlCode && !urlFromCode;
 
   return (
-    <div className="relative w-full h-full group/video-container">
-      <iframe 
-        src={enhancedSrc} 
-        title={name}
-        className="w-full h-full border-0 absolute inset-0 pointer-events-none"
-         allowFullScreen 
-        referrerPolicy="no-referrer"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        loading="eager"
-        scrolling="no"
-      />
-      {!isModal && (
-        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/video-container:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 pointer-events-none z-10">
-          
-          <Button 
-            variant="outline"
-            className="pointer-events-auto bg-black/70 border-white/10 text-[10px] px-3 h-7 gap-1 hover:bg-black text-white hover:text-atalaia-neon transition-all"
-            onClick={handleOpenHttp}
-          >
-            <ExternalLink size={11} /> MONITOR POPUP
-          </Button>
-        </div>
+    <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center group/video-container rounded-2xl border border-white/5">
+      {isCustomVideoOrScript ? (
+        // Caso de código HTML customizado (video tag ou scripts de widget)
+        <div 
+          className="w-full h-full [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:absolute [&_iframe]:inset-0 [&_video]:w-full [&_video]:h-full [&_video]:absolute [&_video]:inset-0 [&_iframe]:border-0 [&_video]:object-cover [&_iframe]:object-cover"
+          dangerouslySetInnerHTML={{ 
+            __html: cleanIframeCode
+              .replace(/<video([^>]*)>/gi, (match, attrs) => {
+                let cleanAttrs = attrs.replace(/\b(autoplay|muted|playsinline|loop|controls)\b/gi, '');
+                return `<video ${cleanAttrs} autoplay="true" muted="true" playsinline="true" loop="true" style="width:100%; height:100%; object-fit:cover; border:none;">`;
+              })
+              .replace(/<iframe([^>]*)>/gi, (match, attrs) => {
+                let cleanAttrs = attrs.replace(/style=["']([^"']*)["']/gi, '');
+                return `<iframe ${cleanAttrs} style="width:100%; height:100%; position:absolute; inset:0; border:none;" allow="autoplay; encrypted-media; picture-in-picture">`;
+              })
+          }}
+        />
+      ) : (
+        // Caso padrão (URLs puras ou iframes de provedores que extraímos o link)
+        <iframe 
+          src={cleanStreamUrl} 
+          title={name}
+          className="w-full h-full border-0 absolute inset-0 pointer-events-none"
+          allowFullScreen 
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          loading="eager"
+          scrolling="no"
+        />
       )}
+
+      {/* Identificador sutil de Live (Apenas aparece no hover para manter o player 100% limpo em repouso) */}
+      <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/5 opacity-0 group-hover/video-container:opacity-100 transition-opacity duration-300 z-20 pointer-events-none">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-atalaia-neon opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-atalaia-neon"></span>
+        </span>
+        <span className="text-[10px] text-atalaia-neon font-black font-mono tracking-widest uppercase">AO VIVO</span>
+      </div>
+
+      {/* Camada invisível de captura de clique para expandir a câmera de forma nativa */}
+      {!isModal && (
+        <div 
+          onClick={(e) => { e.stopPropagation(); onExpand(); }}
+          className="absolute inset-0 bg-transparent cursor-pointer z-10" 
+          title="Expandir câmera"
+        />
+      )}
+
+      {/* Controles flutuantes de suporte (Apenas aparecem no hover para manter o player 100% limpo em repouso) */}
+      <div className="absolute bottom-3 right-3 flex gap-2 z-20 opacity-0 group-hover/video-container:opacity-100 transition-opacity duration-300 pointer-events-auto">
+        <button 
+          onClick={handleOpenHttp}
+          className="px-3 py-1.5 bg-black/80 hover:bg-black border border-white/10 rounded-xl text-[10px] text-gray-300 hover:text-atalaia-neon font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-lg backdrop-blur-sm"
+          title="Abrir em popup externo"
+        >
+          <ExternalLink size={11} className="stroke-[2.5]" />
+          <span>ABRIR POPUP</span>
+        </button>
+
+        {!isModal && (
+          <button 
+            onClick={(e) => { e.stopPropagation(); onExpand(); }}
+            className="px-3 py-1.5 bg-atalaia-neon hover:bg-atalaia-neon/90 border border-atalaia-neon/20 rounded-xl text-[10px] text-black font-black flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-atalaia-neon/15"
+            title="Expandir câmera"
+          >
+            <Maximize2 size={11} className="stroke-[3]" />
+            <span>EXPANDIR</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 });
@@ -509,7 +473,15 @@ const Cameras: React.FC = () => {
   const filteredCameras = cameras.filter(cam => {
     const matchesSearch = cam.name.toLowerCase().includes(searchTerm.toLowerCase());
     const userNeighborhoodId = user?.role === UserRole.ADMIN ? selectedNeighborhoodId : user?.neighborhoodId;
-    const matchesNeighborhood = userNeighborhoodId ? cam.neighborhoodId === userNeighborhoodId : true;
+    
+    // Se o bairro selecionado não possuir nenhuma câmera real cadastrada no banco, 
+    // permitimos que as câmeras de demonstração ('hood-demo-1') apareçam para que o usuário não fique sem visualização.
+    const neighborhoodHasRealCameras = cameras.some(c => c.neighborhoodId === userNeighborhoodId && !c.id.startsWith('cam-demo-'));
+    
+    const matchesNeighborhood = userNeighborhoodId 
+      ? (cam.neighborhoodId === userNeighborhoodId || (cam.neighborhoodId === 'hood-demo-1' && !neighborhoodHasRealCameras))
+      : true;
+      
     return matchesSearch && matchesNeighborhood;
   });
 

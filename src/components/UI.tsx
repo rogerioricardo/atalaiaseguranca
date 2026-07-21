@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { X } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Eye, EyeOff } from 'lucide-react';
 
 export const Card: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className = '' }) => (
   <div className={`bg-[#080808] border border-atalaia-border rounded-xl shadow-lg ${className}`}>
@@ -30,15 +30,34 @@ export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
   );
 };
 
-export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label?: string }> = ({ label, className = '', ...props }) => (
-  <div className="w-full">
-    {label && <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">{label}</label>}
-    <input 
-      className={`w-full bg-[#020202] border border-atalaia-border rounded-lg px-4 py-2.5 text-base text-white placeholder-gray-600 focus:outline-none focus:border-atalaia-neon focus:ring-1 focus:ring-atalaia-neon transition-colors ${className}`}
-      {...props}
-    />
-  </div>
-);
+export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label?: string }> = ({ label, className = '', type, ...props }) => {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === 'password';
+  const inputType = isPassword ? (showPassword ? 'text' : 'password') : type;
+
+  return (
+    <div className="w-full">
+      {label && <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">{label}</label>}
+      <div className="relative">
+        <input 
+          type={inputType}
+          className={`w-full bg-[#020202] border border-atalaia-border rounded-lg px-4 py-2.5 text-base text-white placeholder-gray-600 focus:outline-none focus:border-atalaia-neon focus:ring-1 focus:ring-atalaia-neon transition-colors ${isPassword ? 'pr-11' : ''} ${className}`}
+          {...props}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-atalaia-neon transition-colors focus:outline-none p-1.5 rounded-md hover:bg-white/5"
+            tabIndex={-1}
+          >
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // Added optional className prop to allow custom styling (e.g. animations) on the Badge component
 export const Badge: React.FC<{ children: React.ReactNode, color?: 'green' | 'red' | 'blue' | 'yellow' | 'purple', className?: string }> = ({ children, color = 'green', className = '' }) => {

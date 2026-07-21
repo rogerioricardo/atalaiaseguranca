@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Zap, MessageSquare, Users, MapPin, Bell, Clock, BarChart3, MessageCircle, Menu, X, Lock, CreditCard, Smartphone, Download, Printer, Video, Check, Wifi, XCircle, FileText, Scan, AlertTriangle, Star, Shield, Heart, Eye, Loader2 } from 'lucide-react';
+import { ShieldCheck, Zap, MessageSquare, Users, MapPin, Bell, Clock, BarChart3, MessageCircle, Menu, X, Lock, CreditCard, Smartphone, Download, Printer, Video, Check, Wifi, XCircle, FileText, Scan, AlertTriangle, Star, Shield, Heart, Eye, Loader2, Home, Wrench } from 'lucide-react';
 import { Button, Modal, Badge } from '@/components/UI';
 import { MockService } from '@/services/mockService';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
@@ -188,6 +188,7 @@ const Landing: React.FC = () => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [plateModalOpen, setPlateModalOpen] = useState(false);
+  const [plateType, setPlateType] = useState<'resident' | 'camera'>('resident');
   const [cameras, setCameras] = useState<any[]>([]);
   const [neighborhoods, setNeighborhoods] = useState<any[]>([]);
 
@@ -280,10 +281,9 @@ const Landing: React.FC = () => {
               body { padding: 0; }
               #plate-to-print { 
                 width: 100vw; 
-                height: 75vw; /* Mantém o aspect ratio 4:3 na página inteira */
+                height: 125vw; /* Mantém o aspect ratio 4:5 na página inteira em modo retrato */
                 max-width: none;
                 border-radius: 0;
-                border-width: 25px !important;
               }
               .print-hidden { display: none; }
             }
@@ -327,9 +327,6 @@ const Landing: React.FC = () => {
               <button onClick={() => scrollToSection('funcionalidades')} className="text-gray-300 hover:text-white transition-colors">Funcionalidades</button>
               <button onClick={() => scrollToSection('mapa-cameras')} className="text-gray-300 hover:text-white transition-colors">Mapa de Câmeras</button>
               <button onClick={() => scrollToSection('planos')} className="text-gray-300 hover:text-white transition-colors">Planos</button>
-              <button onClick={() => setPlateModalOpen(true)} className="flex items-center gap-2 text-atalaia-neon hover:text-white transition-colors border border-atalaia-neon/30 px-3 py-1.5 rounded-full hover:bg-atalaia-neon hover:border-atalaia-neon hover:text-black">
-                  <Printer size={14} /> Imprimir Placa
-              </button>
             </div>
             
             <div className="hidden md:flex items-center gap-3">
@@ -366,9 +363,6 @@ const Landing: React.FC = () => {
                <button onClick={() => scrollToSection('funcionalidades')} className="text-left text-base font-medium text-gray-300 hover:text-atalaia-neon py-2">Funcionalidades</button>
                <button onClick={() => scrollToSection('mapa-cameras')} className="text-left text-base font-medium text-gray-300 hover:text-atalaia-neon py-2">Mapa de Câmeras</button>
                <button onClick={() => scrollToSection('planos')} className="text-left text-base font-medium text-gray-300 hover:text-atalaia-neon py-2">Planos</button>
-               <button onClick={() => { setPlateModalOpen(true); setMobileMenuOpen(false); }} className="text-left text-base font-medium text-atalaia-neon py-2 flex items-center gap-2">
-                   <Printer size={18} /> Imprimir Placa de Segurança
-               </button>
 
              {/* BOTÃO DE DESTAQUE MOBILE DO APLICATIVO */}
              <a 
@@ -701,7 +695,6 @@ const Landing: React.FC = () => {
                 <li><button onClick={() => scrollToSection('como-funciona')} className="hover:text-atalaia-neon transition-colors">Como Funciona</button></li>
                 <li><button onClick={() => scrollToSection('funcionalidades')} className="hover:text-atalaia-neon transition-colors">Funcionalidades</button></li>
                 <li><button onClick={() => scrollToSection('planos')} className="hover:text-atalaia-neon transition-colors">Planos e Preços</button></li>
-                <li><button onClick={() => setPlateModalOpen(true)} className="hover:text-atalaia-neon transition-colors">Imprimir Placa</button></li>
               </ul>
             </div>
 
@@ -741,41 +734,103 @@ const Landing: React.FC = () => {
         <div className="p-4 sm:p-8 flex flex-col items-center">
             <div className="mb-6 text-center print:hidden">
                 <h2 className="text-2xl font-bold text-white mb-2 flex items-center justify-center gap-2">
-                    <Printer className="text-atalaia-neon" /> Modelo de Placa de Segurança
+                    <Printer className="text-atalaia-neon" /> Placa de Segurança Residencial
                 </h2>
-                <p className="text-gray-400 text-sm">Imprima e coloque em local visível.</p>
+                <p className="text-gray-400 text-sm">Design exclusivo para residências e propriedades colaboradoras.</p>
             </div>
 
-            {/* AREA DA PLACA - DESIGN PROFISSIONAL VERDE NEON */}
+            {/* AREA DA PLACA - DESIGN ALTAMENTE LUXUOSO, LIMPO E PROFISSIONAL */}
             <div 
                 id="printable-plate"
-                className="bg-[#00FF66] w-full max-w-[600px] aspect-[4/3] border-[12px] border-black rounded-xl p-8 flex flex-col items-center justify-between text-black shadow-2xl relative overflow-hidden"
+                className="bg-[#070708] w-full max-w-[420px] aspect-[4/5] border-[18px] border-[#39ff14] rounded-[32px] p-6 sm:p-8 flex flex-col items-center justify-between text-white shadow-[0_0_60px_rgba(57,255,20,0.3)] relative overflow-hidden select-none"
                 style={{ fontFamily: "'Inter', sans-serif" }}
             >
-                <div className="absolute inset-0 opacity-[0.07] flex flex-wrap gap-12 justify-center items-center p-4 pointer-events-none">
-                    {[...Array(12)].map((_, i) => (<ShieldCheck key={i} size={100} className={`transform ${i % 2 === 0 ? 'rotate-12' : '-rotate-12'}`} />))}
+                {/* Efeito de marca d'água de proteção sutil em background */}
+                <div className="absolute inset-0 opacity-[0.02] flex flex-wrap gap-12 justify-center items-center p-4 pointer-events-none">
+                    {[...Array(6)].map((_, i) => (<ShieldCheck key={i} size={160} />))}
                 </div>
-                <div className="w-full flex justify-between items-start z-10">
-                    <div className="flex items-center gap-3"><ShieldCheck size={64} fill="black" /><div className="leading-tight"><h3 className="text-5xl font-black tracking-tighter">ATALAIA</h3><p className="text-sm font-bold tracking-[0.2em] uppercase">Vigilância Digital</p></div></div>
-                    <div className="bg-black text-[#00FF66] p-3 rounded-lg flex flex-col items-center justify-center border-2 border-black"><Video size={32} /><span className="text-[10px] font-black uppercase mt-1">24 Horas</span></div>
-                </div>
-                <div className="text-center z-10 flex flex-col gap-4">
-                    <h4 className="text-4xl sm:text-5xl font-black uppercase leading-none tracking-tight">LOCAL VIGIADO</h4>
-                    <div className="bg-black text-[#00FF66] px-4 py-2 inline-block mx-auto rounded shadow-lg"><p className="text-xl sm:text-2xl font-black uppercase tracking-wider">Segurança Colaborativa</p></div>
-                </div>
-                <div className="w-full text-center z-10">
-                    <p className="text-sm sm:text-lg font-bold leading-tight max-w-md mx-auto mb-4">COMUNICAÇÃO INSTANTÂNEA ENTRE MORADORES<br />E MONITORAMENTO INTEGRADO 24H</p>
-                    <div className="flex items-center justify-center gap-6 border-t-2 border-black/20 pt-4">
-                        <div className="flex items-center gap-1"><Smartphone size={20} /><span className="text-xs font-black uppercase">App Integrado</span></div>
-                        <div className="flex items-center gap-1"><MessageSquare size={20} /><span className="text-xs font-black uppercase">Alertas WhatsApp</span></div>
-                        <div className="flex items-center gap-1"><Eye size={20} /><span className="text-xs font-black uppercase">Rede Vizinhos</span></div>
+
+                {/* Linha fina de contorno interno para acabamento de alta classe */}
+                <div className="absolute inset-2 border border-white/5 rounded-[22px] pointer-events-none" />
+
+                {/* Cabeçalho Superior */}
+                <div className="w-full flex justify-between items-start gap-4 z-10">
+                  <div className="flex items-center gap-3">
+                    <div className="border-2 border-[#39ff14] p-2.5 rounded-2xl bg-[#39ff14]/10 text-[#39ff14] shadow-[0_0_15px_rgba(57,255,20,0.25)]">
+                      <Home size={34} className="stroke-[2.5]" />
                     </div>
+                    <div>
+                      <h3 className="text-xl sm:text-2xl font-black tracking-widest text-[#39ff14] uppercase leading-none">SISTEMA ATALAIA</h3>
+                      <p className="text-[9px] sm:text-[10px] font-extrabold text-white/80 tracking-widest mt-1.5 uppercase">Segurança Residencial</p>
+                    </div>
+                  </div>
+
+                  {/* Carimbo circular elegante de Vigilância Integrada */}
+                  <div className="border-[3px] border-[#39ff14] bg-[#39ff14]/5 rounded-full p-2 text-center flex flex-col items-center justify-center w-[96px] h-[96px] sm:w-[104px] sm:h-[104px] shadow-[0_0_20px_rgba(57,255,20,0.15)] shrink-0 relative">
+                    <div className="absolute inset-1 border border-[#39ff14]/20 rounded-full" />
+                    <span className="text-[7px] font-black text-[#39ff14] uppercase tracking-widest leading-none">VIZINHO</span>
+                    <span className="text-[11px] font-black text-white uppercase leading-none tracking-tight my-0.5">ALERTA</span>
+                    <span className="text-[6px] font-bold text-white/60 uppercase tracking-widest leading-none mt-0.5">MONITORADO</span>
+                    <span className="text-[10px] font-black text-[#39ff14] tracking-wider uppercase leading-none mt-1">24H</span>
+                  </div>
                 </div>
-                <div className="absolute bottom-2 right-4 text-[10px] font-bold opacity-30 uppercase tracking-widest">WWW.ATALAIA.CLOUD</div>
+
+                {/* Banner Vermelho de Atenção e Dissuasão */}
+                <div className="bg-[#d90429] border-[3px] border-red-500 rounded-2xl p-4 sm:p-5 text-center my-4 shadow-xl relative z-10 w-full transform hover:scale-[1.01] transition-transform">
+                  <h4 className="text-base sm:text-lg font-black tracking-[0.15em] text-white mb-2 uppercase leading-none">ATENÇÃO!</h4>
+                  <p className="text-[10.5px] sm:text-[11.5px] font-extrabold leading-relaxed text-white uppercase tracking-wide">
+                    Este imóvel faz parte de uma Rede Inteligente de Segurança Colaborativa. Qualquer atividade suspeita será fotografada e reportada de imediato ao grupo de vizinhos e às forças policiais.
+                  </p>
+                </div>
+
+                {/* Painel Inferior em 3 colunas de Altíssimo Acabamento */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 items-stretch z-10 w-full">
+                  
+                  {/* Coluna 1: QR Code para Reportar/Contatar */}
+                  <div className="bg-white text-black p-2 sm:p-2.5 rounded-2xl flex flex-col items-center justify-center text-center shadow-md border border-white/20">
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 flex flex-col gap-0.5 bg-white p-0.5 border border-gray-300 mx-auto">
+                      <div className="flex justify-between w-full">
+                        <div className="w-4 h-4 bg-black p-0.5"><div className="w-full h-full bg-white p-0.5"><div className="w-full h-full bg-black"></div></div></div>
+                        <div className="w-4 h-4 bg-black p-0.5"><div className="w-full h-full bg-white p-0.5"><div className="w-full h-full bg-black"></div></div></div>
+                      </div>
+                      <div className="flex justify-between items-end h-full w-full">
+                        <div className="w-4 h-4 bg-black p-0.5"><div className="w-full h-full bg-white p-0.5"><div className="w-full h-full bg-black"></div></div></div>
+                        <div className="w-4 h-4 flex flex-wrap gap-[1px]">
+                          <div className="w-1.5 h-1.5 bg-black"></div><div className="w-1.5 h-1.5 bg-black"></div>
+                          <div className="w-1.5 h-1.5 bg-black"></div><div className="w-1.5 h-1.5 bg-black"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[6.5px] font-black leading-none uppercase mt-1.5 text-zinc-800 tracking-tighter">Aponte a Câmera</span>
+                  </div>
+
+                  {/* Coluna 2: Selo do Tipo de Propriedade Protegida */}
+                  <div className="bg-[#111] border-2 border-[#39ff14]/40 text-white p-2 sm:p-2.5 rounded-2xl flex flex-col items-center justify-center text-center shadow-lg">
+                    <ShieldCheck size={22} className="text-[#39ff14] mb-1.5 animate-pulse" />
+                    <span className="text-[7.5px] font-black leading-tight uppercase text-white tracking-widest">IMÓVEL</span>
+                    <span className="text-[6px] font-bold text-gray-400 uppercase mt-0.5">CADASTRADO</span>
+                  </div>
+
+                  {/* Coluna 3: Números Oficiais de Socorro Emergencial */}
+                  <div className="bg-[#020202] border border-white/10 rounded-2xl p-2 flex flex-col justify-between">
+                    <span className="text-[6px] font-extrabold tracking-widest text-gray-500 uppercase text-center mb-1">EMERGÊNCIAS</span>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="bg-[#0f2a4a] text-white rounded-[4px] py-0.5 text-[7px] font-black text-center leading-none tracking-wider">POLÍCIA 190</div>
+                      <div className="bg-[#851821] text-white rounded-[4px] py-0.5 text-[7px] font-black text-center leading-none tracking-wider">BOMB. 193</div>
+                      <div className="bg-[#b58105] text-white rounded-[4px] py-0.5 text-[7px] font-black text-center leading-none tracking-wider">SAMU 192</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rodapé institucional oficial */}
+                <div className="w-full flex justify-between items-center z-10 pt-1 border-t border-white/5 opacity-40">
+                  <span className="text-[6px] font-bold tracking-widest text-white uppercase">VIGILÂNCIA COLABORATIVA</span>
+                  <span className="text-[6px] font-mono tracking-wider text-[#39ff14]">WWW.ATALAIA.CLOUD</span>
+                </div>
             </div>
 
             <div className="mt-8 flex gap-4 w-full sm:w-auto print:hidden">
-                <Button onClick={handlePrintPlate} className="flex-1 sm:flex-none h-12 px-8 bg-white text-black hover:bg-atalaia-neon font-black shadow-lg">
+                <Button onClick={handlePrintPlate} className="flex-1 sm:flex-none h-12 px-8 bg-[#39ff14] text-black hover:bg-white hover:text-black font-black shadow-lg shadow-[#39ff14]/15">
                     <Printer className="mr-2" /> IMPRIMIR AGORA
                 </Button>
                 <Button onClick={() => setPlateModalOpen(false)} variant="outline" className="flex-1 sm:flex-none h-12">FECHAR</Button>

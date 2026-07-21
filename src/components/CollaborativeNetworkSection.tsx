@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Modal, Input, Button } from '@/components/UI';
 import { supabase } from '@/lib/supabaseClient';
+import atalaiaWarningPlaqueImg from '@/assets/images/atalaia_warning_plaque_1784380494061.jpg';
 import { 
   Camera, 
   MapPin, 
@@ -270,6 +271,109 @@ export const CollaborativeNetworkSection: React.FC = () => {
               </motion.div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* NOVO: Sinalização Física & Instalação Profissional */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-24 relative z-10">
+        <div className="bg-[#030303] border border-white/5 rounded-[40px] p-8 md:p-16 relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)]">
+          <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-atalaia-neon/5 rounded-full blur-[120px] pointer-events-none" />
+          
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <span className="px-3 py-1 rounded-full bg-atalaia-neon/10 border border-atalaia-neon/20 text-atalaia-neon text-xs font-bold uppercase tracking-wider mb-4 inline-block">
+              Padrão de Instalação e Sinalização
+            </span>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4 tracking-tight">
+              Sinalização de Alto Impacto & <span className="text-atalaia-neon">Caixa de Sobrepor</span>
+            </h2>
+            <p className="text-gray-400 text-sm md:text-base leading-relaxed">
+              O Atalaia padroniza as instalações para garantir segurança física absoluta e inibição ativa. Em vez de postes expostos simples, as câmeras são montadas em conjuntos estruturados profissionais.
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-12 gap-12 items-center">
+            
+            {/* Esquerda: Imagem Real da Placa Oficial (Anexo do Usuário em Alta Qualidade) */}
+            <div className="lg:col-span-6 flex flex-col items-center">
+              <div className="mb-4 text-center">
+                <span className="text-xs text-gray-400 font-bold uppercase tracking-widest block mb-1">Sinalização Oficial do Sistema Atalaia</span>
+                <span className="text-[10px] text-atalaia-neon font-medium uppercase tracking-wider">Identidade de Segurança Integrada</span>
+              </div>
+              
+              {/* Placa com efeito premium */}
+              <div className="relative rounded-[32px] overflow-hidden border-2 border-atalaia-neon/50 shadow-[0_0_50px_rgba(57,255,20,0.25)] group w-full max-w-[420px] aspect-[4/5]">
+                <img 
+                  src={atalaiaWarningPlaqueImg} 
+                  alt="Placa Oficial do Sistema Atalaia" 
+                  className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-500"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-6">
+                  <p className="text-xs text-atalaia-neon font-bold uppercase tracking-wider">Sinalização Refletiva de Alto Impacto Visual</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Direita: Padrão de Instalação e Benefícios da Caixa de Sobrepor */}
+            <div className="lg:col-span-6 space-y-6">
+              
+              <div className="bg-[#080808] border border-white/5 rounded-3xl p-8 space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="bg-atalaia-neon/10 border border-atalaia-neon/30 p-2.5 rounded-xl text-atalaia-neon">
+                    <Wrench size={24} className="animate-pulse" />
+                  </div>
+                  <h4 className="text-xl font-bold text-white tracking-tight">
+                    Instalação em Caixa de Sobrepor
+                  </h4>
+                </div>
+                
+                <p className="text-sm text-gray-300 leading-relaxed">
+                  Para garantir a robustez do sistema, <strong className="text-[#39ff14]">esta placa oficial não é colocada de forma vulnerável em postes comuns</strong>. Ela é instalada de forma integrada junto a uma <strong className="text-white">Caixa de Passagem / Sobrepor</strong>, onde fica abrigada toda a infraestrutura física e a própria câmera de segurança.
+                </p>
+
+                <div className="space-y-4">
+                  <div className="flex gap-3">
+                    <div className="text-atalaia-neon shrink-0 mt-1">
+                      <ShieldCheck size={18} />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-white uppercase tracking-wider mb-1">Proteção Total de Conectores</h5>
+                      <p className="text-xs text-gray-400">Fontes, baluns e conectores RJ45 ficam selados dentro de uma estrutura estanque (IP66), imune a chuva, poeira e oxidação.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <div className="text-atalaia-neon shrink-0 mt-1">
+                      <Lock size={18} />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-white uppercase tracking-wider mb-1">Prevenção contra Sabotagem</h5>
+                      <p className="text-xs text-gray-400">Sem fios ou emendas externas visíveis. Fiação embutida diretamente da caixa para o duto, eliminando o risco de cabos serem cortados ou desconectados.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <div className="text-atalaia-neon shrink-0 mt-1">
+                      <Camera size={18} />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-white uppercase tracking-wider mb-1">Acoplamento Direto</h5>
+                      <p className="text-xs text-gray-400">A câmera de segurança é aparafusada de forma firme sobre a tampa reforçada da caixa de sobrepor, formando uma estação de vigilância robusta e unificada.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-white/5 text-center lg:text-left">
+                  <span className="text-[11px] text-gray-500 font-mono">
+                    * Padrão obrigatório para homologação na Rede Inteligente Atalaia.
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
         </div>
       </div>
 
