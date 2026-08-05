@@ -38,7 +38,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
     {
       id: 'FAMILY',
       title: 'Plano Família',
-      price: '39,90',
+      price: '29,90',
       description: 'Ideal para sua casa e família',
       features: [
         'Acesso a todas as câmeras do bairro',
@@ -52,7 +52,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose }) =
     {
       id: 'PREMIUM',
       title: 'Plano Prêmio',
-      price: '79,90',
+      price: '49,90',
       description: 'O monitoramento mais completo',
       features: [
         'Todos os recursos do Plano Família',

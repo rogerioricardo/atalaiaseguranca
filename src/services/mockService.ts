@@ -1,6 +1,6 @@
 
 import { supabase, isRealSupabase } from '../lib/supabaseClient';
-import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, ServiceRequest, Camera, SupportTicket, Coupon } from '../types';
+import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, ServiceRequest, Camera, SupportTicket, Coupon, RecordingRequest } from '../types';
 
 const generateUUID = () => {
     if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
@@ -378,37 +378,141 @@ export const MockService = {
 
   // --- USUÁRIOS (Sincronização Total) ---
   getUsers: async (neighborhoodId?: string): Promise<User[]> => {
-    if (!isRealSupabase) return [];
-    let query = supabase.from('profiles').select('*').order('name');
-    const safeId = sanitizeUUID(neighborhoodId);
-    if (safeId) query = query.eq('neighborhood_id', safeId);
-    
-    const { data, error } = await query;
-    if (error) return [];
-    
-    return (data || []).map(p => ({
-        id: p.id,
-        name: p.name || 'Sem Nome',
-        email: p.email || '',
-        role: p.role as UserRole,
-        plan: p.plan,
-        neighborhoodId: p.neighborhood_id,
-        phone: p.phone,
-        address: p.address,
-        approved: p.approved,
-        lat: p.lat,
-        lng: p.lng,
-        promoActive: p.promo_active === true,
-        promoStart: p.promo_start,
-        promoEnd: p.promo_end,
-        promoCoupon: p.promo_coupon
-    }));
+    if (!isRealSupabase) {
+        const localUsers: User[] = [];
+        if (typeof window !== 'undefined') {
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('atalaia_local_profile_')) {
+                    try {
+                        const u = JSON.parse(localStorage.getItem(key) || '');
+                        if (u && (!neighborhoodId || u.neighborhoodId === neighborhoodId || u.secondaryNeighborhoodId === neighborhoodId)) {
+                            localUsers.push(u);
+                        }
+                    } catch {}
+                }
+            }
+            if (localUsers.length === 0) {
+                const demoUsers = [
+                    { id: 'demo-user-id', name: 'Mariana Costa', email: 'morador@atalaia.com', role: UserRole.RESIDENT, plan: 'PREMIUM', approved: true, neighborhoodId: 'hood-demo-1', primaryNeighborhoodId: 'hood-demo-1' },
+                    { id: 'demo-scr-id', name: 'Vigia Roberto', email: 'scr@atalaia.com', role: UserRole.SCR, plan: 'PREMIUM', approved: true, neighborhoodId: 'hood-demo-1', primaryNeighborhoodId: 'hood-demo-1' },
+                    { id: 'demo-integrator-id', name: 'Gestor Anderson', email: 'integrador@atalaia.com', role: UserRole.INTEGRATOR, plan: 'PREMIUM', approved: true, neighborhoodId: 'hood-demo-1', primaryNeighborhoodId: 'hood-demo-1' }
+                ];
+                demoUsers.forEach(du => {
+                    localStorage.setItem(`atalaia_local_profile_${du.id}`, JSON.stringify(du));
+                    localUsers.push(du as any);
+                });
+            }
+        }
+        return localUsers;
+    }
+
+    try {
+        let query = supabase.from('profiles').select('*').order('name');
+        const safeId = sanitizeUUID(neighborhoodId);
+        
+        let data: any[] | null = null;
+        let error: any = null;
+
+        if (safeId) {
+            // Tenta usar a coluna nova secondary_neighborhood_id na consulta OR
+            const res = await supabase.from('profiles').select('*').or(`neighborhood_id.eq.${safeId},secondary_neighborhood_id.eq.${safeId}`).order('name');
+            data = res.data;
+            error = res.error;
+            
+            if (error) {
+                console.warn("[getUsers] Falha ao filtrar por secondary_neighborhood_id no Supabase, usando fallback de neighborhood_id padrão:", error);
+                // Fallback: filtra apenas pelo neighborhood_id padrão se a coluna secondary não existir
+                const resFallback = await supabase.from('profiles').select('*').eq('neighborhood_id', safeId).order('name');
+                data = resFallback.data;
+                error = resFallback.error;
+            }
+        } else {
+            const res = await query;
+            data = res.data;
+            error = res.error;
+        }
+
+        if (error || !data) return [];
+
+        return data.map(p => {
+            // Tenta carregar dados de cache local adicionais (ex: se salvou no localStorage mas não no DB real)
+            let localData: any = {};
+            if (typeof window !== 'undefined') {
+                try {
+                    const cached = localStorage.getItem(`atalaia_local_profile_${p.id}`);
+                    if (cached) {
+                        localData = JSON.parse(cached);
+                    }
+                } catch {}
+            }
+
+            return {
+                id: p.id,
+                name: p.name || 'Sem Nome',
+                email: p.email || '',
+                role: p.role as UserRole,
+                plan: p.plan,
+                neighborhoodId: p.neighborhood_id,
+                primaryNeighborhoodId: p.primary_neighborhood_id || p.neighborhood_id || localData.primaryNeighborhoodId,
+                secondaryNeighborhoodId: p.secondary_neighborhood_id || localData.secondaryNeighborhoodId,
+                phone: p.phone,
+                address: p.address,
+                approved: p.approved === true,
+                lat: p.lat,
+                lng: p.lng,
+                promoActive: p.promo_active === true,
+                promoStart: p.promo_start,
+                promoEnd: p.promo_end,
+                promoCoupon: p.promo_coupon
+            };
+        });
+    } catch (err) {
+        console.error("[getUsers] Erro crítico ao buscar usuários:", err);
+        return [];
+    }
   },
 
   adminUpdateUser: async (userId: string, data: any): Promise<void> => {
       const safeId = sanitizeUUID(userId);
+      
+      // Sempre atualiza o cache local (essencial para persistência robusta)
+      if (typeof window !== 'undefined') {
+          const targetKey = `atalaia_local_profile_${userId}`;
+          const currentStr = localStorage.getItem(targetKey);
+          let profileObj = currentStr ? JSON.parse(currentStr) : {};
+          profileObj = {
+              ...profileObj,
+              name: data.name !== undefined ? data.name : profileObj.name,
+              phone: data.phone !== undefined ? data.phone : profileObj.phone,
+              neighborhoodId: data.neighborhood_id !== undefined ? (data.neighborhood_id || undefined) : profileObj.neighborhoodId,
+              primaryNeighborhoodId: data.primary_neighborhood_id !== undefined ? (data.primary_neighborhood_id || undefined) : profileObj.primaryNeighborhoodId,
+              secondaryNeighborhoodId: data.secondary_neighborhood_id !== undefined ? (data.secondary_neighborhood_id || undefined) : profileObj.secondaryNeighborhoodId,
+              plan: data.plan !== undefined ? data.plan : profileObj.plan,
+              role: data.role !== undefined ? data.role : profileObj.role
+          };
+          localStorage.setItem(targetKey, JSON.stringify(profileObj));
+      }
+
       if (!isRealSupabase || !safeId) return;
-      await supabase.from('profiles').update(data).eq('id', safeId);
+
+      try {
+          const { error } = await supabase.from('profiles').update(data).eq('id', safeId);
+          if (error) {
+              console.warn("[adminUpdateUser] Falha ao atualizar Supabase, tentando sem os campos de duplo bairro:", error);
+              // Fallback gracioso: remove colunas novas e atualiza apenas o padrão
+              const fallbackData = { ...data };
+              delete fallbackData.primary_neighborhood_id;
+              delete fallbackData.secondary_neighborhood_id;
+              const { error: fallbackError } = await supabase.from('profiles').update(fallbackData).eq('id', safeId);
+              if (fallbackError) {
+                  throw fallbackError;
+              }
+          }
+      } catch (err) {
+          console.error("[adminUpdateUser] Erro ao atualizar perfil no Supabase:", err);
+          throw err;
+      }
   },
 
   updateUserPlan: async (userId: string, plan: string): Promise<void> => {
@@ -899,13 +1003,94 @@ export const MockService = {
 
   // --- FINANCEIRO / PAGAMENTOS ---
   getPayments: async (): Promise<any[]> => {
-    try {
-        const { data, error } = await supabase
-            .from('payments')
-            .select('*, profiles(name, neighborhood_id)')
-            .order('due_date', { ascending: false });
+    if (!isRealSupabase) {
+        let localPayments: any[] = [];
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('atalaia_local_payments');
+            if (cached) {
+                try {
+                    localPayments = JSON.parse(cached);
+                } catch {}
+            }
+            if (localPayments.length === 0) {
+                localPayments = [
+                    {
+                        id: 'pay-demo-1',
+                        user_id: 'demo-user-id',
+                        amount: 49.90,
+                        due_date: new Date(Date.now() + 5*24*60*60*1000).toISOString().split('T')[0],
+                        status: 'PENDING',
+                        reference_month: '08/2026',
+                        profiles: { name: 'Mariana Costa', neighborhood_id: 'hood-demo-1', plan: 'PREMIUM' }
+                    },
+                    {
+                        id: 'pay-demo-2',
+                        user_id: 'demo-scr-id',
+                        amount: 49.90,
+                        due_date: new Date(Date.now() - 2*24*60*60*1000).toISOString().split('T')[0],
+                        status: 'PAID',
+                        reference_month: '07/2026',
+                        profiles: { name: 'Vigia Roberto', neighborhood_id: 'hood-demo-1', plan: 'PREMIUM' }
+                    }
+                ];
+                localStorage.setItem('atalaia_local_payments', JSON.stringify(localPayments));
+            }
             
-        if (error) throw error;
+            // Enrich with current mock profiles to ensure updates in users (name, neighborhood, plan) are reflected
+            const users = await MockService.getUsers();
+            const userMap = new Map(users.map(u => [u.id, u]));
+            localPayments = localPayments.map(p => {
+                const u = userMap.get(p.user_id);
+                const localReceipt = localStorage.getItem(`receipt_data_${p.id}`);
+                const localReceiptName = localStorage.getItem(`receipt_name_${p.id}`);
+                return {
+                    ...p,
+                    profiles: u ? { name: u.name, neighborhood_id: u.neighborhoodId, plan: u.plan } : p.profiles,
+                    receipt_base64: p.receipt_base64 || localReceipt || null,
+                    receipt_name: p.receipt_name || localReceiptName || null
+                };
+            });
+        }
+        return localPayments;
+    }
+
+    try {
+        let data: any[] | null = null;
+        let error: any = null;
+
+        // Try direct relational join first
+        try {
+            const res = await supabase
+                .from('payments')
+                .select('*, profiles(name, neighborhood_id, plan)')
+                .order('due_date', { ascending: false });
+            data = res.data;
+            error = res.error;
+        } catch (joinErr) {
+            console.warn("[getPayments] Falha de join na primeira tentativa:", joinErr);
+            error = joinErr;
+        }
+
+        if (error) {
+            console.warn("[getPayments] Falha ao fazer join direto, buscando pagamentos e perfis separadamente...", error);
+            const { data: payData, error: payError } = await supabase
+                .from('payments')
+                .select('*')
+                .order('due_date', { ascending: false });
+            
+            if (payError) throw payError;
+            
+            const { data: profData } = await supabase
+                .from('profiles')
+                .select('id, name, neighborhood_id, plan');
+            
+            const profMap = new Map((profData || []).map(p => [p.id, p]));
+            
+            data = (payData || []).map(p => ({
+                ...p,
+                profiles: profMap.get(p.user_id) || null
+            }));
+        }
         
         // Enriquecer pagamentos com os dados de comprovante anexados localmente ou no banco
         const enriched = (data || []).map((p: any) => {
@@ -925,6 +1110,28 @@ export const MockService = {
   },
 
   createPayment: async (userId: string, amount: number, dueDate: string, referenceMonth: string) => {
+    if (!isRealSupabase) {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('atalaia_local_payments');
+            let localPayments: any[] = [];
+            if (cached) {
+                try { localPayments = JSON.parse(cached); } catch {}
+            }
+            const newPayment = {
+                id: `pay-local-${Date.now()}`,
+                user_id: userId,
+                amount: Number(amount),
+                due_date: dueDate,
+                status: 'PENDING',
+                reference_month: referenceMonth,
+                created_at: new Date().toISOString()
+            };
+            localPayments.unshift(newPayment);
+            localStorage.setItem('atalaia_local_payments', JSON.stringify(localPayments));
+        }
+        return;
+    }
+
     const { error } = await supabase
         .from('payments')
         .insert([{ 
@@ -942,6 +1149,28 @@ export const MockService = {
   },
 
   updatePaymentStatus: async (paymentId: string, status: 'PAID' | 'PENDING' | 'OVERDUE', paymentDate?: string) => {
+    if (!isRealSupabase) {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('atalaia_local_payments');
+            let localPayments: any[] = [];
+            if (cached) {
+                try { localPayments = JSON.parse(cached); } catch {}
+            }
+            localPayments = localPayments.map(p => {
+                if (p.id === paymentId) {
+                    return {
+                        ...p,
+                        status,
+                        payment_date: status === 'PAID' ? (paymentDate || new Date().toISOString()) : null
+                    };
+                }
+                return p;
+            });
+            localStorage.setItem('atalaia_local_payments', JSON.stringify(localPayments));
+        }
+        return;
+    }
+
     const updateData: any = { status };
     if (status === 'PAID') {
         updateData.payment_date = paymentDate || new Date().toISOString();
@@ -1366,6 +1595,86 @@ export const MockService = {
     } catch (e: any) {
       console.error("[MockService] Erro ao ativar promoção manualmente:", e);
       return { success: false, message: e.message || "Erro técnico ao liberar plano." };
+    }
+  },
+
+  // --- GRAVAÇÕES / PEDIDOS DE GRAVAÇÃO ---
+  getRecordingRequests: async (userId?: string): Promise<RecordingRequest[]> => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const cached = localStorage.getItem('atalaia_recording_requests');
+      let requests: RecordingRequest[] = cached ? JSON.parse(cached) : [];
+      if (userId) {
+        requests = requests.filter(r => r.userId === userId);
+      }
+      return requests;
+    } catch (e) {
+      console.warn("localStorage recording requests failed:", e);
+      return [];
+    }
+  },
+
+  createRecordingRequest: async (request: Omit<RecordingRequest, 'id' | 'createdAt' | 'status'>): Promise<RecordingRequest> => {
+    if (typeof window === 'undefined') throw new Error("Window is undefined");
+    const newRequest: RecordingRequest = {
+      ...request,
+      id: 'req-' + generateUUID(),
+      createdAt: new Date().toISOString(),
+      status: 'PENDING'
+    };
+    try {
+      const cached = localStorage.getItem('atalaia_recording_requests');
+      const requests: RecordingRequest[] = cached ? JSON.parse(cached) : [];
+      requests.push(newRequest);
+      localStorage.setItem('atalaia_recording_requests', JSON.stringify(requests));
+      return newRequest;
+    } catch (e) {
+      console.warn("localStorage recording request create failed:", e);
+      return newRequest;
+    }
+  },
+
+  updateRecordingRequestStatus: async (requestId: string, status: RecordingRequest['status'], recordingUrl?: string): Promise<void> => {
+    if (typeof window === 'undefined') return;
+    try {
+      const cached = localStorage.getItem('atalaia_recording_requests');
+      if (cached) {
+        const requests: RecordingRequest[] = JSON.parse(cached);
+        const index = requests.findIndex(r => r.id === requestId);
+        if (index !== -1) {
+          requests[index].status = status;
+          if (recordingUrl) {
+            requests[index].recordingUrl = recordingUrl;
+          }
+          localStorage.setItem('atalaia_recording_requests', JSON.stringify(requests));
+          
+          // Envia notificação simulada de WhatsApp se aplicável
+          if (requests[index].notifyWhatsApp && requests[index].phone) {
+            console.log(`[WhatsApp API] Notificação enviada para ${requests[index].phone}: Olá ${requests[index].userName}, o status do seu pedido de gravação da câmera ${requests[index].cameraName} mudou para ${status}!`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("localStorage recording request update failed:", e);
+    }
+  },
+
+  uploadBOFile: async (requestId: string, fileName: string, fileUrl: string): Promise<void> => {
+    if (typeof window === 'undefined') return;
+    try {
+      const cached = localStorage.getItem('atalaia_recording_requests');
+      if (cached) {
+        const requests: RecordingRequest[] = JSON.parse(cached);
+        const index = requests.findIndex(r => r.id === requestId);
+        if (index !== -1) {
+          requests[index].boFileName = fileName;
+          requests[index].boFileUrl = fileUrl;
+          requests[index].status = 'ANALYZING'; // Entra em análise após envio do BO
+          localStorage.setItem('atalaia_recording_requests', JSON.stringify(requests));
+        }
+      }
+    } catch (e) {
+      console.warn("localStorage recording request BO upload failed:", e);
     }
   },
 

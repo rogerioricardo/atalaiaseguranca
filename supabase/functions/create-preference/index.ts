@@ -60,20 +60,20 @@ serve(async (req) => {
 
     // Configuração do preço baseado no ID do plano
     let title = "Assinatura Plano Atalaia";
-    let price = 39.90;
+    let price = 29.90;
 
     if (planId === "FAMILY") {
       title = "Atalaia - Plano Família";
-      price = 39.90;
+      price = 29.90;
     } else if (planId === "PREMIUM") {
       title = "Atalaia - Plano Prêmio";
-      price = 79.90;
+      price = 49.90;
     } else if (planId === "PROMO" || planId === "TESTE_1REAL" || planId === "PROMO_1REAL" || planId === "TESTE7DIAS1REAL") {
       title = "Atalaia - Plano de Teste";
       price = 1.00;
     } else {
       title = `Atalaia - Plano ${planId}`;
-      price = 39.90; 
+      price = 29.90; 
     }
 
     // Verificar se existe cupom e se é válido

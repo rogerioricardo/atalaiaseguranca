@@ -496,12 +496,12 @@ export const ContractSignature: React.FC<ContractSignatureProps> = ({ user, onSi
 
       <div class="section-title">4. PLANOS DISPONÍVEIS</div>
       <p>O CONTRATANTE poderá aderir a um dos seguintes planos comercializados ou vinculados:</p>
-      <p><strong>🟢 4.1 PLANO GRATUITO (BASIC COLABORATIVO)</strong>: Plano sem custo mensal, com funcionalidades limitadas. Acesso básico à plataforma, visualização de alertas comunitários limitados, cadastro básico de usuário, participação restrita na rede colaborativa, sem suporte prioritário, sem recursos avançados de análise ou integração. Mesmo sendo gratuito, exige aceite integral deste contrato para utilização da plataforma.</p>
-      <p><strong>🔵 4.2 PLANO STANDARD – R$ 39,90 / MÊS</strong>: Inclui: Acesso completo à rede colaborativa Atalaia, Registro e visualização de eventos em tempo real, Notificações em tempo real, Histórico de eventos básico, Suporte padrão via plataforma e participação ativa.</p>
-      <p><strong>🟣 4.3 PLANO PREMIUM – R$ 79,90 / MÊS</strong>: Inclui todos os benefícios do plano Standard, acrescidos de: Prioridade em alertas críticos, Histórico estendido de eventos, Recursos avançados de análise de ocorrências, Integração ampliada com dispositivos e sistemas compatíveis, Suporte prioritário e acesso a funcionalidades exclusivas.</p>
+      <p><strong>🟢 4.1 PLANO GRATUITO (BASIC COLABORATIVO)</strong>: Plano sem custo mensal, com funcionalidades comunitárias limitadas. Acesso básico à plataforma, visualização de alertas comunitários limitados, cadastro básico de usuário, participação restrita na rede colaborativa, sem suporte prioritário, sem recursos avançados de análise ou integração. Atenção: este plano não possui acesso a câmeras ao vivo do bairro. Mesmo sendo gratuito, exige aceite integral deste contrato para utilização da plataforma.</p>
+      <p><strong>🔵 4.2 PLANO FAMÍLIA – R$ 29,90 / MÊS</strong>: Inclui: Acesso completo à rede colaborativa Atalaia, acesso às câmeras ao vivo do bairro, Registro e visualização de eventos em tempo real, Notificações em tempo real, Histórico de eventos básico, Suporte padrão via plataforma e participação ativa.</p>
+      <p><strong>🟣 4.3 PLANO PREMIUM – R$ 49,90 / MÊS</strong>: Inclui todos os benefícios do plano Família, acrescidos de: Prioridade em alertas críticos, Histórico estendido de eventos, Recursos avançados de análise de ocorrências, Integração ampliada com dispositivos e sistemas compatíveis, Suporte prioritário via WhatsApp e acesso a funcionalidades exclusivas.</p>
 
       <div class="section-title">5. CONDIÇÕES DE PAGAMENTO (PLANOS PAGOS)</div>
-      <p>Para os planos Standard e Premium: Cobrança mensal recorrente automática. Pagamento via PIX, cartão de crédito ou gateway integrado. Vencimento conforme data de adesão do usuário. Em caso de inadimplência, poderá ocorrer suspensão automática do acesso aos recursos pagos.</p>
+      <p>Para os planos Família e Premium: Cobrança mensal recorrente automática. Pagamento via PIX, cartão de crédito ou gateway integrado. Vencimento conforme data de adesão do usuário. Em caso de inadimplência, poderá ocorrer suspensão automática do acesso aos recursos pagos.</p>
 
       <div class="section-title">6. ADESÃO E ACEITE DIGITAL</div>
       <p>A adesão à plataforma ocorre mediante: Cadastro do usuário, Aceite eletrônico deste contrato e Registro de data, hora e identificação digital (IP e logs do sistema). Este aceite possui validade jurídica plena, conforme legislação vigente de assinaturas eletrônicas no Brasil.</p>
@@ -851,15 +851,15 @@ export const ContractSignature: React.FC<ContractSignatureProps> = ({ user, onSi
             <div>
               <h4 className="font-bold text-white border-l-2 border-atalaia-neon pl-2 mb-2 text-xs">4. PLANOS DISPONÍVEIS</h4>
               <div className="space-y-3 pl-2 mt-2">
-                <p>🟢 <strong className="text-white">4.1 PLANO GRATUITO (BASIC COLABORATIVO)</strong>: Plano sem custo mensal, com funcionalidades limitadas, acesso básico comunitário e cadastro. Mesmo sendo gratuito, exige aceite integral para uso.</p>
-                <p>🔵 <strong className="text-white">4.2 PLANO STANDARD – R$ 39,90 / MÊS</strong>: Integração completa de rede ativa de eventos, notificação real-time, escolta de aviso chegada/saída e solicitação de rondas comunitárias.</p>
-                <p>🟣 <strong className="text-white">4.3 PLANO PREMIUM – R$ 79,90 / MÊS</strong>: Prioridade de alertas táticos imediatos, suporte tático WhatsApp direto, histórico estendido e recursos avançados de análise de ocorrências comunitárias.</p>
+                <p>🟢 <strong className="text-white">4.1 PLANO GRATUITO (BASIC COLABORATIVO)</strong>: Plano sem custo mensal, com funcionalidades comunitárias limitadas, acesso comunitário básico e cadastro. Atenção: este plano não dá acesso a câmeras de segurança ao vivo do bairro. Mesmo sendo gratuito, exige aceite integral para uso.</p>
+                <p>🔵 <strong className="text-white">4.2 PLANO FAMÍLIA – R$ 29,90 / MÊS</strong>: Integração completa de rede ativa de eventos, visualização de câmeras ao vivo do bairro, notificação real-time, escolta de aviso chegada/saída e solicitação de rondas comunitárias.</p>
+                <p>🟣 <strong className="text-white">4.3 PLANO PREMIUM – R$ 49,90 / MÊS</strong>: Prioridade de alertas táticos imediatos, suporte tático WhatsApp direto, histórico estendido e recursos avançados de análise de ocorrências comunitárias.</p>
               </div>
             </div>
 
             <div>
               <h4 className="font-bold text-white border-l-2 border-atalaia-neon pl-2 mb-2 text-xs">5. CONDIÇÕES DE PAGAMENTO (PLANOS PAGOS)</h4>
-              <p>Cobrança recorrente mensal automatizada para planos Standard e Premium. Vencimento na data de adesão. A inadimplência possibilita a suspensão imediata de serviços de suporte adicionais.</p>
+              <p>Cobrança recorrente mensal automatizada para planos Família e Premium. Vencimento na data de adesão. A inadimplência possibilita a suspensão imediata de serviços de suporte adicionais.</p>
             </div>
 
             <div>

@@ -90,13 +90,13 @@ const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ 
                             onClick={onUpgrade}
                             className="bg-yellow-600 text-white text-[8px] font-black py-1 rounded uppercase"
                         >
-                            Plano Família (R$ 39,90)
+                            Plano Família (R$ 29,90)
                         </button>
                         <button 
                             onClick={onUpgrade}
                             className="bg-atalaia-neon text-black text-[8px] font-black py-1 rounded uppercase"
                         >
-                            Plano Prêmio (R$ 79,90)
+                            Plano Prêmio (R$ 49,90)
                         </button>
                     </div>
                 </div>

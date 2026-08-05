@@ -99,6 +99,7 @@ const IntegratorUsers: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editHoodId, setEditHoodId] = useState('');
+  const [editSecondaryHoodId, setEditSecondaryHoodId] = useState('');
   const [editPlan, setEditPlan] = useState<string>('FREE');
   const [editRole, setEditRole] = useState<UserRole>(UserRole.RESIDENT);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -168,12 +169,32 @@ const IntegratorUsers: React.FC = () => {
               name: editName, 
               phone: editPhone, 
               neighborhood_id: editHoodId || null,
+              primary_neighborhood_id: editHoodId || null,
+              secondary_neighborhood_id: editSecondaryHoodId || null,
               plan: editPlan,
               role: editRole
           });
+          
+          if (typeof window !== 'undefined') {
+              const targetKey = `atalaia_local_profile_${editingUser.id}`;
+              const currentStr = localStorage.getItem(targetKey);
+              let profileObj = currentStr ? JSON.parse(currentStr) : {};
+              profileObj = {
+                  ...profileObj,
+                  name: editName,
+                  phone: editPhone,
+                  neighborhoodId: editHoodId || undefined,
+                  primaryNeighborhoodId: editHoodId || undefined,
+                  secondaryNeighborhoodId: editSecondaryHoodId || undefined,
+                  plan: editPlan,
+                  role: editRole
+              };
+              localStorage.setItem(targetKey, JSON.stringify(profileObj));
+          }
+
           setIsEditModalOpen(false);
           fetchData();
-          alert('Usuário atualizado no banco!');
+          alert('Usuário atualizado com sucesso!');
       } catch (e: any) { alert(e.message); }
   };
 
@@ -373,6 +394,11 @@ const IntegratorUsers: React.FC = () => {
                                     <span className="text-[10px] text-atalaia-neon font-bold uppercase">
                                         {neighborhoods.find(n => n.id === resident.neighborhoodId)?.name || 'NÃO VINCULADO'}
                                     </span>
+                                    {resident.secondaryNeighborhoodId && (
+                                        <span className="text-[10px] text-purple-400 font-bold uppercase bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                            + {neighborhoods.find(n => n.id === resident.secondaryNeighborhoodId)?.name || 'Bairro 2'}
+                                        </span>
+                                    )}
                                 </div>
 
                                 {/* ACTIVE TRIAL BANNER CARDS AND PROGRESS COUNTDOWN */}
@@ -459,7 +485,16 @@ const IntegratorUsers: React.FC = () => {
                                 )}
                             </div>
                             <div className="flex gap-2 shrink-0">
-                                <button onClick={() => { setEditingUser(resident); setEditName(resident.name); setEditPhone(resident.phone || ''); setEditHoodId(resident.neighborhoodId || ''); setEditPlan(resident.plan); setEditRole(resident.role); setIsEditModalOpen(true); }} className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg"><Edit2 size={18} className="pointer-events-none" /></button>
+                                <button onClick={() => { 
+                                    setEditingUser(resident); 
+                                    setEditName(resident.name); 
+                                    setEditPhone(resident.phone || ''); 
+                                    setEditHoodId(resident.neighborhoodId || ''); 
+                                    setEditSecondaryHoodId(resident.secondaryNeighborhoodId || '');
+                                    setEditPlan(resident.plan); 
+                                    setEditRole(resident.role); 
+                                    setIsEditModalOpen(true); 
+                                }} className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg"><Edit2 size={18} className="pointer-events-none" /></button>
                                 {user?.id !== resident.id && (
                                     <button onClick={() => setUserToDelete(resident)} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg"><Trash2 size={18} className="pointer-events-none" /></button>
                                 )}
@@ -499,6 +534,13 @@ const IntegratorUsers: React.FC = () => {
                         <label className="text-[10px] text-gray-500 uppercase font-black mb-1 block">Bairro</label>
                         <select className="w-full bg-black border border-white/10 rounded-xl p-4 text-white" value={editHoodId} onChange={e => setEditHoodId(e.target.value)}>
                             <option value="">Sem Bairro</option>
+                            {neighborhoods.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-[10px] text-gray-500 uppercase font-black mb-1 block">Bairro Secundário (Opcional - Duplo Acesso)</label>
+                        <select className="w-full bg-black border border-white/10 rounded-xl p-4 text-white" value={editSecondaryHoodId} onChange={e => setEditSecondaryHoodId(e.target.value)}>
+                            <option value="">Sem Bairro Secundário</option>
                             {neighborhoods.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                         </select>
                     </div>

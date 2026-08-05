@@ -695,10 +695,11 @@ const FinancialAdmin: React.FC = () => {
       const dueDate = new Date(now.getFullYear(), now.getMonth(), 10).toISOString().split('T')[0];
 
       for (const resident of residents) {
+        if (resident.plan === 'FREE') continue; // Don't generate billing for free plan
         let amount = 0;
-        if (resident.plan === 'FAMILY') amount = 39.90;
-        else if (resident.plan === 'PREMIUM') amount = 79.90;
-        else amount = 39.90;
+        if (resident.plan === 'FAMILY') amount = 29.90;
+        else if (resident.plan === 'PREMIUM') amount = 49.90;
+        else continue;
 
         await MockService.createPayment(resident.id, amount, dueDate, refMonth);
       }

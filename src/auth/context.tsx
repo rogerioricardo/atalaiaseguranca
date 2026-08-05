@@ -15,6 +15,14 @@ const DEMO_USERS: Record<string, any> = {
         plan: 'PREMIUM',
         approved: true
     },
+    'geane.admin@atalaia.cloud': {
+        id: 'demo-geane-admin-id',
+        email: 'geane.admin@atalaia.cloud',
+        name: 'Geane Admin',
+        role: UserRole.ADMIN,
+        plan: 'PREMIUM',
+        approved: true
+    },
     'morador@atalaia.com': {
         id: 'demo-user-id',
         email: 'morador@atalaia.com',
@@ -22,7 +30,9 @@ const DEMO_USERS: Record<string, any> = {
         role: UserRole.RESIDENT,
         plan: 'PREMIUM',
         approved: true,
-        neighborhood_id: 'hood-demo-1'
+        neighborhood_id: 'hood-demo-1',
+        neighborhoodId: 'hood-demo-1',
+        primaryNeighborhoodId: 'hood-demo-1'
     },
     'scr@atalaia.com': {
         id: 'demo-scr-id',
@@ -31,7 +41,9 @@ const DEMO_USERS: Record<string, any> = {
         role: UserRole.SCR,
         plan: 'PREMIUM',
         approved: true,
-        neighborhood_id: 'hood-demo-1'
+        neighborhood_id: 'hood-demo-1',
+        neighborhoodId: 'hood-demo-1',
+        primaryNeighborhoodId: 'hood-demo-1'
     },
     'integrador@atalaia.com': {
         id: 'demo-integrator-id',
@@ -40,7 +52,9 @@ const DEMO_USERS: Record<string, any> = {
         role: UserRole.INTEGRATOR,
         plan: 'PREMIUM',
         approved: true,
-        neighborhood_id: 'hood-demo-1'
+        neighborhood_id: 'hood-demo-1',
+        neighborhoodId: 'hood-demo-1',
+        primaryNeighborhoodId: 'hood-demo-1'
     }
 };
 
@@ -63,6 +77,8 @@ interface AuthContextType {
   sessionTerminatedReason: string | null;
   clearSessionTerminatedReason: () => void;
   loginWithBiometrics: (profile: User) => Promise<void>;
+  switchNeighborhood?: (neighborhoodId: string) => void;
+  activeNeighborhoodId?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -71,6 +87,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionTerminatedReason, setSessionTerminatedReason] = useState<string | null>(null);
+  
+  const [activeNeighborhoodId, setActiveNeighborhoodId] = useState<string | undefined>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('atalaia_active_neighborhood_id') || undefined;
+    }
+    return undefined;
+  });
+
+  const switchNeighborhood = (id: string) => {
+    setActiveNeighborhoodId(id);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('atalaia_active_neighborhood_id', id);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      const primary = user.primaryNeighborhoodId || user.neighborhoodId;
+      const secondary = user.secondaryNeighborhoodId;
+      
+      if (!activeNeighborhoodId || (activeNeighborhoodId !== primary && activeNeighborhoodId !== secondary)) {
+        if (primary) {
+          setActiveNeighborhoodId(primary);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('atalaia_active_neighborhood_id', primary);
+          }
+        }
+      }
+    }
+  }, [user?.id, user?.neighborhoodId, user?.secondaryNeighborhoodId]);
 
   console.log("[AuthProvider] Renderizing AuthProvider with loading =", loading);
 
@@ -122,6 +168,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: mappedRole,
           plan: (profile.plan as UserPlan) || 'FREE',
           neighborhoodId: profile.neighborhood_id,
+          primaryNeighborhoodId: profile.primary_neighborhood_id || profile.neighborhood_id,
+          secondaryNeighborhoodId: profile.secondary_neighborhood_id,
           address: profile.address,
           city: profile.city,
           state: profile.state,
@@ -173,6 +221,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: resolvedRole,
               plan: ((metadata?.plan as UserPlan) || 'FREE'),
               neighborhoodId: metadata?.neighborhood_id,
+              primaryNeighborhoodId: metadata?.primary_neighborhood_id || metadata?.neighborhood_id,
+              secondaryNeighborhoodId: metadata?.secondary_neighborhood_id,
               phone: metadata?.phone,
               approved: true,
               ...localCachedUser
@@ -284,9 +334,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   localStorage.setItem(`atalaia_cached_role_${mappedUser.id}`, mappedUser.role);
               }
               
+              const cleanMappedUser = Object.fromEntries(
+                  Object.entries(mappedUser).filter(([_, v]) => v !== undefined)
+              );
               const mergedUser = {
                   ...localCachedUser,
-                  ...mappedUser
+                  ...cleanMappedUser
               };
 
               // Sincronizar cache local com os dados reais do banco de dados para evitar reaparecimento do banner
@@ -340,6 +393,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    // Auto-provisionamento de Geane Admin se for banco real (Supabase)
+    if (isRealSupabase) {
+      const provisionGeane = async () => {
+        try {
+          console.log("[Auth] Verificando existência de geane.admin@atalaia.cloud no banco...");
+          const { data: profileData, error: profileErr } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', 'geane.admin@atalaia.cloud')
+            .maybeSingle();
+
+          if (!profileData && !profileErr) {
+            console.log("[Auth] Provisionando geane.admin@atalaia.cloud no Supabase...");
+            const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+              email: 'geane.admin@atalaia.cloud',
+              password: '02011975',
+              options: {
+                data: {
+                  role: UserRole.ADMIN,
+                  name: 'Geane Admin',
+                  approved: true,
+                  plan: 'PREMIUM'
+                }
+              }
+            });
+
+            if (signUpErr) {
+              console.warn("[Auth] Não foi possível registrar Geane via signUp:", signUpErr.message);
+            } else if (signUpData?.user) {
+              const { error: insertErr } = await supabase.from('profiles').upsert({
+                id: signUpData.user.id,
+                email: 'geane.admin@atalaia.cloud',
+                name: 'Geane Admin',
+                role: UserRole.ADMIN,
+                approved: true,
+                plan: 'PREMIUM'
+              });
+              if (insertErr) {
+                console.error("[Auth] Erro ao inserir perfil de Geane no profiles:", insertErr.message);
+              } else {
+                console.log("[Auth] Geane Admin cadastrada e sincronizada com sucesso!");
+              }
+            }
+          } else {
+            console.log("[Auth] geane.admin@atalaia.cloud já existe no profiles ou erro:", profileErr);
+          }
+        } catch (err) {
+          console.warn("[Auth] Erro ao provisionar Geane:", err);
+        }
+      };
+      provisionGeane();
+    }
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       try {
         if (session?.user) {
@@ -351,6 +457,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           await fetchProfile(session.user.id, session.user.email!, session.user.user_metadata);
         } else {
+          // No real Supabase session, check if we have a local active demo session
+          const activeUserId = localStorage.getItem('atalaia_active_user_id');
+          if (activeUserId) {
+            const cachedStr = localStorage.getItem(`atalaia_local_profile_${activeUserId}`);
+            if (cachedStr) {
+              try {
+                const parsed = JSON.parse(cachedStr);
+                setUser(parsed);
+              } catch (e) {}
+            }
+          }
           setLoading(false);
         }
       } catch (err) {
@@ -378,8 +495,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
            }
            await fetchProfile(session.user.id, session.user.email!, session.user.user_metadata, event === 'SIGNED_IN');
         } else {
-          setUser(null);
-          setLoading(false);
+           // No real Supabase session, check if we have a local session active
+           const activeUserId = localStorage.getItem('atalaia_active_user_id');
+           if (activeUserId) {
+             const cachedStr = localStorage.getItem(`atalaia_local_profile_${activeUserId}`);
+             if (cachedStr) {
+               try {
+                 const parsed = JSON.parse(cachedStr);
+                 setUser(parsed);
+               } catch (e) {}
+             }
+           } else {
+             setUser(null);
+           }
+           setLoading(false);
         }
       } catch (err) {
         console.error("[Auth State Change] Erro crítico:", err);
@@ -403,6 +532,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('atalaia_active_user_id');
     }
   }, [user?.id]);
+
+  // Periodic local profile storage synchronization (picks up changes made by other pages like Admin instantly)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const syncInterval = setInterval(() => {
+      if (typeof window !== 'undefined') {
+        const cachedStr = localStorage.getItem(`atalaia_local_profile_${user.id}`);
+        if (cachedStr) {
+          try {
+            const parsed = JSON.parse(cachedStr);
+            const hasUpdates = 
+              parsed.name !== user.name ||
+              parsed.plan !== user.plan ||
+              parsed.role !== user.role ||
+              parsed.neighborhoodId !== user.neighborhoodId ||
+              parsed.primaryNeighborhoodId !== user.primaryNeighborhoodId ||
+              parsed.secondaryNeighborhoodId !== user.secondaryNeighborhoodId;
+
+            if (hasUpdates) {
+              console.log("[Auth - Local Sync] Detectadas atualizações no perfil local:", parsed);
+              setUser(prev => {
+                if (!prev) return null;
+                return {
+                  ...prev,
+                  ...parsed
+                };
+              });
+            }
+          } catch (e) {}
+        }
+      }
+    }, 3000);
+
+    return () => clearInterval(syncInterval);
+  }, [user]);
 
   // Instantly detect if another user account logs in inside another tab of the same browser
   useEffect(() => {
@@ -507,7 +672,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const cleanEmail = email.trim().toLowerCase();
-    const isDemoEmail = ['admin@atalaia.com', 'morador@atalaia.com', 'integrador@atalaia.com', 'scr@atalaia.com'].includes(cleanEmail);
+    const isDemoEmail = ['admin@atalaia.com', 'geane.admin@atalaia.cloud', 'morador@atalaia.com', 'integrador@atalaia.com', 'scr@atalaia.com'].includes(cleanEmail);
 
     // Bypass de contingência se Supabase não estiver configurado ou se for uma conta demo conhecida de teste
     if (!isRealSupabase || isDemoEmail) {
@@ -521,15 +686,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             approved: true
         };
 
-        if (password === 'admin123') {
+        const expectedPassword = cleanEmail === 'geane.admin@atalaia.cloud' ? '02011975' : 'admin123';
+
+        if (password === expectedPassword) {
             if (demoUser.phone) {
                localStorage.setItem('user_last_phone', demoUser.phone);
             }
-            setUser(demoUser);
-            await SessionService.registerSession(demoUser.id, demoUser.email);
+            
+            // Tenta obter o perfil atualizado do cache local (que o Admin atualizou)
+            let finalDemoUser = { ...demoUser };
+            if (typeof window !== 'undefined') {
+                const cachedStr = localStorage.getItem(`atalaia_local_profile_${demoUser.id}`);
+                if (cachedStr) {
+                    try {
+                        const parsed = JSON.parse(cachedStr);
+                        finalDemoUser = {
+                            ...demoUser,
+                            ...parsed
+                        };
+                    } catch (e) {}
+                }
+            }
+
+            setUser(finalDemoUser);
+            await SessionService.registerSession(finalDemoUser.id, finalDemoUser.email);
             return;
         } else if (isDemoEmail) {
-            throw new Error("Senha incorreta para o perfil de acesso local. (Dica: admin123)");
+            throw new Error(`Senha incorreta para o perfil de acesso local. (Dica: ${expectedPassword})`);
         }
         throw new Error("Conexão indisponível. Entre com 'admin@atalaia.com' e senha 'admin123' para acessar a conta local.");
     }
@@ -590,6 +773,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if ('role' in data) dbPayload.role = data.role;
     if ('plan' in data) dbPayload.plan = data.plan;
     if ('neighborhoodId' in data) dbPayload.neighborhood_id = data.neighborhoodId;
+    if ('primaryNeighborhoodId' in data) dbPayload.primary_neighborhood_id = data.primaryNeighborhoodId;
+    if ('secondaryNeighborhoodId' in data) dbPayload.secondary_neighborhood_id = data.secondaryNeighborhoodId;
     if ('address' in data) dbPayload.address = data.address;
     if ('city' in data) dbPayload.city = data.city;
     if ('state' in data) dbPayload.state = data.state;
@@ -673,8 +858,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const activeUser = user ? {
+    ...user,
+    neighborhoodId: activeNeighborhoodId || user.neighborhoodId
+  } : null;
+
   const contextValue: AuthContextType = { 
-        user, 
+        user: activeUser, 
         login: async (email, password, role, name, neighborhoodId, phone, plan) => {
              if (name || role) {
                  if (!isRealSupabase) {
@@ -715,7 +905,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshUser,
         sessionTerminatedReason,
         clearSessionTerminatedReason,
-        loginWithBiometrics
+        loginWithBiometrics,
+        switchNeighborhood,
+        activeNeighborhoodId
   };
 
   // Safe global fallback assignment to protect against multiple react bundles

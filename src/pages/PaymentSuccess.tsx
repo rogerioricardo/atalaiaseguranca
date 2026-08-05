@@ -26,7 +26,7 @@ const PaymentSuccess: React.FC = () => {
 
           try {
               // 1. Determinar o preço do plano contratado
-              let amount = planId === 'PREMIUM' ? 79.90 : 39.90;
+              let amount = planId === 'PREMIUM' ? 49.90 : 29.90;
               const payDate = new Date();
               const refMonth = `${(payDate.getMonth() + 1).toString().padStart(2, '0')}/${payDate.getFullYear()}`;
 

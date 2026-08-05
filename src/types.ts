@@ -15,6 +15,8 @@ export interface User {
   role: UserRole;
   plan: UserPlan;
   neighborhoodId?: string;
+  primaryNeighborhoodId?: string;
+  secondaryNeighborhoodId?: string;
   lat?: number;
   lng?: number;
   approved?: boolean;
@@ -174,6 +176,27 @@ export interface UserSession {
     createdAt: Date;
     lastActive: Date;
     isCurrent?: boolean;
+}
+
+export interface RecordingRequest {
+    id: string;
+    userId: string;
+    userName: string;
+    neighborhoodId: string;
+    cameraId: string;
+    cameraName: string;
+    startDate: string;
+    startTime: string;
+    endDate: string;
+    endTime: string;
+    incidentDetails: string;
+    boFileName?: string;
+    boFileUrl?: string;
+    recordingUrl?: string;
+    status: 'PENDING' | 'ANALYZING' | 'APPROVED' | 'COMPLETED' | 'REJECTED';
+    notifyWhatsApp: boolean;
+    phone?: string;
+    createdAt: string;
 }
 
 

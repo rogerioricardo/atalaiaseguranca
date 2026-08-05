@@ -28,13 +28,24 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, switchNeighborhood, activeNeighborhoodId } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [neighborhoods, setNeighborhoods] = useState<any[]>([]);
   
   const [partnerLogo, setPartnerLogo] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadHoods = async () => {
+      try {
+        const list = await MockService.getNeighborhoods(true);
+        setNeighborhoods(list);
+      } catch (err) {}
+    };
+    loadHoods();
+  }, []);
 
   useEffect(() => {
     const fetchPartnerBranding = async () => {
@@ -142,6 +153,26 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
             )}
           </div>
+
+          {user?.secondaryNeighborhoodId && (
+            <div className="mt-4 p-3 bg-white/[0.02] border border-white/5 rounded-xl space-y-1.5 animate-in fade-in duration-300">
+              <span className="text-[10px] text-gray-500 uppercase font-black tracking-widest pl-0.5 block flex items-center gap-1">
+                🌐 Visualizando Bairro:
+              </span>
+              <select 
+                value={activeNeighborhoodId || user?.neighborhoodId}
+                onChange={(e) => switchNeighborhood?.(e.target.value)}
+                className="w-full h-9 bg-black border border-white/10 rounded-lg px-2 text-xs text-atalaia-neon focus:outline-none focus:border-atalaia-neon/50 cursor-pointer font-bold font-sans uppercase"
+              >
+                <option value={user?.primaryNeighborhoodId || user?.neighborhoodId}>
+                  🏡 {neighborhoods.find(h => h.id === (user?.primaryNeighborhoodId || user?.neighborhoodId))?.name || 'Bairro Principal'}
+                </option>
+                <option value={user?.secondaryNeighborhoodId}>
+                  🏢 {neighborhoods.find(h => h.id === user?.secondaryNeighborhoodId)?.name || 'Bairro Secundário'}
+                </option>
+              </select>
+            </div>
+          )}
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-2">

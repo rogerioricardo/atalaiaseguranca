@@ -621,7 +621,27 @@ const Landing: React.FC = () => {
               <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">Escolha sua Proteção</h2>
               <p className="text-gray-400 text-lg max-w-2xl mx-auto">Planos flexíveis para cada nível de necessidade e segurança.</p>
           </div>
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+              {/* PLANO GRATUITO */}
+              <div className="bg-[#020202] border border-white/5 rounded-3xl p-8 flex flex-col hover:border-gray-500/20 transition-all duration-300">
+                  <div className="mb-8">
+                      <div className="flex items-center gap-2 mb-4">
+                          <Users className="text-gray-400" size={20} />
+                          <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Colaborativo Básico</span>
+                      </div>
+                      <h3 className="text-2xl font-bold text-white mb-2">Morador Gratuito</h3>
+                      <p className="text-gray-500 text-sm">Acesso básico à rede comunitária.</p>
+                  </div>
+                  <div className="mb-10"><span className="text-4xl font-extrabold text-white">R$ Grátis</span></div>
+                  <ul className="space-y-4 mb-12 flex-1">
+                      <li className="flex items-start gap-3 text-sm text-gray-400"><X className="text-red-500 mt-0.5 shrink-0" size={16} /> <span className="text-red-400 font-bold">Sem acesso a câmeras ao vivo</span></li>
+                      <li className="flex items-start gap-3 text-sm text-gray-400"><Check className="text-gray-400 mt-0.5 shrink-0" size={16} /> Chat em tempo real liberado</li>
+                      <li className="flex items-start gap-3 text-sm text-gray-400"><Check className="text-gray-400 mt-0.5 shrink-0" size={16} /> Disparo de alertas comunitários</li>
+                      <li className="flex items-start gap-3 text-sm text-gray-400"><Check className="text-gray-400 mt-0.5 shrink-0" size={16} /> Histórico básico da vizinhança</li>
+                  </ul>
+                  <Button onClick={() => handleRegister('FREE')} variant="outline" className="w-full justify-center h-12 font-bold hover:bg-gray-500/10 hover:text-gray-300 border-white/10 text-gray-400">Começar Plano Gratuito</Button>
+              </div>
+
               {/* PLANO FAMILIA */}
               <div className="bg-[#040404] border border-white/5 rounded-3xl p-8 flex flex-col hover:border-yellow-500/20 transition-all duration-300">
                   <div className="mb-8">
@@ -632,7 +652,7 @@ const Landing: React.FC = () => {
                       <h3 className="text-2xl font-bold text-white mb-2">Morador Família</h3>
                       <p className="text-gray-500 text-sm">Ideal para a segurança essencial da sua família.</p>
                   </div>
-                  <div className="mb-10"><span className="text-4xl font-extrabold text-white">R$ 39,90</span><span className="text-gray-500 text-sm ml-1">/mês</span></div>
+                  <div className="mb-10"><span className="text-4xl font-extrabold text-white">R$ 29,90</span><span className="text-gray-500 text-sm ml-1">/mês</span></div>
                   <ul className="space-y-4 mb-12 flex-1">
                       <li className="flex items-start gap-3 text-sm text-gray-400"><Check className="text-yellow-500 mt-0.5 shrink-0" size={16} /> Acesso em tempo real a todas as câmeras</li>
                       <li className="flex items-start gap-3 text-sm text-gray-400"><Check className="text-yellow-500 mt-0.5 shrink-0" size={16} /> Chat em tempo real liberado no sistema</li>
@@ -653,7 +673,7 @@ const Landing: React.FC = () => {
                       <h3 className="text-2xl font-bold text-white mb-2">Morador Prêmio</h3>
                       <p className="text-gray-400 text-sm">O monitoramento mais completo para sua segurança.</p>
                   </div>
-                  <div className="mb-10"><span className="text-4xl font-extrabold text-white">R$ 79,90</span><span className="text-gray-500 text-sm ml-1">/mês</span></div>
+                  <div className="mb-10"><span className="text-4xl font-extrabold text-white">R$ 49,90</span><span className="text-gray-500 text-sm ml-1">/mês</span></div>
                   <ul className="space-y-4 mb-12 flex-1">
                       <li className="flex items-start gap-3 text-sm text-white"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Todos os recursos do Plano Família</li>
                       <li className="flex items-start gap-3 text-sm text-white"><Check className="text-atalaia-neon mt-0.5 shrink-0" size={16} /> Atalaia Móvel (Botão de Pânico 24h)</li>
