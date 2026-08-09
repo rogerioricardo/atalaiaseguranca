@@ -1,5 +1,6 @@
 {
   "name": "Atalaia Segurança Colaborativa",
   "description": "Sistema avançado de segurança comunitária com monitoramento de câmeras em tempo real, alertas de pânico e integração com WhatsApp.",
-  "requestFramePermissions": ["geolocation", "camera"]
+  "requestFramePermissions": ["geolocation", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
