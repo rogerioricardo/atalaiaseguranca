@@ -29,21 +29,19 @@ var import_url = require("url");
 var import_vite = require("vite");
 var import_pg = __toESM(require("pg"), 1);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_cors = __toESM(require("cors"), 1);
 var import_meta = {};
 import_dotenv.default.config();
 var { Pool } = import_pg.default;
-var PORT = 3e3;
+var PORT = process.env.PORT || 3e3;
 var __filename = (0, import_url.fileURLToPath)(import_meta.url);
 var __dirname = import_path.default.dirname(__filename);
 var rdsConfig = {
-  host: process.env.RDS_HOST || "database-1.ciz622uoa3r0.us-east-1.rds.amazonaws.com",
+  host: process.env.RDS_HOST || "localhost",
   port: parseInt(process.env.RDS_PORT || "5432", 10),
-  database: process.env.RDS_DATABASE || "postgres",
-  user: process.env.RDS_USUARIO || "atalaiacloud",
-  password: process.env.SENHA_RDS,
-  // Configured via environment variable/secret SENHA_RDS
-  ssl: process.env.RDS_SSL === "false" ? void 0 : { rejectUnauthorized: false },
+  database: process.env.RDS_DATABASE || "atalaia_atalaia",
+  user: process.env.RDS_USER || "atalaia_atalaiacloud",
+  password: process.env.RDS_PASSWORD,
+  ssl: process.env.RDS_SSL === "true" ? { rejectUnauthorized: false } : false,
   max: 10,
   idleTimeoutMillis: 3e4,
   connectionTimeoutMillis: 5e3
@@ -52,8 +50,8 @@ var pool = null;
 var dbError = null;
 function getPool() {
   if (!pool) {
-    if (!process.env.SENHA_RDS) {
-      console.warn("\u26A0\uFE0F SENHA_RDS is not set. Database connections may fail if authentication is required.");
+    if (!process.env.RDS_PASSWORD) {
+      console.warn("\u26A0\uFE0F RDS_PASSWORD is not set. Database connections may fail if authentication is required.");
     }
     pool = new Pool(rdsConfig);
     pool.on("error", (err) => {
@@ -154,7 +152,6 @@ async function initializeDatabase() {
 }
 async function startServer() {
   const app = (0, import_express.default)();
-  app.use((0, import_cors.default)());
   app.use(import_express.default.json({ limit: "15mb" }));
   await initializeDatabase();
   app.get("/api/health", async (req, res) => {
@@ -341,16 +338,6 @@ async function startServer() {
       res.status(500).json({ error: err.message });
     }
   });
-  app.delete("/api/cameras/:id", async (req, res) => {
-    try {
-      const client = getPool();
-      const { id } = req.params;
-      await client.query("DELETE FROM cameras WHERE id = $1", [id]);
-      res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
   app.get("/api/payments", async (req, res) => {
     try {
       const client = getPool();
@@ -422,13 +409,6 @@ async function startServer() {
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
-  });
-  app.use((err, req, res, next) => {
-    console.error("\u274C Global Error Handler Caught:", err);
-    res.status(500).json({
-      error: "Internal Server Error",
-      message: err.message || String(err)
-    });
   });
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
