@@ -4,26 +4,27 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import pg from "pg";
 import dotenv from "dotenv";
-import cors from "cors";
 
 // Load environment variables
 dotenv.config();
 
 const { Pool } = pg;
-const PORT = 3000;
+const PORT = (process.env.PORT || 3000) as number;
 
 // Resolve dirname since we are in ES module mode
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize PostgreSQL Connection Pool using AWS RDS details
+// Initialize PostgreSQL Connection Pool
 const rdsConfig = {
-  host: process.env.RDS_HOST || "database-1.ciz622uoa3r0.us-east-1.rds.amazonaws.com",
+  host: process.env.RDS_HOST || "localhost",
   port: parseInt(process.env.RDS_PORT || "5432", 10),
-  database: process.env.RDS_DATABASE || "postgres",
-  user: process.env.RDS_USUARIO || "atalaiacloud",
-  password: process.env.SENHA_RDS, // Configured via environment variable/secret SENHA_RDS
-  ssl: process.env.RDS_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  database: process.env.RDS_DATABASE || "atalaia_atalaia",
+  user: process.env.RDS_USER || "atalaia_atalaiacloud",
+  password: process.env.RDS_PASSWORD,
+  ssl: process.env.RDS_SSL === "true"
+    ? { rejectUnauthorized: false }
+    : false,
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
@@ -34,8 +35,8 @@ let dbError: string | null = null;
 
 function getPool(): pg.Pool {
   if (!pool) {
-    if (!process.env.SENHA_RDS) {
-      console.warn("⚠️ SENHA_RDS is not set. Database connections may fail if authentication is required.");
+    if (!process.env.RDS_PASSWORD) {
+      console.warn("⚠️ RDS_PASSWORD is not set. Database connections may fail if authentication is required.");
     }
     pool = new Pool(rdsConfig);
     pool.on("error", (err) => {
@@ -154,9 +155,6 @@ async function initializeDatabase() {
 
 async function startServer() {
   const app = express();
-
-  // Enable CORS
-  app.use(cors());
 
   // Parse JSON payloads
   app.use(express.json({ limit: "15mb" }));
@@ -376,17 +374,6 @@ async function startServer() {
     }
   });
 
-  app.delete("/api/cameras/:id", async (req, res) => {
-    try {
-      const client = getPool();
-      const { id } = req.params;
-      await client.query("DELETE FROM cameras WHERE id = $1", [id]);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
   // --- PAYMENTS API ---
   app.get("/api/payments", async (req, res) => {
     try {
@@ -466,15 +453,6 @@ async function startServer() {
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
-  });
-
-  // --- GLOBAL ERROR HANDLING MIDDLEWARE ---
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error("❌ Global Error Handler Caught:", err);
-    res.status(500).json({
-      error: "Internal Server Error",
-      message: err.message || String(err),
-    });
   });
 
   // --- VITE MIDDLEWARE OR STATIC SERVING ---
