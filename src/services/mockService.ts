@@ -19,34 +19,6 @@ const sanitizeUUID = (id?: string): string | null => {
     return id;
 };
 
-let isSupabaseHealthy = true;
-
-const shouldUseSupabase = (): boolean => {
-    return isRealSupabase && isSupabaseHealthy;
-};
-
-const handleSupabaseError = (err: any, context: string) => {
-    const errMsg = err?.message || String(err);
-    console.warn(`[MockService/Supabase] Non-fatal error in ${context}:`, errMsg);
-    if (errMsg.includes("exceed_egress_quota") || errMsg.includes("restricted") || errMsg.includes("Failed to fetch") || errMsg.includes("network")) {
-        console.warn("[MockService/Supabase] Supabase egress quota exceeded or network failure. Disabling real-time Supabase integrations and falling back to Local Storage.");
-        isSupabaseHealthy = false;
-    }
-};
-
-const apiFetch = async (endpoint: string, options?: RequestInit): Promise<any> => {
-    try {
-        const response = await fetch(endpoint, options);
-        if (!response.ok) {
-            throw new Error(`HTTP Error ${response.status}: ${response.statusText}`);
-        }
-        return await response.json();
-    } catch (err) {
-        console.warn(`[MockService/API] Failed fetching from API endpoint ${endpoint}:`, err);
-        throw err;
-    }
-};
-
 const DEMO_CAMERAS: Camera[] = [
   {
     id: 'cam-demo-1',
@@ -106,47 +78,41 @@ const saveLocalCameras = (cameras: Camera[]) => {
 export const MockService = {
   // --- SISTEMA ---
   getSettings: async (forceRefresh = false): Promise<Record<string, string>> => {
-      if (!shouldUseSupabase()) return { 'template_broadcast_prefix': '[DEMO]' };
+      if (!isRealSupabase) return { 'template_broadcast_prefix': '[DEMO]' };
       try {
           const { data, error } = await supabase.from('system_settings').select('key, value');
           if (error) {
-              handleSupabaseError(error, "getSettings");
-              return { 'template_broadcast_prefix': '[DEMO]' };
+              console.error("[MockService] Error fetching settings:", error);
+              throw error;
           }
           const settings: Record<string, string> = {};
           (data || []).forEach(s => settings[s.key] = s.value);
           return settings;
       } catch (e) { 
-          handleSupabaseError(e, "getSettings");
+          console.error("[MockService] Catch in getSettings:", e);
           return {}; 
       }
   },
 
   updateSetting: async (key: string, value: string): Promise<void> => {
-      if (!shouldUseSupabase()) return;
-      try {
-          const { error } = await supabase.from('system_settings').upsert({ 
-              key: key.trim(), 
-              value: value.trim(), 
-              updated_at: new Date().toISOString() 
-          }, { onConflict: 'key' });
-          if (error) {
-              handleSupabaseError(error, "updateSetting");
-          }
-      } catch (e) {
-          handleSupabaseError(e, "updateSetting");
+      if (!isRealSupabase) return;
+      const { error } = await supabase.from('system_settings').upsert({ 
+          key: key.trim(), 
+          value: value.trim(), 
+          updated_at: new Date().toISOString() 
+      }, { onConflict: 'key' });
+      if (error) {
+          console.error("[MockService] Error updating setting:", error);
+          throw error;
       }
   },
 
   deleteSetting: async (key: string): Promise<void> => {
-      if (!shouldUseSupabase()) return;
-      try {
-          const { error } = await supabase.from('system_settings').delete().eq('key', key);
-          if (error) {
-              handleSupabaseError(error, "deleteSetting");
-          }
-      } catch (e) {
-          handleSupabaseError(e, "deleteSetting");
+      if (!isRealSupabase) return;
+      const { error } = await supabase.from('system_settings').delete().eq('key', key);
+      if (error) {
+          console.error("[MockService] Error deleting setting:", error);
+          throw error;
       }
   },
 
@@ -179,12 +145,19 @@ export const MockService = {
       }
     ];
 
+    if (!isRealSupabase) {
+        return demoHoods;
+    }
     try {
-        const data = await apiFetch('/api/neighborhoods');
-        const mapped = (data || []).map((n: any) => ({ 
+        const { data, error } = await supabase.from('neighborhoods').select('*').order('name');
+        if (error) {
+            console.error("[MockService] Error fetching neighborhoods:", JSON.stringify(error));
+            throw error;
+        }
+        const mapped = (data || []).map(n => ({ 
             id: n.id, 
             name: n.name, 
-            iframeUrl: n.iframe_url || '', 
+            iframeUrl: n.iframe_url || n.camera_url || '', 
             description: n.description, 
             lat: n.lat, 
             lng: n.lng 
@@ -197,7 +170,7 @@ export const MockService = {
         }
         return mapped;
     } catch (e) { 
-        console.warn("[MockService] Failed to fetch neighborhoods from API, falling back to local cache/demo:", e);
+        console.error("[MockService] Catch in getNeighborhoods, using local fallback:", e instanceof Error ? e.message : JSON.stringify(e));
         try {
             const cached = localStorage.getItem('atalaia_local_neighborhoods');
             if (cached) {
@@ -212,15 +185,29 @@ export const MockService = {
   },
 
   getNeighborhoodById: async (id: string): Promise<Neighborhood | undefined> => {
+    const safeId = sanitizeUUID(id);
+    
     const getFallback = async () => {
         const list = await MockService.getNeighborhoods();
         return list.find(h => h.id === id);
     };
 
+    if (!isRealSupabase || !safeId) {
+        return getFallback();
+    }
     try {
-        const list = await MockService.getNeighborhoods();
-        return list.find(h => h.id === id);
+        const { data, error } = await supabase.from('neighborhoods').select('*').eq('id', safeId).maybeSingle();
+        if (error) throw error;
+        return data ? { 
+            id: data.id, 
+            name: data.name, 
+            iframeUrl: data.iframe_url || data.camera_url || '', 
+            description: data.description, 
+            lat: data.lat, 
+            lng: data.lng 
+        } : getFallback();
     } catch (err) {
+        console.warn("[MockService] Error in getNeighborhoodById, falling back:", err);
         return getFallback();
     }
   },
@@ -242,14 +229,16 @@ export const MockService = {
         localStorage.setItem('atalaia_local_neighborhoods', JSON.stringify(updated));
     } catch (err) {}
 
+    if (!isRealSupabase) return;
+
     try {
-        await apiFetch('/api/neighborhoods', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: newId, name, description, iframe_url: iframeUrl })
-        });
+        const { error } = await supabase.from('neighborhoods').insert([{ name, description, iframe_url: iframeUrl }]);
+        if (error) {
+            console.error("[MockService] Error creating neighborhood in Supabase:", error);
+            throw error;
+        }
     } catch (err) {
-        console.warn("[MockService] Failed to create neighborhood on RDS API, saved locally:", err);
+        console.warn("[MockService] Bypass Supabase write during createNeighborhood due to network/quota error.");
     }
   },
 
@@ -260,14 +249,16 @@ export const MockService = {
         localStorage.setItem('atalaia_local_neighborhoods', JSON.stringify(updated));
     } catch (err) {}
 
+    if (!isRealSupabase) return;
+
     try {
-        await apiFetch('/api/neighborhoods', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, name, description, iframe_url: iframeUrl })
-        });
+        const { error } = await supabase.from('neighborhoods').update({ name, description, iframe_url: iframeUrl }).eq('id', id);
+        if (error) {
+            console.error("[MockService] Error updating neighborhood in Supabase:", error);
+            throw error;
+        }
     } catch (err) {
-        console.warn("[MockService] Failed to update neighborhood on RDS API, updated locally:", err);
+        console.warn("[MockService] Bypass Supabase write during updateNeighborhood due to network/quota error.");
     }
   },
 
@@ -278,30 +269,43 @@ export const MockService = {
         localStorage.setItem('atalaia_local_neighborhoods', JSON.stringify(updated));
     } catch (err) {}
 
+    if (!isRealSupabase) return;
+
     try {
-        await apiFetch(`/api/neighborhoods/${id}`, { method: 'DELETE' });
+        const { error } = await supabase.from('neighborhoods').delete().eq('id', id);
+        if (error) {
+            console.error("[MockService] Error deleting neighborhood in Supabase:", error);
+            throw error;
+        }
     } catch (err) {
-        console.warn("[MockService] Failed to delete neighborhood on RDS API, deleted locally:", err);
+        console.warn("[MockService] Bypass Supabase write during deleteNeighborhood due to network/quota error.");
     }
   },
 
   // --- CÂMERAS ---
   getAdditionalCameras: async (neighborhoodId: string): Promise<Camera[]> => {
+    const safeId = sanitizeUUID(neighborhoodId);
     let dbCameras: Camera[] = [];
     try {
-        const data = await apiFetch(`/api/cameras?neighborhoodId=${neighborhoodId}`);
-        dbCameras = (data || []).map((c: any) => ({
-            id: c.id, 
-            neighborhoodId: c.neighborhood_id, 
-            name: c.name, 
-            iframeCode: c.iframe_code, 
-            lat: c.lat, 
-            lng: c.lng,
-            locationPhotoUrl: c.location_photo_url,
-            maintenancePhotoUrl: c.maintenance_photo_url
-        }));
+        if (safeId) {
+            const { data, error } = await supabase.from('cameras').select('*').eq('neighborhood_id', safeId);
+            if (!error && data) {
+                dbCameras = data.map(c => ({ 
+                    id: c.id, 
+                    neighborhoodId: c.neighborhood_id, 
+                    name: c.name, 
+                    iframeCode: c.iframe_code, 
+                    lat: c.lat, 
+                    lng: c.lng,
+                    locationPhotoUrl: c.location_photo_url,
+                    maintenancePhotoUrl: c.maintenance_photo_url
+                }));
+            } else if (error) {
+                console.warn("[MockService] Erro de permissão ou banco ao buscar câmeras do Supabase:", error.message);
+            }
+        }
     } catch (e) {
-        console.warn("[MockService] Failed to fetch cameras from API, using local fallback:", e);
+        console.warn("[MockService] Falha em getAdditionalCameras do Supabase:", e);
     }
 
     const localCameras = getLocalCameras().filter(c => c.neighborhoodId === neighborhoodId);
@@ -320,19 +324,23 @@ export const MockService = {
   getAllSystemCameras: async (): Promise<Camera[]> => {
     let dbCameras: Camera[] = [];
     try {
-        const data = await apiFetch('/api/cameras');
-        dbCameras = (data || []).map((c: any) => ({ 
-            id: c.id, 
-            neighborhoodId: c.neighborhood_id, 
-            name: c.name, 
-            iframeCode: c.iframe_code, 
-            lat: c.lat, 
-            lng: c.lng,
-            locationPhotoUrl: c.location_photo_url,
-            maintenancePhotoUrl: c.maintenance_photo_url
-        }));
+        const { data, error } = await supabase.from('cameras').select('*');
+        if (!error && data) {
+            dbCameras = data.map(c => ({ 
+                id: c.id, 
+                neighborhoodId: c.neighborhood_id, 
+                name: c.name, 
+                iframeCode: c.iframe_code, 
+                lat: c.lat, 
+                lng: c.lng,
+                locationPhotoUrl: c.location_photo_url,
+                maintenancePhotoUrl: c.maintenance_photo_url
+            }));
+        } else if (error) {
+            console.warn("[MockService] Supabase cameras query returned error, using local fallback.", error);
+        }
     } catch (e) {
-        console.warn("[MockService] Failed to fetch all cameras from API, using local fallback:", e);
+        console.warn("[MockService] Error in getAllSystemCameras from Supabase, using local fallback:", e);
     }
 
     const localCameras = getLocalCameras();
@@ -366,22 +374,35 @@ export const MockService = {
     saveLocalCameras(local);
 
     try {
-        await apiFetch('/api/cameras', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                id,
-                neighborhoodId,
-                name,
-                iframeCode,
-                lat,
-                lng,
-                locationPhotoUrl,
-                maintenancePhotoUrl
-            })
-        });
+        const payload: any = {
+            id,
+            neighborhood_id: sanitizeUUID(neighborhoodId), 
+            name, 
+            iframe_code: iframeCode,
+            lat,
+            lng,
+            location_photo_url: locationPhotoUrl
+        };
+        let error;
+        if (maintenancePhotoUrl) {
+            payload.maintenance_photo_url = maintenancePhotoUrl;
+            const res = await supabase.from('cameras').insert([payload]);
+            error = res.error;
+            if (error && error.message && error.message.includes("maintenance_photo_url")) {
+                console.warn("[MockService] Coluna maintenance_photo_url ausente, tentando sem ela...");
+                delete payload.maintenance_photo_url;
+                const res2 = await supabase.from('cameras').insert([payload]);
+                error = res2.error;
+            }
+        } else {
+            const res = await supabase.from('cameras').insert([payload]);
+            error = res.error;
+        }
+        if (error) {
+            console.warn("[MockService] Failed to write camera to Supabase, saved locally:", error);
+        }
     } catch (e) {
-        console.warn("[MockService] Failed to create camera on RDS API, saved locally:", e);
+        console.warn("[MockService] Error adding camera to Supabase, saved locally:", e);
     }
   },
 
@@ -413,22 +434,33 @@ export const MockService = {
     saveLocalCameras(local);
 
     try {
-        await apiFetch('/api/cameras', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                id: cameraId,
-                neighborhoodId: neighborhoodId || local.find(c => c.id === cameraId)?.neighborhoodId,
-                name,
-                iframeCode,
+        const payload: any = { 
+                name, 
+                iframe_code: iframeCode,
                 lat,
                 lng,
-                locationPhotoUrl,
-                maintenancePhotoUrl
-            })
-        });
+                location_photo_url: locationPhotoUrl
+            };
+            let error;
+            if (maintenancePhotoUrl) {
+                payload.maintenance_photo_url = maintenancePhotoUrl;
+                const res = await supabase.from('cameras').update(payload).eq('id', cameraId);
+                error = res.error;
+                if (error && error.message && error.message.includes("maintenance_photo_url")) {
+                    console.warn("[MockService] Coluna maintenance_photo_url ausente no update, tentando sem ela...");
+                    delete payload.maintenance_photo_url;
+                    const res2 = await supabase.from('cameras').update(payload).eq('id', cameraId);
+                    error = res2.error;
+                }
+            } else {
+                const res = await supabase.from('cameras').update(payload).eq('id', cameraId);
+                error = res.error;
+            }
+        if (error) {
+            console.warn("[MockService] Failed to update camera on Supabase, updated locally:", error);
+        }
     } catch (e) {
-        console.warn("[MockService] Failed to update camera on RDS API, updated locally:", e);
+        console.warn("[MockService] Error updating camera on Supabase, updated locally:", e);
     }
   },
 
@@ -438,15 +470,18 @@ export const MockService = {
     saveLocalCameras(filtered);
 
     try {
-        await apiFetch(`/api/cameras/${id}`, { method: 'DELETE' });
+        const { error } = await supabase.from('cameras').delete().eq('id', id);
+        if (error) {
+            console.warn("[MockService] Failed to delete camera from Supabase, deleted locally:", error);
+        }
     } catch (e) {
-        console.warn("[MockService] Failed to delete camera from RDS API, deleted locally:", e);
+        console.warn("[MockService] Error deleting camera from Supabase, deleted locally:", e);
     }
   },
 
   // --- USUÁRIOS (Sincronização Total) ---
   getUsers: async (neighborhoodId?: string): Promise<User[]> => {
-    const getLocalFallback = () => {
+    if (!isRealSupabase) {
         const localUsers: User[] = [];
         if (typeof window !== 'undefined') {
             for (let i = 0; i < localStorage.length; i++) {
@@ -473,139 +508,265 @@ export const MockService = {
             }
         }
         return localUsers;
-    };
+    }
 
     try {
-        const endpoint = neighborhoodId ? `/api/users?neighborhoodId=${neighborhoodId}` : '/api/users';
-        const data = await apiFetch(endpoint);
-        return (data || []).map((p: any) => ({
-            id: p.id,
-            name: p.name || 'Sem Nome',
-            email: p.email || '',
-            role: p.role as UserRole,
-            plan: p.plan,
-            neighborhoodId: p.neighborhood_id,
-            primaryNeighborhoodId: p.primary_neighborhood_id || p.neighborhood_id,
-            secondaryNeighborhoodId: p.secondary_neighborhood_id,
-            phone: p.phone,
-            address: p.address,
-            approved: p.approved === true,
-            lat: p.lat,
-            lng: p.lng
-        }));
+        let query = supabase.from('profiles').select('*').order('name');
+        const safeId = sanitizeUUID(neighborhoodId);
+        
+        let data: any[] | null = null;
+        let error: any = null;
+
+        if (safeId) {
+            // Tenta usar a coluna nova secondary_neighborhood_id na consulta OR
+            const res = await supabase.from('profiles').select('*').or(`neighborhood_id.eq.${safeId},secondary_neighborhood_id.eq.${safeId}`).order('name');
+            data = res.data;
+            error = res.error;
+            
+            if (error) {
+                console.warn("[getUsers] Falha ao filtrar por secondary_neighborhood_id no Supabase, usando fallback de neighborhood_id padrão:", error);
+                // Fallback: filtra apenas pelo neighborhood_id padrão se a coluna secondary não existir
+                const resFallback = await supabase.from('profiles').select('*').eq('neighborhood_id', safeId).order('name');
+                data = resFallback.data;
+                error = resFallback.error;
+            }
+        } else {
+            const res = await query;
+            data = res.data;
+            error = res.error;
+        }
+
+        if (error || !data) throw error || new Error("No data returned");
+
+        return data.map(p => {
+            // Tenta carregar dados de cache local adicionais (ex: se salvou no localStorage mas não no DB real)
+            let localData: any = {};
+            if (typeof window !== 'undefined') {
+                try {
+                    const cached = localStorage.getItem(`atalaia_local_profile_${p.id}`);
+                    if (cached) {
+                        localData = JSON.parse(cached);
+                    }
+                } catch {}
+            }
+
+            return {
+                id: p.id,
+                name: p.name || 'Sem Nome',
+                email: p.email || '',
+                role: p.role as UserRole,
+                plan: p.plan,
+                neighborhoodId: p.neighborhood_id,
+                primaryNeighborhoodId: p.primary_neighborhood_id || p.neighborhood_id || localData.primaryNeighborhoodId,
+                secondaryNeighborhoodId: p.secondary_neighborhood_id || localData.secondaryNeighborhoodId,
+                phone: p.phone,
+                address: p.address,
+                approved: p.approved === true,
+                lat: p.lat,
+                lng: p.lng,
+                promoActive: p.promo_active === true,
+                promoStart: p.promo_start,
+                promoEnd: p.promo_end,
+                promoCoupon: p.promo_coupon
+            };
+        });
     } catch (err) {
-        console.warn("[MockService] Failed to fetch users from RDS API, using local cache:", err);
-        return getLocalFallback();
+        console.error("[getUsers] Erro crítico ao buscar usuários, recorrendo ao cache local:", err);
+        const localUsers: User[] = [];
+        if (typeof window !== 'undefined') {
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('atalaia_local_profile_')) {
+                    try {
+                        const u = JSON.parse(localStorage.getItem(key) || '');
+                        if (u && (!neighborhoodId || u.neighborhoodId === neighborhoodId || u.secondaryNeighborhoodId === neighborhoodId)) {
+                            localUsers.push(u);
+                        }
+                    } catch {}
+                }
+            }
+            if (localUsers.length === 0) {
+                const demoUsers = [
+                    { id: 'demo-user-id', name: 'Mariana Costa', email: 'morador@atalaia.com', role: UserRole.RESIDENT, plan: 'PREMIUM', approved: true, neighborhoodId: 'hood-demo-1', primaryNeighborhoodId: 'hood-demo-1' },
+                    { id: 'demo-scr-id', name: 'Vigia Roberto', email: 'scr@atalaia.com', role: UserRole.SCR, plan: 'PREMIUM', approved: true, neighborhoodId: 'hood-demo-1', primaryNeighborhoodId: 'hood-demo-1' },
+                    { id: 'demo-integrator-id', name: 'Gestor Anderson', email: 'integrador@atalaia.com', role: UserRole.INTEGRATOR, plan: 'PREMIUM', approved: true, neighborhoodId: 'hood-demo-1', primaryNeighborhoodId: 'hood-demo-1' }
+                ];
+                demoUsers.forEach(du => {
+                    localStorage.setItem(`atalaia_local_profile_${du.id}`, JSON.stringify(du));
+                    localUsers.push(du as any);
+                });
+            }
+        }
+        return localUsers;
     }
   },
 
   adminUpdateUser: async (userId: string, data: any): Promise<void> => {
-      let profileObj: any = {};
+      const safeId = sanitizeUUID(userId);
+      
+      // Sempre atualiza o cache local (essencial para persistência robusta)
       if (typeof window !== 'undefined') {
           const targetKey = `atalaia_local_profile_${userId}`;
           const currentStr = localStorage.getItem(targetKey);
-          profileObj = currentStr ? JSON.parse(currentStr) : {};
+          let profileObj = currentStr ? JSON.parse(currentStr) : {};
           profileObj = {
               ...profileObj,
-              id: userId,
               name: data.name !== undefined ? data.name : profileObj.name,
-              email: data.email !== undefined ? data.email : profileObj.email,
               phone: data.phone !== undefined ? data.phone : profileObj.phone,
               neighborhoodId: data.neighborhood_id !== undefined ? (data.neighborhood_id || undefined) : profileObj.neighborhoodId,
               primaryNeighborhoodId: data.primary_neighborhood_id !== undefined ? (data.primary_neighborhood_id || undefined) : profileObj.primaryNeighborhoodId,
               secondaryNeighborhoodId: data.secondary_neighborhood_id !== undefined ? (data.secondary_neighborhood_id || undefined) : profileObj.secondaryNeighborhoodId,
               plan: data.plan !== undefined ? data.plan : profileObj.plan,
-              role: data.role !== undefined ? data.role : profileObj.role,
-              approved: data.approved !== undefined ? data.approved : profileObj.approved
+              role: data.role !== undefined ? data.role : profileObj.role
           };
           localStorage.setItem(targetKey, JSON.stringify(profileObj));
       }
 
+      if (!isRealSupabase || !safeId) return;
+
       try {
-          await apiFetch('/api/users/upsert', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  id: userId,
-                  email: profileObj.email,
-                  name: profileObj.name,
-                  role: profileObj.role,
-                  plan: profileObj.plan,
-                  approved: profileObj.approved,
-                  neighborhoodId: profileObj.neighborhoodId,
-                  primaryNeighborhoodId: profileObj.primaryNeighborhoodId,
-                  secondaryNeighborhoodId: profileObj.secondaryNeighborhoodId
-              })
-          });
+          const { error } = await supabase.from('profiles').update(data).eq('id', safeId);
+          if (error) {
+              console.warn("[adminUpdateUser] Falha ao atualizar Supabase, tentando sem os campos de duplo bairro:", error);
+              // Fallback gracioso: remove colunas novas e atualiza apenas o padrão
+              const fallbackData = { ...data };
+              delete fallbackData.primary_neighborhood_id;
+              delete fallbackData.secondary_neighborhood_id;
+              const { error: fallbackError } = await supabase.from('profiles').update(fallbackData).eq('id', safeId);
+              if (fallbackError) {
+                  throw fallbackError;
+              }
+          }
       } catch (err) {
-          console.warn("[MockService] Failed to upsert user on RDS API, saved locally:", err);
+          console.error("[adminUpdateUser] Erro ao atualizar perfil no Supabase:", err);
+          throw err;
       }
   },
 
   updateUserPlan: async (userId: string, plan: string): Promise<void> => {
-      await MockService.adminUpdateUser(userId, { plan });
+      const safeId = sanitizeUUID(userId);
+      if (!isRealSupabase || !safeId) return;
+      await supabase.from('profiles').update({ plan }).eq('id', safeId);
   },
 
   approveUser: async (userId: string): Promise<void> => {
-      await MockService.adminUpdateUser(userId, { approved: true });
+      const safeId = sanitizeUUID(userId);
+      if (!isRealSupabase || !safeId) return;
+      await supabase.from('profiles').update({ approved: true }).eq('id', safeId);
   },
 
   deleteUser: async (id: string): Promise<void> => {
-      if (typeof window !== 'undefined') {
-          localStorage.removeItem(`atalaia_local_profile_${id}`);
-      }
+      const safeId = sanitizeUUID(id);
+      if (!isRealSupabase || !safeId) return;
+      await supabase.from('profiles').delete().eq('id', safeId);
   },
 
   maintenanceFixOrphans: async (): Promise<number> => {
-      return 0;
+      if (!isRealSupabase) return 0;
+      const { data: hoods } = await supabase.from('neighborhoods').select('id');
+      const hoodIds = (hoods || []).map(h => h.id);
+      const { data: users } = await supabase.from('profiles').select('id, neighborhood_id');
+      let fixedCount = 0;
+      if (users) {
+          for (const u of users) {
+              if (u.neighborhood_id && !hoodIds.includes(u.neighborhood_id)) {
+                  await supabase.from('profiles').update({ neighborhood_id: null }).eq('id', u.id);
+                  fixedCount++;
+              }
+          }
+      }
+      return fixedCount;
   },
 
   // --- ALERTAS E CHAT ---
   getAlerts: async (neighborhoodId?: string): Promise<Alert[]> => {
-    const fallbackAlerts = [{
-        id: 'alert-1',
-        type: 'OK' as any,
-        userId: 'demo-user',
-        userName: 'Morador Atalaia',
-        neighborhoodId: 'hood-demo-1',
-        timestamp: new Date(),
-        message: 'Ronda preventiva de segurança ativa.'
-    }];
+    if (!isRealSupabase) {
+        return [{
+            id: 'alert-1',
+            type: 'OK' as any,
+            userId: 'demo-user',
+            userName: 'Morador Atalaia',
+            neighborhoodId: 'hood-demo-1',
+            timestamp: new Date(),
+            message: 'Ronda preventiva de segurança ativa.'
+        }];
+    }
     try {
-        const endpoint = neighborhoodId ? `/api/alerts?neighborhoodId=${neighborhoodId}` : '/api/alerts';
-        const data = await apiFetch(endpoint);
-        return (data || []).map((a: any) => ({
-            id: a.id,
-            type: a.type as any,
-            userId: a.user_id,
-            userName: a.user_name,
-            neighborhoodId: a.neighborhood_id,
-            timestamp: new Date(a.timestamp),
-            message: a.message,
-            image: a.image
-        }));
+        const safeId = sanitizeUUID(neighborhoodId);
+        let query = supabase.from('alerts').select('*').order('timestamp', { ascending: false });
+        if (safeId) query = query.eq('neighborhood_id', safeId);
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data || []).map(a => ({ id: a.id, type: a.type as any, userId: a.user_id, userName: a.user_name, neighborhoodId: a.neighborhood_id, timestamp: new Date(a.timestamp), message: a.message, image: a.image }));
     } catch (e) {
-        console.warn("[MockService] Failed to fetch alerts from API, using local fallback:", e);
-        return fallbackAlerts;
+        console.error("[MockService] Error in getAlerts:", e);
+        return [];
     }
   },
 
   createAlert: async (alertData: any) => {
+    if (!isRealSupabase) { console.log("[DEMO] Alerta criado:", alertData); return; }
     try {
-        await apiFetch('/api/alerts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                type: alertData.type,
-                userId: alertData.userId,
-                userName: alertData.userName,
-                neighborhoodId: alertData.neighborhoodId,
-                message: alertData.message,
-                image: alertData.image
-            })
-        });
-    } catch (err) {
-        console.warn("[MockService] Failed to create alert on API backend:", err);
+        const safeHoodId = sanitizeUUID(alertData.neighborhoodId);
+        const safeUserId = sanitizeUUID(alertData.userId);
+        const { error: alertErr } = await supabase.from('alerts').insert([{ 
+            type: alertData.type, 
+            user_id: safeUserId, 
+            user_name: alertData.userName, 
+            neighborhood_id: safeHoodId, 
+            message: alertData.message, 
+            image: alertData.image 
+        }]);
+        if (alertErr) throw alertErr;
+        
+        const { error: chatErr } = await supabase.from('chat_messages').insert([{ 
+            neighborhood_id: safeHoodId, 
+            user_id: safeUserId, 
+            user_name: alertData.userName, 
+            user_role: alertData.userRole, 
+            text: alertData.message || (alertData.type === 'PANIC' ? '🚨 PÂNICO ACIONADO!' : alertData.type), 
+            is_system_alert: true, 
+            alert_type: alertData.type, 
+            image: alertData.image 
+        }]);
+        if (chatErr) throw chatErr;
+
+        // --- WHATSAPP BROADCAST ---
+        if (safeHoodId) {
+            const settings = await MockService.getSettings();
+            const hood = await MockService.getNeighborhoodById(safeHoodId);
+            const hoodName = hood?.name || 'Bairro';
+            
+            const typeLabels: Record<string, string> = {
+                'PANIC': '🚨 PÂNICO',
+                'DANGER': '⚠️ PERIGO',
+                'SUSPICIOUS': '👁️ SUSPEITA',
+                'OK': '✅ ESTOU BEM'
+            };
+
+            const prefix = settings['template_broadcast_prefix'] || '[ATALAIA]';
+            const message = `${prefix} ${typeLabels[alertData.type] || alertData.type}\n\nMorador: ${alertData.userName}\nBairro: ${hoodName}\n${alertData.message ? `Mensagem: ${alertData.message}` : ''}\n\nVerifique o app para mais detalhes.`;
+
+            // Fetch all phone numbers in the neighborhood
+            const { data: profiles, error: profileErr } = await supabase
+                .from('profiles')
+                .select('phone')
+                .eq('neighborhood_id', safeHoodId)
+                .not('phone', 'is', null);
+
+            if (!profileErr && profiles && profiles.length > 0) {
+                const numbers = profiles.map(p => p.phone).filter(Boolean) as string[];
+                if (numbers.length > 0) {
+                    // Dispara em background para não travar a resposta do app
+                    supabase.functions.invoke('send-alert', { 
+                        body: { message, numbers } 
+                    }).catch(err => console.error("[WhatsApp Broadcast] Error:", err));
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[MockService] Error in createAlert:", e);
+        throw e;
     }
   },
 
@@ -970,7 +1131,108 @@ export const MockService = {
 
   // --- FINANCEIRO / PAGAMENTOS ---
   getPayments: async (): Promise<any[]> => {
-    const getLocalFallback = async () => {
+    if (!isRealSupabase) {
+        let localPayments: any[] = [];
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('atalaia_local_payments');
+            if (cached) {
+                try {
+                    localPayments = JSON.parse(cached);
+                } catch {}
+            }
+            if (localPayments.length === 0) {
+                localPayments = [
+                    {
+                        id: 'pay-demo-1',
+                        user_id: 'demo-user-id',
+                        amount: 49.90,
+                        due_date: new Date(Date.now() + 5*24*60*60*1000).toISOString().split('T')[0],
+                        status: 'PENDING',
+                        reference_month: '08/2026',
+                        profiles: { name: 'Mariana Costa', neighborhood_id: 'hood-demo-1', plan: 'PREMIUM' }
+                    },
+                    {
+                        id: 'pay-demo-2',
+                        user_id: 'demo-scr-id',
+                        amount: 49.90,
+                        due_date: new Date(Date.now() - 2*24*60*60*1000).toISOString().split('T')[0],
+                        status: 'PAID',
+                        reference_month: '07/2026',
+                        profiles: { name: 'Vigia Roberto', neighborhood_id: 'hood-demo-1', plan: 'PREMIUM' }
+                    }
+                ];
+                localStorage.setItem('atalaia_local_payments', JSON.stringify(localPayments));
+            }
+            
+            // Enrich with current mock profiles to ensure updates in users (name, neighborhood, plan) are reflected
+            const users = await MockService.getUsers();
+            const userMap = new Map(users.map(u => [u.id, u]));
+            localPayments = localPayments.map(p => {
+                const u = userMap.get(p.user_id);
+                const localReceipt = localStorage.getItem(`receipt_data_${p.id}`);
+                const localReceiptName = localStorage.getItem(`receipt_name_${p.id}`);
+                return {
+                    ...p,
+                    profiles: u ? { name: u.name, neighborhood_id: u.neighborhoodId, plan: u.plan } : p.profiles,
+                    receipt_base64: p.receipt_base64 || localReceipt || null,
+                    receipt_name: p.receipt_name || localReceiptName || null
+                };
+            });
+        }
+        return localPayments;
+    }
+
+    try {
+        let data: any[] | null = null;
+        let error: any = null;
+
+        // Try direct relational join first
+        try {
+            const res = await supabase
+                .from('payments')
+                .select('*, profiles(name, neighborhood_id, plan)')
+                .order('due_date', { ascending: false });
+            data = res.data;
+            error = res.error;
+        } catch (joinErr) {
+            console.warn("[getPayments] Falha de join na primeira tentativa:", joinErr);
+            error = joinErr;
+        }
+
+        if (error) {
+            console.warn("[getPayments] Falha ao fazer join direto, buscando pagamentos e perfis separadamente...", error);
+            const { data: payData, error: payError } = await supabase
+                .from('payments')
+                .select('*')
+                .order('due_date', { ascending: false });
+            
+            if (payError) throw payError;
+            
+            const { data: profData } = await supabase
+                .from('profiles')
+                .select('id, name, neighborhood_id, plan');
+            
+            const profMap = new Map((profData || []).map(p => [p.id, p]));
+            
+            data = (payData || []).map(p => ({
+                ...p,
+                profiles: profMap.get(p.user_id) || null
+            }));
+        }
+        
+        // Enriquecer pagamentos com os dados de comprovante anexados localmente ou no banco
+        const enriched = (data || []).map((p: any) => {
+          const localReceipt = localStorage.getItem(`receipt_data_${p.id}`);
+          const localReceiptName = localStorage.getItem(`receipt_name_${p.id}`);
+          return {
+            ...p,
+            receipt_base64: p.receipt_base64 || localReceipt || null,
+            receipt_name: p.receipt_name || localReceiptName || null
+          };
+        });
+        return enriched;
+    } catch (e) {
+        console.error("[MockService] Error in getPayments, falling back to local storage:", e);
         let localPayments: any[] = [];
         if (typeof window !== 'undefined') {
             const cached = localStorage.getItem('atalaia_local_payments');
@@ -1023,95 +1285,86 @@ export const MockService = {
             }
         }
         return localPayments;
-    };
-
-    try {
-        const data = await apiFetch('/api/payments');
-        const enriched = (data || []).map((p: any) => {
-          const localReceipt = localStorage.getItem(`receipt_data_${p.id}`);
-          const localReceiptName = localStorage.getItem(`receipt_name_${p.id}`);
-          return {
-            ...p,
-            profiles: p.profiles || { name: p.user_name || 'Sem Nome', neighborhood_id: p.neighborhood_id, plan: p.plan },
-            receipt_base64: p.receipt_base64 || localReceipt || null,
-            receipt_name: p.receipt_name || localReceiptName || null
-          };
-        });
-        return enriched;
-    } catch (e) {
-        console.warn("[MockService] Failed to fetch payments from API, using local fallback:", e);
-        return getLocalFallback();
     }
   },
 
   createPayment: async (userId: string, amount: number, dueDate: string, referenceMonth: string) => {
-    if (typeof window !== 'undefined') {
-        const cached = localStorage.getItem('atalaia_local_payments');
-        let localPayments: any[] = [];
-        if (cached) {
-            try { localPayments = JSON.parse(cached); } catch {}
+    if (!isRealSupabase) {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('atalaia_local_payments');
+            let localPayments: any[] = [];
+            if (cached) {
+                try { localPayments = JSON.parse(cached); } catch {}
+            }
+            const newPayment = {
+                id: `pay-local-${Date.now()}`,
+                user_id: userId,
+                amount: Number(amount),
+                due_date: dueDate,
+                status: 'PENDING',
+                reference_month: referenceMonth,
+                created_at: new Date().toISOString()
+            };
+            localPayments.unshift(newPayment);
+            localStorage.setItem('atalaia_local_payments', JSON.stringify(localPayments));
         }
-        const newPayment = {
-            id: `pay-local-${Date.now()}`,
-            user_id: userId,
-            amount: Number(amount),
-            due_date: dueDate,
-            status: 'PENDING',
-            reference_month: referenceMonth,
-            created_at: new Date().toISOString()
-        };
-        localPayments.unshift(newPayment);
-        localStorage.setItem('atalaia_local_payments', JSON.stringify(localPayments));
+        return;
     }
 
-    try {
-        await apiFetch('/api/payments', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                userId, 
-                amount: Number(amount), 
-                dueDate, 
-                referenceMonth, 
-                status: 'PENDING'
-            })
-        });
-    } catch (error) {
-        console.error("[MockService] Failed to create payment on RDS API, saved locally:", error);
+    const { error } = await supabase
+        .from('payments')
+        .insert([{ 
+            user_id: sanitizeUUID(userId), 
+            amount, 
+            due_date: dueDate,
+            reference_month: referenceMonth,
+            status: 'PENDING'
+        }]);
+    
+    if (error) {
+        console.error("[MockService] Error in createPayment:", error);
+        throw error;
     }
   },
 
   updatePaymentStatus: async (paymentId: string, status: 'PAID' | 'PENDING' | 'OVERDUE', paymentDate?: string) => {
-    if (typeof window !== 'undefined') {
-        const cached = localStorage.getItem('atalaia_local_payments');
-        let localPayments: any[] = [];
-        if (cached) {
-            try { localPayments = JSON.parse(cached); } catch {}
-        }
-        localPayments = localPayments.map(p => {
-            if (p.id === paymentId) {
-                return {
-                    ...p,
-                    status,
-                    payment_date: status === 'PAID' ? (paymentDate || new Date().toISOString()) : null
-                };
+    if (!isRealSupabase) {
+        if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem('atalaia_local_payments');
+            let localPayments: any[] = [];
+            if (cached) {
+                try { localPayments = JSON.parse(cached); } catch {}
             }
-            return p;
-        });
-        localStorage.setItem('atalaia_local_payments', JSON.stringify(localPayments));
+            localPayments = localPayments.map(p => {
+                if (p.id === paymentId) {
+                    return {
+                        ...p,
+                        status,
+                        payment_date: status === 'PAID' ? (paymentDate || new Date().toISOString()) : null
+                    };
+                }
+                return p;
+            });
+            localStorage.setItem('atalaia_local_payments', JSON.stringify(localPayments));
+        }
+        return;
     }
 
-    try {
-        await apiFetch(`/api/payments/${paymentId}/status`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                status,
-                paymentDate: status === 'PAID' ? (paymentDate || new Date().toISOString()) : null
-            })
-        });
-    } catch (error) {
-        console.error("[MockService] Failed to update payment status on RDS API:", error);
+    const updateData: any = { status };
+    if (status === 'PAID') {
+        updateData.payment_date = paymentDate || new Date().toISOString();
+    } else {
+        updateData.payment_date = null;
+    }
+
+    const { error } = await supabase
+        .from('payments')
+        .update(updateData)
+        .eq('id', paymentId);
+    
+    if (error) {
+        console.error("[MockService] Error in updatePaymentStatus:", error);
+        throw error;
     }
   },
 
