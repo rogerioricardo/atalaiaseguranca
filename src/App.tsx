@@ -21,6 +21,7 @@ import Terms from '@/pages/Terms';
 import Privacy from '@/pages/Privacy';
 import ResetPassword from '@/pages/ResetPassword';
 import CollaborativeNetwork from '@/pages/CollaborativeNetwork';
+import ImagePolicyPage from '@/pages/ImagePolicyPage';
 import { ShieldCheck, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/UI';
 
@@ -114,6 +115,8 @@ const AppRoutes = () => {
       <Route path="/docs" element={<Documentation />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/politica-imagens" element={<ImagePolicyPage />} />
+      <Route path="/politica-fornecimento-imagens" element={<ImagePolicyPage />} />
       
       {/* Protected Routes */}
       <Route path="/welcome" element={

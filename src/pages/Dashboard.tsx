@@ -13,7 +13,7 @@ import {
     Heart, DollarSign, Loader2, Navigation, FileText, 
     Shield, Star, Lock, Send, Search, CheckCircle, UserCheck, XCircle,
     Wrench, MessageSquare, DoorOpen, LightbulbOff, Eye, ShieldAlert, UserX,
-    VolumeX, Package, Droplet, Sparkles, Bell, Upload, Globe
+    VolumeX, Package, Droplet, Sparkles, Bell, Upload, Globe, ArrowRight, Play
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PaymentService } from '@/services/paymentService';
@@ -203,6 +203,7 @@ const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ 
 
 // --- SUB-COMPONENT: SCR TACTICAL DASHBOARD ---
 const SCRDashboard = ({ user, neighborhood }: { user: User, neighborhood?: Neighborhood }) => {
+    const navigate = useNavigate();
     const [patrolLoading, setPatrolLoading] = useState(false);
     const [quickIncidents, setQuickIncidents] = useState<Alert[]>([]);
     const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
@@ -348,22 +349,31 @@ const SCRDashboard = ({ user, neighborhood }: { user: User, neighborhood?: Neigh
                 </div>
 
                 {/* BIG BUTTONS FOR GLOVED HANDS */}
-                <div className="grid grid-cols-2 gap-4 h-32 md:h-40">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <button 
                         onClick={() => initiateAction('CHECKIN')}
                         disabled={patrolLoading}
-                        className="bg-emerald-950/70 hover:bg-emerald-900 active:bg-emerald-800 text-white rounded-xl border-2 border-emerald-500/50 hover:border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)] flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                        className="h-28 sm:h-32 bg-emerald-950/70 hover:bg-emerald-900 active:bg-emerald-800 text-white rounded-xl border-2 border-emerald-500/50 hover:border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)] flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                     >
-                        {patrolLoading ? <Loader2 className="animate-spin w-10 h-10 text-emerald-400" /> : <MapPin className="w-10 h-10 text-emerald-400" />}
-                        <span className="text-sm font-black uppercase tracking-wider">CHECK-IN RONDA</span>
+                        {patrolLoading ? <Loader2 className="animate-spin w-8 h-8 text-emerald-400" /> : <MapPin className="w-8 h-8 text-emerald-400" />}
+                        <span className="text-xs sm:text-sm font-black uppercase tracking-wider">CHECK-IN RONDA</span>
                     </button>
 
                     <button 
                         onClick={() => initiateAction('PANIC')}
-                        className="bg-red-950/70 hover:bg-red-900 active:bg-red-800 text-white rounded-xl border-2 border-red-500/50 hover:border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.15)] flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                        className="h-28 sm:h-32 bg-red-950/70 hover:bg-red-900 active:bg-red-800 text-white rounded-xl border-2 border-red-500/50 hover:border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.15)] flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                     >
-                        <AlertTriangle className="w-10 h-10 text-red-500" />
-                        <span className="text-sm font-black uppercase tracking-wider">PANICO / PERIGO</span>
+                        <AlertTriangle className="w-8 h-8 text-red-500" />
+                        <span className="text-xs sm:text-sm font-black uppercase tracking-wider">PANICO / PERIGO</span>
+                    </button>
+
+                    <button 
+                        id="btn-scr-view-cameras"
+                        onClick={() => navigate('/cameras')}
+                        className="h-28 sm:h-32 bg-cyan-950/70 hover:bg-cyan-900 active:bg-cyan-800 text-white rounded-xl border-2 border-atalaia-neon/60 hover:border-atalaia-neon shadow-[0_0_20px_rgba(0,240,255,0.2)] flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                    >
+                        <Video className="w-8 h-8 text-atalaia-neon" />
+                        <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-atalaia-neon">VER CÂMERAS</span>
                     </button>
                 </div>
 
@@ -1235,6 +1245,59 @@ const Dashboard: React.FC = () => {
                  <MapPin size={16} /> Bairro: {myNeighborhood.name}
              </div>
         )}
+      </div>
+
+      {/* PROMINENT ACTION CARD: QUERO VER MINHAS CÂMERAS */}
+      <div className="mb-8 animate-in slide-in-from-top-4">
+        <button
+          id="btn-dashboard-view-cameras"
+          onClick={() => navigate('/cameras')}
+          className="w-full text-left p-6 sm:p-7 rounded-2xl bg-gradient-to-r from-emerald-950/80 via-black to-zinc-950 border-2 border-atalaia-neon/50 hover:border-atalaia-neon shadow-[0_0_30px_rgba(0,240,255,0.18)] hover:shadow-[0_0_40px_rgba(0,240,255,0.35)] transition-all duration-300 group relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 cursor-pointer transform hover:-translate-y-0.5 active:scale-[0.99]"
+        >
+          {/* Ambient Glows */}
+          <div className="absolute top-0 right-0 w-80 h-80 bg-atalaia-neon/15 rounded-full blur-[90px] -translate-y-1/2 translate-x-1/3 pointer-events-none group-hover:bg-atalaia-neon/25 transition-all duration-500" />
+          <div className="absolute bottom-0 left-10 w-48 h-48 bg-emerald-500/10 rounded-full blur-[70px] pointer-events-none" />
+
+          {/* Left info & Icon */}
+          <div className="flex items-center gap-5 relative z-10 w-full md:w-auto">
+            <div className="relative shrink-0">
+              <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-atalaia-neon/15 border border-atalaia-neon/40 flex items-center justify-center text-atalaia-neon shadow-[0_0_20px_rgba(0,240,255,0.3)] group-hover:scale-105 group-hover:bg-atalaia-neon group-hover:text-black transition-all duration-300">
+                <Video size={32} className="shrink-0" />
+              </div>
+              <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-black"></span>
+              </span>
+            </div>
+
+            <div className="space-y-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2.5 py-0.5 rounded-full bg-atalaia-neon/20 border border-atalaia-neon/40 text-atalaia-neon text-[10px] font-black tracking-widest uppercase">
+                  Transmissão ao Vivo & Gravações
+                </span>
+                <span className="flex items-center gap-1 text-[11px] text-emerald-400 font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  {cameras.length} {cameras.length === 1 ? 'Câmera Ativa' : 'Câmeras Ativas'}
+                </span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight group-hover:text-atalaia-neon transition-colors">
+                Quero ver minhas câmeras
+              </h2>
+              <p className="text-sm text-zinc-300 max-w-xl">
+                Acesse o mosaico de vigilância em tempo real do seu bairro, gravações em nuvem e solicitação de imagens.
+              </p>
+            </div>
+          </div>
+
+          {/* Right Action CTA Button */}
+          <div className="relative z-10 w-full md:w-auto shrink-0 flex items-center justify-end">
+            <div className="w-full md:w-auto px-6 py-3.5 rounded-xl bg-atalaia-neon text-black font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(0,240,255,0.4)] group-hover:bg-white group-hover:shadow-[0_0_35px_rgba(255,255,255,0.6)] group-hover:scale-105 transition-all duration-300">
+              <Play size={18} fill="currentColor" />
+              <span>Acessar Câmeras</span>
+              <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+        </button>
       </div>
 
        {/* ACTIVE TRIAL COUNTDOWN WARNING BANNER */}

@@ -20,7 +20,9 @@ import {
   FileText,
   DollarSign,
   Smartphone,
-  Download
+  Download,
+  Scale,
+  Server
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -230,9 +232,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           
           {/* New Help Section */}
           <div className="mt-8 mb-4 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            Ajuda
+            Ajuda & Legal
           </div>
           <NavItem to="/docs" icon={FileText} label="Manual do Sistema" />
+          <NavItem to="/politica-imagens" icon={Scale} label="Política de Imagens" />
 
         </nav>
 
@@ -261,6 +264,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <LogOut size={18} />
             Sair do Sistema
           </button>
+
+          <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2 px-1">
+            <Server size={12} className="text-atalaia-neon shrink-0 opacity-70" />
+            <p className="text-[10px] text-zinc-500 font-mono leading-tight">
+              Servidores <span className="text-zinc-400 font-semibold">ServCam</span> • <span className="text-zinc-400">Alien Seg. Eletrônica</span>
+            </p>
+          </div>
         </div>
       </aside>
 

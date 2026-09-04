@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Zap, MessageSquare, Users, MapPin, Bell, Clock, BarChart3, MessageCircle, Menu, X, Lock, CreditCard, Smartphone, Download, Printer, Video, Check, Wifi, XCircle, FileText, Scan, AlertTriangle, Star, Shield, Heart, Eye, Loader2, Home, Wrench } from 'lucide-react';
+import { ShieldCheck, Zap, MessageSquare, Users, MapPin, Bell, Clock, BarChart3, MessageCircle, Menu, X, Lock, CreditCard, Smartphone, Download, Printer, Video, Check, Wifi, XCircle, FileText, Scan, AlertTriangle, Star, Shield, Heart, Eye, Loader2, Home, Wrench, Server } from 'lucide-react';
 import { Button, Modal, Badge } from '@/components/UI';
+import { ImagePolicyButton, ImagePolicyModal } from '@/components/ImagePolicyModal';
 import { MockService } from '@/services/mockService';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -685,6 +686,74 @@ const Landing: React.FC = () => {
           </div>
       </section>
 
+      {/* Seção Infraestrutura ServCam & Alien Sistemas */}
+      <section className="py-16 md:py-24 bg-[#030303] border-t border-white/5 relative overflow-hidden print:hidden font-sans">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-atalaia-neon/5 rounded-full blur-[140px] pointer-events-none" />
+        
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="bg-gradient-to-r from-[#070707] via-[#0b0b0f] to-[#070707] border border-atalaia-neon/30 rounded-3xl p-8 sm:p-12 shadow-[0_0_50px_rgba(0,255,102,0.06)] relative overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              <div className="lg:col-span-8 space-y-4">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-atalaia-neon/10 border border-atalaia-neon/30 text-atalaia-neon text-xs font-mono font-black tracking-wider uppercase">
+                  <Server size={14} className="animate-pulse" /> Servidores Dedicados ServCam
+                </div>
+                
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-snug">
+                  Tecnologia e Servidores <span className="text-atalaia-neon">ServCam</span>
+                </h2>
+                
+                <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
+                  O sistema <strong className="text-white font-bold">Atalaia</strong> utiliza os servidores <strong className="text-atalaia-neon font-bold">ServCam</strong>, de propriedade da <strong className="text-white font-bold">Alien Sistemas de Segurança Eletrônica</strong>, garantindo máxima estabilidade, baixíssima latência na transmissão de vídeo ao vivo, segurança da informação e alta disponibilidade 24 horas por dia.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
+                  <div className="p-3.5 rounded-2xl bg-black/60 border border-white/10 flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-atalaia-neon/10 text-atalaia-neon shrink-0">
+                      <Server size={18} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase font-mono">ServCam Cloud</h4>
+                      <p className="text-[11px] text-gray-400">Servidores de alta performance</p>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-black/60 border border-white/10 flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-atalaia-neon/10 text-atalaia-neon shrink-0">
+                      <ShieldCheck size={18} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase font-mono">Alien Sistemas</h4>
+                      <p className="text-[11px] text-gray-400">Segurança Eletrônica</p>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-black/60 border border-white/10 flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-atalaia-neon/10 text-atalaia-neon shrink-0">
+                      <Zap size={18} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase font-mono">Transmissão 24/7</h4>
+                      <p className="text-[11px] text-gray-400">Streaming ultra estável</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-4 flex flex-col items-center justify-center p-6 sm:p-8 bg-[#040404] border border-white/10 rounded-2xl text-center shadow-xl">
+                <div className="w-16 h-16 rounded-2xl bg-atalaia-neon/10 border border-atalaia-neon/40 flex items-center justify-center text-atalaia-neon mb-4 shadow-[0_0_25px_rgba(0,255,102,0.25)]">
+                  <Server size={32} />
+                </div>
+                <h3 className="text-white font-black text-base sm:text-lg mb-1">ServCam Servers</h3>
+                <p className="text-xs text-atalaia-neon font-mono font-bold uppercase mb-3">Alien Sistemas de Segurança Eletrônica</p>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Infraestrutura de ponta desenvolvida para monitoramento inteligente comunitário.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="py-16 bg-[#010101] border-t border-white/5 text-gray-400 text-sm print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -695,8 +764,11 @@ const Landing: React.FC = () => {
                 <ShieldCheck className="text-atalaia-neon h-6 w-6" />
                 <span className="text-xl font-bold text-white tracking-tight">ATALAIA</span>
               </div>
-              <p className="text-gray-500 max-w-xs mb-6 leading-relaxed">
+              <p className="text-gray-500 max-w-xs mb-4 leading-relaxed">
                 A maior rede de segurança colaborativa do Brasil. Unindo tecnologia e vizinhança para um ambiente mais seguro para todos.
+              </p>
+              <p className="text-xs text-gray-400 font-mono mb-6">
+                Servidores <span className="text-atalaia-neon font-bold">ServCam</span> • Propriedade da <span className="text-white font-semibold">Alien Sistemas de Segurança Eletrônica</span>
               </p>
               <div className="flex gap-4">
                 <button className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-atalaia-neon hover:text-black transition-all">
@@ -734,15 +806,17 @@ const Landing: React.FC = () => {
               <ul className="space-y-4">
                 <li><button onClick={() => navigate('/terms')} className="hover:text-atalaia-neon transition-colors">Termos de Uso</button></li>
                 <li><button onClick={() => navigate('/privacy')} className="hover:text-atalaia-neon transition-colors">Privacidade</button></li>
+                <li><ImagePolicyButton variant="subtle" label="Política de Imagens" /></li>
                 <li><button className="hover:text-atalaia-neon transition-colors">Cookies</button></li>
               </ul>
             </div>
           </div>
 
-          <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-medium opacity-50">
-            <p>© 2025 ALIEN MONITORAMENTO ELETRONICO LTDA. TODOS OS DIREITOS RESERVADOS.</p>
+          <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-medium opacity-60">
+            <p>© 2026 ALIEN SISTEMAS DE SEGURANÇA ELETRÔNICA LTDA. • SERVIDORES SERVCAM • TODOS OS DIREITOS RESERVADOS.</p>
             <div className="flex gap-8">
               <span>CNPJ: 51.482.661/0001-31</span>
+              <span>SERVIDORES SERVCAM</span>
               <span>BRASIL</span>
             </div>
           </div>

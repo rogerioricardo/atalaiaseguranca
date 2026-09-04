@@ -10,10 +10,11 @@ import {
     AlertTriangle, Shield, CheckCircle, Info, ExternalLink,
     ChevronRight, Camera as CameraIcon, Loader2, Edit2, X, Lock,
     Maximize2, Clock, Wrench, RefreshCw, Calendar, Download, 
-    Upload, FileText, Phone, UploadCloud
+    Upload, FileText, Phone, UploadCloud, Sparkles, Check
 } from 'lucide-react';
 import { Card, Button, Input, Badge } from '@/components/UI';
 import { UpgradeModal } from '@/components/UpgradeModal';
+import { ImagePolicyButton } from '@/components/ImagePolicyModal';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Relógio tático isolado para impedir que todo o painel de câmeras re-renderize a cada 1 segundo
@@ -44,13 +45,28 @@ interface CameraStreamPlayerProps {
   onExpand: () => void;
   isModal?: boolean;
   maintenancePhotoUrl?: string;
+  locationPhotoUrl?: string;
+  neighborhoodName?: string;
+  coordinates?: { lat?: number; lng?: number };
 }
 
-// Player de streaming que foca em reprodução em tempo real e em modo limpo (sem controles/textos), com a opção de popup no hover
-const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ iframeCode, name, id, onExpand, isModal = false, maintenancePhotoUrl }) => {
+// Player de streaming com suporte a reprodução em tempo real e visual limpo
+const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ 
+  iframeCode, 
+  name, 
+  id, 
+  onExpand, 
+  isModal = false, 
+  maintenancePhotoUrl,
+  locationPhotoUrl,
+  neighborhoodName,
+  coordinates
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   if (!iframeCode || iframeCode.trim() === '') {
     return (
-      <div className="relative w-full h-full group/video-container flex flex-col items-center justify-center bg-[#0a0a0a] text-center overflow-hidden rounded-2xl border border-white/5">
+      <div ref={containerRef} className="relative w-full h-full group/video-container flex flex-col items-center justify-center bg-[#0a0a0a] text-center overflow-hidden rounded-2xl border border-white/5">
         {maintenancePhotoUrl ? (
            <img src={maintenancePhotoUrl} alt="Câmera em manutenção" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
@@ -154,7 +170,10 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ ifra
   const isCustomVideoOrScript = isHtmlCode && !urlFromCode;
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center group/video-container rounded-2xl border border-white/5">
+    <div 
+      ref={containerRef}
+      className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center group/video-container rounded-2xl border border-white/5"
+    >
       {isCustomVideoOrScript ? (
         // Caso de código HTML customizado (video tag ou scripts de widget)
         <div 
@@ -185,7 +204,10 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ ifra
       )}
 
       {/* Identificador sutil de Live (Apenas aparece no hover para manter o player 100% limpo em repouso) */}
-      <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/5 opacity-0 group-hover/video-container:opacity-100 transition-opacity duration-300 z-20 pointer-events-none">
+      <div 
+        data-ignore-screenshot="true"
+        className="absolute top-3 left-3 flex items-center gap-2 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/5 opacity-0 group-hover/video-container:opacity-100 transition-opacity duration-300 z-20 pointer-events-none"
+      >
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-atalaia-neon opacity-75"></span>
           <span className="relative inline-flex rounded-full h-2 w-2 bg-atalaia-neon"></span>
@@ -193,8 +215,10 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({ ifra
         <span className="text-[10px] text-atalaia-neon font-black font-mono tracking-widest uppercase">AO VIVO</span>
       </div>
 
-      {/* Controles flutuantes de suporte (Apenas aparecem no hover para manter o player 100% limpo em repouso) */}
-      <div className="absolute bottom-3 right-3 flex gap-2 z-20 opacity-0 group-hover/video-container:opacity-100 transition-opacity duration-300 pointer-events-auto">
+      {/* Controles flutuantes de suporte */}
+      <div 
+        className="absolute bottom-3 right-3 flex items-center gap-2 z-20 opacity-0 group-hover/video-container:opacity-100 transition-opacity duration-300 pointer-events-auto"
+      >
         <button 
           onClick={handleOpenHttp}
           className="px-3 py-1.5 bg-black/80 hover:bg-black border border-white/10 rounded-xl text-[10px] text-gray-300 hover:text-atalaia-neon font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-lg backdrop-blur-sm"
@@ -751,11 +775,16 @@ const Cameras: React.FC = () => {
                                  </div>
                              </div>
                          ) : (
-                             <CameraStreamPlayer maintenancePhotoUrl={cam.maintenancePhotoUrl}
+                             <CameraStreamPlayer 
+                                 maintenancePhotoUrl={cam.maintenancePhotoUrl}
+                                 locationPhotoUrl={cam.locationPhotoUrl}
                                  iframeCode={cam.iframeCode}
                                  name={cam.name}
                                  id={cam.id}
+                                 neighborhoodName={neighborhoods.find(h => h.id === cam.neighborhoodId)?.name}
+                                 coordinates={{ lat: cam.lat, lng: cam.lng }}
                                  onExpand={() => setSelectedCameraForModal(cam)}
+                                 
                              />
                          )}
                          {false && (
@@ -904,6 +933,13 @@ const Cameras: React.FC = () => {
                 >
                     🎬 PEDIR GRAVAÇÃO DE IMAGEM
                 </Button>
+                <div className="mt-2">
+                    <ImagePolicyButton 
+                        label="Política de Fornecimento de Imagens" 
+                        variant="outline"
+                        className="w-full text-[10px] h-9 border-white/10 hover:border-atalaia-neon text-zinc-300 font-bold"
+                    />
+                </div>
             </Card>
 
             {/* Admin/Integrator Controls */}
@@ -1209,7 +1245,7 @@ const Cameras: React.FC = () => {
                     </div>
                 </div>
                 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                     {/* Relógio Tático do Transmissor */}
                     <TacticalClock />
 
@@ -1223,17 +1259,20 @@ const Cameras: React.FC = () => {
               </div>
 
               {/* Feed de Vídeo Ampliado */}
-              <div className="flex-1 min-h-[300px] bg-black relative flex items-center justify-center">
+              <div id="camera-modal-player-container" className="flex-1 min-h-[300px] bg-black relative flex items-center justify-center">
                  <CameraStreamPlayer maintenancePhotoUrl={selectedCameraForModal.maintenancePhotoUrl}
+                     locationPhotoUrl={selectedCameraForModal.locationPhotoUrl}
                      iframeCode={selectedCameraForModal.iframeCode}
                      name={selectedCameraForModal.name}
                      id={selectedCameraForModal.id}
+                     neighborhoodName={neighborhoods.find(h => h.id === selectedCameraForModal.neighborhoodId)?.name}
+                     coordinates={{ lat: selectedCameraForModal.lat, lng: selectedCameraForModal.lng }}
                      onExpand={() => {}}
                      isModal={true}
                  />
                  
                  {/* Visual Tático em hover */}
-                 <div className="absolute bottom-4 left-4 z-10 px-3 py-1.5 bg-black/70 backdrop-blur-md border border-white/10 rounded-xl flex items-center gap-4 text-[10px] font-mono text-gray-400">
+                 <div className="absolute bottom-4 left-4 z-10 px-3 py-1.5 bg-black/70 backdrop-blur-md border border-white/10 rounded-xl flex items-center gap-4 text-[10px] font-mono text-gray-400 pointer-events-none">
                     <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> 1080p stream</span>
                     {selectedCameraForModal.lat && (
                         <span>GPS: {selectedCameraForModal.lat.toFixed(4)}, {selectedCameraForModal.lng?.toFixed(4)}</span>
@@ -1336,12 +1375,15 @@ const Cameras: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setIsRecordingModalOpen(false)}
-                  className="p-2 hover:bg-white/10 text-zinc-400 hover:text-white rounded-xl transition-all"
-                >
-                  <X size={18} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <ImagePolicyButton variant="badge" label="Política de Imagens" />
+                  <button 
+                    onClick={() => setIsRecordingModalOpen(false)}
+                    className="p-2 hover:bg-white/10 text-zinc-400 hover:text-white rounded-xl transition-all"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
 
               {/* Tabs if resident */}
@@ -1870,6 +1912,7 @@ const Cameras: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
     </Layout>
   );
 };

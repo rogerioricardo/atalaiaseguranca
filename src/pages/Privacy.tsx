@@ -2,8 +2,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/context';
-import { Lock, ArrowLeft, Eye, MapPin, MessageSquare } from 'lucide-react';
+import { Lock, ArrowLeft, Eye, MapPin, MessageSquare, Scale } from 'lucide-react';
 import { Button, Card } from '../components/UI';
+import { ImagePolicyButton } from '@/components/ImagePolicyModal';
 
 const Privacy: React.FC = () => {
   const navigate = useNavigate();
@@ -18,7 +19,28 @@ const Privacy: React.FC = () => {
 
         <div className="flex items-center gap-3 mb-8">
             <Lock className="text-atalaia-neon" size={40} />
-            <h1 className="text-3xl md:text-4xl font-bold text-white">Política de Privacidade</h1>
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-white">Política de Privacidade</h1>
+              <p className="text-xs text-zinc-500 mt-1 uppercase tracking-widest font-mono">ALIEN SISTEMAS DE SEGURANÇA & SISTEMA ATALAIA</p>
+            </div>
+        </div>
+
+        {/* Highlight Card for Image Policy */}
+        <div className="mb-8 p-6 rounded-2xl bg-zinc-950 border border-atalaia-neon/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-[0_0_30px_rgba(0,255,102,0.1)]">
+          <div className="flex items-start gap-3">
+            <div className="p-3 bg-atalaia-neon/10 rounded-xl text-atalaia-neon border border-atalaia-neon/20 shrink-0">
+              <Scale size={24} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                Política de Fornecimento de Imagens (LGPD)
+              </h3>
+              <p className="text-xs text-zinc-400 mt-0.5 max-w-lg">
+                Procedimentos de solicitação, recuperação, preservação e regras de atendimento para imagens de câmeras de videomonitoramento.
+              </p>
+            </div>
+          </div>
+          <ImagePolicyButton variant="primary" label="Abrir Política" />
         </div>
 
         <Card className="p-8 bg-[#111] border-white/10 space-y-8">

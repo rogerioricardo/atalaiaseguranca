@@ -2,8 +2,8 @@
 import React, { useState } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
 
-export const Card: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className = '' }) => (
-  <div className={`bg-[#080808] border border-atalaia-border rounded-xl shadow-lg ${className}`}>
+export const Card: React.FC<React.HTMLAttributes<HTMLDivElement> & { children: React.ReactNode, className?: string }> = ({ children, className = '', ...props }) => (
+  <div className={`bg-[#080808] border border-atalaia-border rounded-xl shadow-lg ${className}`} {...props}>
     {children}
   </div>
 );
