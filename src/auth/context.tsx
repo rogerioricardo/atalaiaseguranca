@@ -710,6 +710,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             setUser(finalDemoUser);
             await SessionService.registerSession(finalDemoUser.id, finalDemoUser.email);
+            MockService.notifyUserLogin(finalDemoUser).catch(() => {});
             return;
         } else if (isDemoEmail) {
             throw new Error(`Senha incorreta para o perfil de acesso local. (Dica: ${expectedPassword})`);
@@ -724,6 +725,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             SessionService.registerSession(data.user.id, data.user.email!).catch(err => {
                 console.error("[Auth Login] Erro assíncrono ao registrar sessão:", err);
             });
+            // Disparo imediato da notificação automática de login
+            await MockService.notifyUserLogin({
+                id: data.user.id,
+                email: data.user.email,
+                name: data.user.user_metadata?.name || data.user.email?.split('@')[0],
+                phone: data.user.user_metadata?.phone
+            }).catch(err => console.error("[Auth Login] Erro ao disparar aviso de login:", err));
         }
     } catch (e: any) {
         if (e.message?.includes('Failed to fetch')) {
@@ -732,6 +740,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                  const demoUser = DEMO_USERS['admin@atalaia.com'];
                  setUser(demoUser);
                  await SessionService.registerSession(demoUser.id, demoUser.email);
+                 MockService.notifyUserLogin(demoUser).catch(() => {});
                  return;
              }
         }
@@ -881,6 +890,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         phone
                     };
                     setUser(newUser);
+                    MockService.notifyUserRegistration({
+                        name: newUser.name,
+                        email: newUser.email,
+                        phone: newUser.phone,
+                        neighborhoodName: newUser.neighborhoodId
+                    }).catch(() => {});
                     return;
                 }
                 const isApproved = role === UserRole.ADMIN || role === UserRole.RESIDENT;
@@ -892,6 +907,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (error) throw error;
                 if (data.user) {
                     await supabase.from('profiles').upsert({ id: data.user.id, email, name, phone, neighborhood_id: safeNeighborhoodId, role, approved: isApproved, plan: resolvedPlan });
+                    
+                    // Notificação automática via WhatsApp para o novo morador e para o admin
+                    MockService.notifyUserRegistration({
+                        name: name || email.split('@')[0],
+                        email,
+                        phone,
+                        neighborhoodName: safeNeighborhoodId || undefined
+                    }).catch(err => console.error("[Registration] Erro ao notificar via WhatsApp:", err));
+
                     if (!isApproved) { await supabase.auth.signOut(); throw new Error("Aguarde aprovação."); }
                 }
                 return;

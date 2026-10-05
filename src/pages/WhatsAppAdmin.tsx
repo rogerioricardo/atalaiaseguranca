@@ -4,22 +4,34 @@ import Layout from '../components/Layout';
 import { useAuth } from '@/auth/context';
 import { UserRole, Neighborhood } from '../types';
 import { MockService } from '../services/mockService';
+import { WhaticketService } from '../services/whaticketService';
 import { supabase } from '../lib/supabaseClient';
 import { Card, Button, Input, Badge } from '../components/UI';
 import { 
     MessageSquare, Send, Users, Wifi, Loader2, Save, 
     Plus, XCircle, Search, Trash2, Smartphone,
-    Shield, MapPin, CheckCircle, Sparkles, HelpCircle, Info, RefreshCw, AlertTriangle, Database, Edit2
+    Shield, MapPin, CheckCircle, Sparkles, HelpCircle, Info, RefreshCw, AlertTriangle, Database, Edit2,
+    Key, Check, Lock, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const WhatsAppAdmin: React.FC = () => {
     const { user } = useAuth();
-    const [activeTab, setActiveTab] = useState<'broadcast' | 'templates'>('templates');
+    const [activeTab, setActiveTab] = useState<'broadcast' | 'templates' | 'credentials'>('credentials');
     const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     
+    // Credenciais Whaticket
+    const [whaticketToken, setWhaticketToken] = useState('HSYumH8GyDXc90Bb1ZcBoVMBjatynktt');
+    const [whaticketApiKey, setWhaticketApiKey] = useState('Oava7PjfYdGfc6AwQXnNTrLDIj030OdtfHgm3o+bK2Qp');
+    const [whaticketUrl, setWhaticketUrl] = useState('https://app.whatendimento.digital/backend/api/messages/send');
+    const [savingCredentials, setSavingCredentials] = useState(false);
+    const [credStatus, setCredStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+    const [testPhone, setTestPhone] = useState('');
+    const [testingMessage, setTestingMessage] = useState(false);
+    const [testResult, setTestResult] = useState<{ success: boolean; text: string } | null>(null);
+
     const [templates, setTemplates] = useState<Record<string, string>>({});
     const [lastSavedValues, setLastSavedValues] = useState<Record<string, string>>({});
     const [templateSearch, setTemplateSearch] = useState('');
@@ -45,16 +57,75 @@ const WhatsAppAdmin: React.FC = () => {
                 MockService.getSettings(true)
             ]);
             
+            const combinedTemplates = {
+                'aviso_login': '🔐 *ATALAIA - AVISO DE ACESSO*\n\nOlá *{{name}}*!\nDetectamos um novo login em sua conta.\n⏰ Data/Hora: {{time}}\n\nSe você reconhece este acesso, nenhuma ação é necessária.',
+                'welcome_template': '🛡️ *BEM-VINDO AO PROJETO ATALAIA*\n\nOlá, *{{name}}*!\n\nSeu cadastro na rede de proteção comunitária foi realizado com sucesso.\nAgora você conta com monitoramento inteligente, rondas preventivas e canal de emergência direto pelo aplicativo!\n\n📌 Bairro: *{{neighborhood}}*\n⏰ Data de Ativação: {{time}}\n\n_Atalaia - Segurança Colaborativa em Primeiro Lugar._',
+                'chat_mirror_template': '*CHAT ATALAIA*\nDe: {user}\n{text}',
+                'service_request_template': '*SOLICITAÇÃO DE SERVIÇO*\nTipo: {type}\nMorador: {user}\nBairro vigiado.',
+                'support_ticket_template': '*SUPORTE ATALAIA*\nUsuário: {user}\nChamado: {text}',
+                'template_broadcast_prefix': '🚨 [ATALAIA ALERTA]',
+                ...settings
+            };
+
             setNeighborhoods(hoods);
-            setTemplates(settings);
-            setLastSavedValues(settings);
-            if(hoods.length > 0 && !selectedHoodId) setSelectedHoodId(hoods[0].id);
+            setTemplates(combinedTemplates);
+            setLastSavedValues(combinedTemplates);
+            if (settings['whaticket_token']) setWhaticketToken(settings['whaticket_token']);
+            if (settings['whaticket_api_key']) setWhaticketApiKey(settings['whaticket_api_key']);
+            if (settings['whaticket_url']) setWhaticketUrl(settings['whaticket_url']);
+            if (hoods.length > 0 && !selectedHoodId) setSelectedHoodId(hoods[0].id);
         } catch (e: any) {
             setLoadError("Erro ao sincronizar com o banco: " + e.message);
         } finally {
             setLoading(false);
         }
     }, [selectedHoodId]);
+
+    const handleSaveCredentials = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        setSavingCredentials(true);
+        setCredStatus(null);
+        try {
+            await Promise.all([
+                MockService.updateSetting('whaticket_token', whaticketToken.trim()),
+                MockService.updateSetting('whaticket_api_key', whaticketApiKey.trim()),
+                MockService.updateSetting('whaticket_url', whaticketUrl.trim())
+            ]);
+            setCredStatus({ type: 'success', msg: 'Credenciais Whaticket salvas com sucesso no banco de dados!' });
+            await loadData();
+        } catch (e: any) {
+            setCredStatus({ type: 'error', msg: 'Erro ao salvar credenciais: ' + e.message });
+        } finally {
+            setSavingCredentials(false);
+        }
+    };
+
+    const handleTestCredentials = async () => {
+        if (!testPhone.trim()) {
+            setTestResult({ success: false, text: 'Digite um número de WhatsApp (com DDD, ex: 5548999999999) para testar.' });
+            return;
+        }
+        setTestingMessage(true);
+        setTestResult(null);
+        try {
+            const result = await WhaticketService.sendMessage(
+                '🔔 *Teste de Conexão Atalaia -> Whaticket*\nAs credenciais da API foram atualizadas e a comunicação está ativa com sucesso!',
+                [testPhone.trim()],
+                whaticketToken.trim(),
+                whaticketUrl.trim()
+            );
+            const failed = result?.results?.find((r: any) => !r.success);
+            if (failed) {
+                setTestResult({ success: false, text: `Erro retornado pela API: ${failed.error || 'Falha no envio'}` });
+            } else {
+                setTestResult({ success: true, text: 'Mensagem de teste disparada com sucesso via Whaticket (200 OK)!' });
+            }
+        } catch (e: any) {
+            setTestResult({ success: false, text: 'Falha ao testar envio: ' + e.message });
+        } finally {
+            setTestingMessage(false);
+        }
+    };
 
     useEffect(() => { 
         if (user?.role === UserRole.ADMIN) loadData(); 
@@ -113,8 +184,9 @@ const WhatsAppAdmin: React.FC = () => {
                         <p className="text-gray-400">Canal: app.whatendimento.digital</p>
                     </div>
                     <div className="flex bg-[#111] p-1 rounded-xl border border-atalaia-border shadow-inner">
-                        <button onClick={() => setActiveTab('broadcast')} className={`px-6 py-2 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${activeTab === 'broadcast' ? 'bg-atalaia-neon text-black shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>Disparos</button>
-                        <button onClick={() => setActiveTab('templates')} className={`px-6 py-2 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${activeTab === 'templates' ? 'bg-atalaia-neon text-black shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>Templates</button>
+                        <button onClick={() => setActiveTab('credentials')} className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'credentials' ? 'bg-atalaia-neon text-black shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>Credenciais API</button>
+                        <button onClick={() => setActiveTab('templates')} className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'templates' ? 'bg-atalaia-neon text-black shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>Templates</button>
+                        <button onClick={() => setActiveTab('broadcast')} className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'broadcast' ? 'bg-atalaia-neon text-black shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>Disparos</button>
                     </div>
                 </div>
 
@@ -128,6 +200,192 @@ const WhatsAppAdmin: React.FC = () => {
                         <AlertTriangle size={48} className="text-red-500 mx-auto mb-4" />
                         <h3 className="text-white font-bold text-lg">{loadError}</h3>
                         <Button onClick={loadData} className="mt-4"><RefreshCw size={18} className="mr-2"/> Tentar Novamente</Button>
+                    </div>
+                ) : activeTab === 'credentials' ? (
+                    <div className="space-y-8 animate-in fade-in duration-500">
+                        {/* Status Bar */}
+                        <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                                    <CheckCircle size={22} />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-sm font-bold text-white">Integração Whaticket Ativa</h3>
+                                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-mono px-2 py-0.5 rounded-full font-bold">ONLINE</span>
+                                    </div>
+                                    <p className="text-xs text-zinc-400">As credenciais configuradas abaixo são utilizadas para todos os alertas, chamados e disparos.</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={loadData}
+                                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-zinc-300 flex items-center gap-2 border border-white/10 transition-colors"
+                            >
+                                <RefreshCw size={14} /> Recarregar
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            {/* Credenciais Form */}
+                            <div className="lg:col-span-2">
+                                <Card className="p-8 border-white/10 bg-[#0a0a0a] shadow-2xl relative overflow-hidden">
+                                    <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-atalaia-neon/50 to-transparent" />
+                                    <div className="flex items-center justify-between mb-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-3 bg-atalaia-neon/10 text-atalaia-neon rounded-xl border border-atalaia-neon/20">
+                                                <Key size={20} />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-lg font-bold text-white uppercase tracking-wider font-mono">Credenciais da API Whaticket</h2>
+                                                <p className="text-xs text-zinc-400">Canal: app.whatendimento.digital</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <form onSubmit={handleSaveCredentials} className="space-y-6">
+                                        <div>
+                                            <label className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <Lock size={12} className="text-atalaia-neon" /> Token Whaticket
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                value={whaticketToken}
+                                                onChange={(e) => setWhaticketToken(e.target.value)}
+                                                className="w-full bg-black border border-white/10 rounded-xl px-4 py-3.5 text-sm font-mono text-white focus:border-atalaia-neon outline-none transition-all"
+                                                placeholder="Ex: HSYumH8GyDXc90Bb1ZcBoVMBjatynktt"
+                                                required
+                                            />
+                                            <p className="text-[10px] text-zinc-500 mt-1.5">Enviado no header <code className="text-zinc-400">Authorization: Bearer</code>.</p>
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <Key size={12} className="text-atalaia-neon" /> Chave API (API Key)
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                value={whaticketApiKey}
+                                                onChange={(e) => setWhaticketApiKey(e.target.value)}
+                                                className="w-full bg-black border border-white/10 rounded-xl px-4 py-3.5 text-sm font-mono text-white focus:border-atalaia-neon outline-none transition-all"
+                                                placeholder="Ex: Oava7PjfYdGfc6AwQXnNTrLDIj030OdtfHgm3o+bK2Qp"
+                                                required
+                                            />
+                                            <p className="text-[10px] text-zinc-500 mt-1.5">Enviado no header <code className="text-zinc-400">apikey</code> para autenticação adicional da instância.</p>
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[11px] font-black text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <ExternalLink size={12} className="text-blue-400" /> URL Endpoint da API
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                value={whaticketUrl}
+                                                onChange={(e) => setWhaticketUrl(e.target.value)}
+                                                className="w-full bg-black border border-white/10 rounded-xl px-4 py-3.5 text-sm font-mono text-zinc-300 focus:border-atalaia-neon outline-none transition-all"
+                                                placeholder="https://app.whatendimento.digital/backend/api/messages/send"
+                                                required
+                                            />
+                                            <p className="text-[10px] text-zinc-500 mt-1.5">Endpoint ativo do backend Whaticket: <code className="text-zinc-400">/backend/api/messages/send</code>.</p>
+                                        </div>
+
+                                        {credStatus && (
+                                            <div className={`p-4 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                                                credStatus.type === 'success' 
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                            }`}>
+                                                {credStatus.type === 'success' ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
+                                                {credStatus.msg}
+                                            </div>
+                                        )}
+
+                                        <div className="flex justify-end pt-2">
+                                            <Button type="submit" disabled={savingCredentials} className="px-8 h-12">
+                                                {savingCredentials ? (
+                                                    <><Loader2 className="animate-spin mr-2" size={16} /> Salvando...</>
+                                                ) : (
+                                                    <><Save size={16} className="mr-2" /> Salvar Credenciais</>
+                                                )}
+                                            </Button>
+                                        </div>
+                                    </form>
+                                </Card>
+                            </div>
+
+                            {/* Test Card */}
+                            <div>
+                                <Card className="p-8 border-white/10 bg-[#0a0a0a] shadow-2xl relative overflow-hidden flex flex-col justify-between h-full">
+                                    <div className="space-y-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">
+                                                <Send size={20} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-base font-bold text-white uppercase tracking-wider font-mono">Testar Conexão</h3>
+                                                <p className="text-xs text-zinc-400">Envie um teste imediato</p>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-zinc-400 leading-relaxed">
+                                            Valide se o Whaticket está recebendo requisições com o novo token e chave API informados:
+                                        </p>
+
+                                        <div>
+                                            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 block">
+                                                Número de Destino (com DDD)
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                value={testPhone}
+                                                onChange={(e) => setTestPhone(e.target.value)}
+                                                placeholder="Ex: 5548999999999"
+                                                className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono focus:border-atalaia-neon outline-none"
+                                            />
+                                        </div>
+
+                                        {testResult && (
+                                            <div className="space-y-3">
+                                                <div className={`p-4 rounded-xl text-xs font-medium flex items-start gap-2 ${
+                                                    testResult.success 
+                                                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                                        : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                                }`}>
+                                                    {testResult.success ? <CheckCircle size={16} className="mt-0.5 shrink-0" /> : <AlertTriangle size={16} className="mt-0.5 shrink-0" />}
+                                                    <span>{testResult.text}</span>
+                                                </div>
+
+                                                {testResult.success && (
+                                                    <div className="p-3.5 bg-blue-500/5 border border-blue-500/15 rounded-xl text-[11px] text-zinc-400 space-y-1.5 leading-relaxed">
+                                                        <p className="font-bold text-white flex items-center gap-1.5 text-xs">
+                                                            <Info size={14} className="text-blue-400" /> Mensagem colocada na fila do Whaticket:
+                                                        </p>
+                                                        <p>Se o aparelho ainda não recebeu a mensagem, verifique no painel do <strong>Whaticket</strong>:</p>
+                                                        <ul className="list-disc list-inside text-zinc-400 space-y-1 pl-1">
+                                                            <li><strong>Conexão WhatsApp:</strong> Verifique se a conexão WhatsApp está com status <span className="text-emerald-400 font-bold">CONECTADO</span> (QR Code logado) em <code className="text-zinc-300">app.whatendimento.digital</code>.</li>
+                                                            <li><strong>Variação do 9º Dígito:</strong> Tente com ou sem o 9º dígito (ex: <code className="text-zinc-300">554899...</code> ou <code className="text-zinc-300">5548...</code>).</li>
+                                                            <li><strong>Fila de Mensagens:</strong> Verifique na aba de filas/mensagens do Whaticket se o envio aguarda liberação.</li>
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <Button 
+                                        type="button" 
+                                        onClick={handleTestCredentials}
+                                        disabled={testingMessage}
+                                        className="w-full mt-6 h-12"
+                                    >
+                                        {testingMessage ? (
+                                            <><Loader2 className="animate-spin mr-2" size={16} /> Disparando Teste...</>
+                                        ) : (
+                                            <><Send size={16} className="mr-2" /> Enviar Mensagem de Teste</>
+                                        )}
+                                    </Button>
+                                </Card>
+                            </div>
+                        </div>
                     </div>
                 ) : activeTab === 'templates' ? (
                     <div className="space-y-8 animate-in fade-in duration-500">
@@ -171,7 +429,7 @@ const WhatsAppAdmin: React.FC = () => {
                             </Card>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
                              {/* Configuração Extra: Admin WhatsApp */}
                              <div className="bg-white/5 p-5 rounded-2xl border border-white/10 flex flex-col justify-between hover:border-atalaia-neon/30 transition-all group">
                                 <div>
@@ -180,13 +438,13 @@ const WhatsAppAdmin: React.FC = () => {
                                     </h3>
                                     <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Monitor Geral do Sistema</label>
                                     <input 
-                                        type="text"
+                                        type="text" 
                                         value={templates['admin_whatsapp'] || ''}
                                         onChange={(e) => setTemplates({...templates, admin_whatsapp: e.target.value})}
                                         placeholder="554899999999"
                                         className="w-full bg-black border border-white/10 rounded-xl px-4 py-2.5 text-white text-xs focus:border-atalaia-neon outline-none"
                                     />
-                                    <p className="text-[9px] text-gray-600 mt-2">Recebe notificações de chamados técnicos (Suporte).</p>
+                                    <p className="text-[9px] text-gray-600 mt-2">Recebe avisos automáticos de logins, chamados e cadastros.</p>
                                 </div>
                                 <Button 
                                     className="mt-4 h-9 text-xs font-bold" 
@@ -194,6 +452,34 @@ const WhatsAppAdmin: React.FC = () => {
                                     disabled={savingKeys.has('admin_whatsapp')}
                                 >
                                     {savingKeys.has('admin_whatsapp') ? 'Gravando...' : 'Salvar Admin'}
+                                </Button>
+                            </div>
+
+                            <div className="bg-white/5 p-5 rounded-2xl border border-white/10 flex flex-col hover:border-atalaia-neon/30 transition-all">
+                                <h3 className="text-white font-bold mb-2 flex items-center gap-2 text-sm">
+                                    <Shield size={16} className="text-emerald-400" /> Aviso de Login
+                                </h3>
+                                <p className="text-[10px] text-gray-500 mb-2 font-medium">Disparado no Zap do morador e admin ao acessar a conta (Tags: <strong>{'{name}'}</strong>, <strong>{'{time}'}</strong>).</p>
+                                <Button 
+                                    variant="outline" 
+                                    className="mt-auto h-8 text-[9px] uppercase font-black"
+                                    onClick={() => setTemplateSearch('aviso_login')}
+                                >
+                                    Editar Template
+                                </Button>
+                            </div>
+
+                            <div className="bg-white/5 p-5 rounded-2xl border border-white/10 flex flex-col hover:border-atalaia-neon/30 transition-all">
+                                <h3 className="text-white font-bold mb-2 flex items-center gap-2 text-sm">
+                                    <Sparkles size={16} className="text-amber-400" /> Boas-Vindas
+                                </h3>
+                                <p className="text-[10px] text-gray-500 mb-2 font-medium">Enviado no novo cadastro de moradores (Tags: <strong>{'{name}'}</strong>, <strong>{'{neighborhood}'}</strong>).</p>
+                                <Button 
+                                    variant="outline" 
+                                    className="mt-auto h-8 text-[9px] uppercase font-black"
+                                    onClick={() => setTemplateSearch('welcome_template')}
+                                >
+                                    Editar Template
                                 </Button>
                             </div>
 
@@ -220,20 +506,6 @@ const WhatsAppAdmin: React.FC = () => {
                                     variant="outline" 
                                     className="mt-auto h-8 text-[9px] uppercase font-black"
                                     onClick={() => setTemplateSearch('service_request')}
-                                >
-                                    Configurar Template
-                                </Button>
-                            </div>
-
-                            <div className="bg-white/5 p-5 rounded-2xl border border-white/10 flex flex-col hover:border-atalaia-neon/30 transition-all">
-                                <h3 className="text-white font-bold mb-2 flex items-center gap-2 text-sm">
-                                    <HelpCircle size={16} className="text-purple-400" /> Chamados Administrativos
-                                </h3>
-                                <p className="text-[10px] text-gray-500 mb-2 font-medium">Avisos de novos chamados de suporte (Tags: <strong>{'{user}'}</strong>, <strong>{'{text}'}</strong>).</p>
-                                <Button 
-                                    variant="outline" 
-                                    className="mt-auto h-8 text-[9px] uppercase font-black"
-                                    onClick={() => setTemplateSearch('support_ticket')}
                                 >
                                     Configurar Template
                                 </Button>

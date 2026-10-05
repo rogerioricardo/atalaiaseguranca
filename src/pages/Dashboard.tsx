@@ -923,7 +923,6 @@ const Dashboard: React.FC = () => {
         // Fetch Neighborhood Info
         if (user?.role === UserRole.ADMIN) {
           const hoods = await MockService.getNeighborhoods();
-          setStats(prev => ({ ...prev, cameras: hoods.length, users: 154 })); // Mock user count
           
           // Fetch Admin Notifications
           const notifs = await MockService.getNotifications(); // All notifications for admin
@@ -936,7 +935,6 @@ const Dashboard: React.FC = () => {
         } else if (user?.neighborhoodId) {
           const hood = await MockService.getNeighborhoodById(user.neighborhoodId);
           setMyNeighborhood(hood);
-          setStats(prev => ({ ...prev, cameras: 1, users: 42 }));
 
           // Check for Integrator to receive donations & custom co-branding Partner information
           if (user?.role === UserRole.RESIDENT) {
@@ -949,12 +947,10 @@ const Dashboard: React.FC = () => {
           setNotifications(myNotifs.filter(n => !n.read));
         }
 
-        // Fetch All System Cameras
-        const allCameras = await MockService.getAllSystemCameras();
-        const filteredCameras = user?.role === UserRole.ADMIN
-          ? allCameras
-          : allCameras.filter(c => c.neighborhoodId === user?.neighborhoodId);
-        setCameras(filteredCameras);
+        // Fetch User Accessible Cameras (Garante que cada usuário veja a quantidade exata de câmeras do seu bairro/acesso)
+        const userCameras = await MockService.getUserAccessibleCameras(user);
+        setCameras(userCameras);
+        setStats(prev => ({ ...prev, cameras: userCameras.length, users: user?.role === UserRole.ADMIN ? 154 : 42 }));
     } catch (e: any) {
         console.error("[Dashboard] Error fetching data:", e);
     }
@@ -1240,11 +1236,17 @@ const Dashboard: React.FC = () => {
                  </div>
             )}
         </div>
-        {user?.neighborhoodId && myNeighborhood && (
-             <div className="px-4 py-2 bg-atalaia-neon/10 border border-atalaia-neon/20 rounded-full text-atalaia-neon text-sm font-bold flex items-center gap-2">
-                 <MapPin size={16} /> Bairro: {myNeighborhood.name}
-             </div>
-        )}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          {user?.neighborhoodId && myNeighborhood && (
+               <div className="px-4 py-2 bg-atalaia-neon/10 border border-atalaia-neon/20 rounded-full text-atalaia-neon text-sm font-bold flex items-center gap-2">
+                   <MapPin size={16} /> Bairro: {myNeighborhood.name}
+               </div>
+          )}
+          <div className="px-3.5 py-1.5 bg-black/60 border border-white/10 rounded-full text-[11px] text-gray-400 font-mono flex items-center gap-2 shadow-sm">
+             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+             <span>Servidores <strong className="text-atalaia-neon font-black">ServCam</strong> • Alien Sistemas</span>
+          </div>
+        </div>
       </div>
 
       {/* PROMINENT ACTION CARD: QUERO VER MINHAS CÂMERAS */}

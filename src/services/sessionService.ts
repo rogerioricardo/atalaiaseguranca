@@ -1,4 +1,5 @@
 import { MockService } from './mockService';
+import { WhaticketService } from './whaticketService';
 import { supabase, isRealSupabase } from '../lib/supabaseClient';
 import { UserSession } from '../types';
 
@@ -104,9 +105,7 @@ export const SessionService = {
         if (settings['template_broadcast_prefix']) {
           const numbers = [localStorage.getItem('user_last_phone') || ''];
           if (numbers[0]) {
-            supabase.functions.invoke('send-alert', {
-              body: { message: `*Atalaia Segurança*:\n${body}`, numbers }
-            }).catch(() => {});
+            WhaticketService.sendMessage(`*Atalaia Segurança*:\n${body}`, numbers).catch(() => {});
           }
         }
       } catch (e) {
@@ -117,44 +116,45 @@ export const SessionService = {
     }
 
     try {
-      // Invalidate existing sessions in Supabase database
+      // Invalidate existing sessions in Supabase database safely
       await supabase.from('user_sessions').delete().eq('user_id', userId);
 
-      // Create new session record
-      const { error } = await supabase.from('user_sessions').insert({
+      // Create new session record safely
+      await supabase.from('user_sessions').insert({
         user_id: userId,
         token: token,
         ip_address: ipAddress,
         browser: browser,
         os: os,
       });
-
-      if (error) {
-        console.warn("[SessionService] Could not push user_sessions row (likely no db config):", error);
-        throw error;
-      }
-
-      // Notify user of new login via integrated notification center & whatsapp
-      try {
-        
-        const userProfiles = await MockService.getUsers();
-        const fullUser = userProfiles.find(u => u.id === userId);
-        
-        if (fullUser?.phone) {
-          const body = `*Segurança Atalaia*\n\nNovo acesso detectado em sua conta!\nDispositivo: ${os} (${browser})\nIP: ${ipAddress}\nData/Hora: ${new Date().toLocaleString('pt-BR')}\n\nSe não foi você, faça login imediatamente para invalidar conexões e contate o suporte.`;
-          supabase.functions.invoke('send-alert', {
-            body: { message: body, numbers: [fullUser.phone] }
-          }).catch(() => {});
-        }
-      } catch (e) {
-        console.warn("Could not send automated security warning message:", e);
-      }
-
-      return token;
-    } catch (error) {
-      console.warn("[SessionService] Could not register DB session (fallback mode):", error);
-      return token; // fallback token to avoid blocking login flow
+    } catch (err) {
+      console.warn("[SessionService] Session DB register skipped:", err);
     }
+
+    // Dispara a notificação de login automaticamente via WhatsApp
+    try {
+      let userPhone = '';
+      let userName = email.split('@')[0];
+
+      if (isRealSupabase) {
+        try {
+          const { data: profile } = await supabase.from('profiles').select('phone, name').eq('id', userId).maybeSingle();
+          if (profile?.phone) userPhone = profile.phone;
+          if (profile?.name) userName = profile.name;
+        } catch {}
+      }
+
+      await MockService.notifyUserLogin({
+        id: userId,
+        email: email,
+        name: userName,
+        phone: userPhone
+      });
+    } catch (e) {
+      console.warn("[SessionService] Falha ao enviar aviso de login:", e);
+    }
+
+    return token;
   },
 
   /**

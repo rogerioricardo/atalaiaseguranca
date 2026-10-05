@@ -236,12 +236,9 @@ const MapPage: React.FC = () => {
         : hoodsData.filter(h => h.id === user?.neighborhoodId);
       setNeighborhoods(filteredHoods);
 
-      // Fetch All System Cameras
-      const allCameras = await MockService.getAllSystemCameras();
-      const filteredCameras = user?.role === UserRole.ADMIN
-        ? allCameras
-        : allCameras.filter(c => c.neighborhoodId === user?.neighborhoodId);
-      setCameras(filteredCameras);
+      // Fetch User Accessible Cameras
+      const userCameras = await MockService.getUserAccessibleCameras(user);
+      setCameras(userCameras);
   }, [user]);
 
   useEffect(() => {

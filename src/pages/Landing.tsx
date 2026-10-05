@@ -420,6 +420,21 @@ const Landing: React.FC = () => {
               Entrar no Sistema
             </button>
           </div>
+
+          {/* Destaque de Infraestrutura e Servidores */}
+          <div className="mt-8 flex items-center gap-3 bg-black/60 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 shadow-lg text-left">
+            <div className="w-8 h-8 rounded-xl bg-atalaia-neon/10 border border-atalaia-neon/30 flex items-center justify-center shrink-0">
+              <Server size={16} className="text-atalaia-neon" />
+            </div>
+            <div className="text-xs">
+              <p className="text-gray-400 leading-tight">
+                Infraestrutura de alta disponibilidade com servidores <strong className="text-atalaia-neon font-black font-mono">ServCam</strong>
+              </p>
+              <p className="text-[11px] text-gray-500 font-medium leading-tight mt-0.5">
+                Propriedade exclusiva da <strong className="text-gray-300">Alien Sistemas de Segurança Eletrônica</strong>
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 

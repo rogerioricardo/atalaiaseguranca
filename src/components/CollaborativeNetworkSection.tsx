@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Modal, Input, Button } from '@/components/UI';
 import { supabase } from '@/lib/supabaseClient';
+import { WhaticketService } from '@/services/whaticketService';
 import atalaiaWarningPlaqueImg from '@/assets/images/atalaia_warning_plaque_1784380494061.jpg';
 import { 
   Camera, 
@@ -56,12 +57,8 @@ export const CollaborativeNetworkSection: React.FC = () => {
         cleanPhone = `55${cleanPhone}`;
       }
       
-      // Enviar mensagem via Whaticket API (Supabase Edge Function)
-      const { data, error } = await supabase.functions.invoke('send-alert', { 
-        body: { message, numbers: [cleanPhone] } 
-      });
-      
-      if (error) throw error;
+      // Enviar mensagem via Whaticket API (Direct Proxy + Fallback Edge Function)
+      await WhaticketService.sendMessage(message, cleanPhone);
       
       setPartnerSuccess(true);
       setTimeout(() => {

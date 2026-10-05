@@ -8,6 +8,7 @@ import { ShieldCheck, ArrowLeft, AlertCircle, MapPin, CheckCircle, RefreshCw, Lo
 import { MockService } from '@/services/mockService';
 import { PaymentService } from '@/services/paymentService';
 import { SessionService } from '@/services/sessionService';
+import { WhaticketService } from '@/services/whaticketService';
 import { supabase, isRealSupabase } from '@/lib/supabaseClient';
 import { motion } from 'motion/react';
 
@@ -348,9 +349,7 @@ const Login: React.FC = () => {
         try {
           const customMsg = `🛡️ *ATALAIA - RECUPERAÇÃO DE ACESSO*\n\nOlá, *${userName || 'Colaborador Atalaia'}*!\n\nRecebemos uma solicitação de redefinição de senha para sua credencial de acesso tático ao Atalaia.\n\nEnviamos o link de alteração de senha de forma segura para o seu e-mail:\n➡️ *${targetEmail}*\n\nSe você não recebeu o e-mail ou precisa que alteremos seu e-mail de acesso cadastrado, basta responder a esta mensagem diretamente no WhatsApp!\n\nAtenciosamente,\n*Equipe de Suporte Atalaia*`;
 
-          await supabase.functions.invoke('send-alert', {
-            body: { message: customMsg, numbers: [targetPhone] }
-          });
+          await WhaticketService.sendMessage(customMsg, [targetPhone]);
 
           waStatus = ` E notificamos seu WhatsApp (${targetPhone})!`;
         } catch (waErr) {

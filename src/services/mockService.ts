@@ -1,5 +1,6 @@
 
 import { supabase, isRealSupabase } from '../lib/supabaseClient';
+import { WhaticketService } from './whaticketService';
 import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, ServiceRequest, Camera, SupportTicket, Coupon, RecordingRequest } from '../types';
 
 const generateUUID = () => {
@@ -19,35 +20,7 @@ const sanitizeUUID = (id?: string): string | null => {
     return id;
 };
 
-const DEMO_CAMERAS: Camera[] = [
-  {
-    id: 'cam-demo-1',
-    neighborhoodId: 'hood-demo-1',
-    name: 'Câmera Entrada Norte',
-    iframeCode: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-    lat: -27.5910,
-    lng: -48.5420,
-    locationPhotoUrl: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=500&auto=format&fit=crop&q=60'
-  },
-  {
-    id: 'cam-demo-2',
-    neighborhoodId: 'hood-demo-1',
-    name: 'Câmera Avenida Central',
-    iframeCode: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-    lat: -27.5969,
-    lng: -48.5495,
-    locationPhotoUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500&auto=format&fit=crop&q=60'
-  },
-  {
-    id: 'cam-demo-3',
-    neighborhoodId: 'hood-demo-1',
-    name: 'Câmera Rotatória Leste',
-    iframeCode: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-    lat: -27.6015,
-    lng: -48.5550,
-    locationPhotoUrl: 'https://images.unsplash.com/photo-1590674899484-13da0d1b58f5?w=500&auto=format&fit=crop&q=60'
-  }
-];
+const DEMO_CAMERAS: Camera[] = [];
 
 const getLocalCameras = (): Camera[] => {
   if (typeof window === 'undefined') return [];
@@ -55,7 +28,11 @@ const getLocalCameras = (): Camera[] => {
     const cached = localStorage.getItem('atalaia_local_cameras');
     if (cached) {
       try {
-        return JSON.parse(cached);
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((c: any) => !c?.id?.startsWith('cam-demo-') && c?.neighborhoodId !== 'hood-demo-1');
+        }
+        return [];
       } catch (e) {
         return [];
       }
@@ -145,8 +122,22 @@ export const MockService = {
       }
     ];
 
+    let localList: Neighborhood[] | null = null;
+    try {
+        const cached = localStorage.getItem('atalaia_local_neighborhoods');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed)) {
+                localList = parsed;
+            }
+        } else {
+            localStorage.setItem('atalaia_local_neighborhoods', JSON.stringify(demoHoods));
+            localList = demoHoods;
+        }
+    } catch (err) {}
+
     if (!isRealSupabase) {
-        return demoHoods;
+        return localList && localList.length > 0 ? localList : demoHoods;
     }
     try {
         const { data, error } = await supabase.from('neighborhoods').select('*').order('name');
@@ -167,20 +158,12 @@ export const MockService = {
             try {
                 localStorage.setItem('atalaia_local_neighborhoods', JSON.stringify(mapped));
             } catch (err) {}
+            return mapped;
         }
-        return mapped;
+        return localList || demoHoods;
     } catch (e) { 
         console.error("[MockService] Catch in getNeighborhoods, using local fallback:", e instanceof Error ? e.message : JSON.stringify(e));
-        try {
-            const cached = localStorage.getItem('atalaia_local_neighborhoods');
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (parsed && parsed.length > 0) {
-                    return parsed;
-                }
-            }
-        } catch (err) {}
-        return demoHoods; 
+        return localList || demoHoods; 
     }
   },
 
@@ -267,15 +250,25 @@ export const MockService = {
         const list = await MockService.getNeighborhoods();
         const updated = list.filter(h => h.id !== id);
         localStorage.setItem('atalaia_local_neighborhoods', JSON.stringify(updated));
+
+        // Also clean up local cameras associated with this neighborhood
+        const localCams = getLocalCameras();
+        const remainingCams = localCams.filter(c => c.neighborhoodId !== id);
+        saveLocalCameras(remainingCams);
     } catch (err) {}
 
     if (!isRealSupabase) return;
 
     try {
-        const { error } = await supabase.from('neighborhoods').delete().eq('id', id);
-        if (error) {
-            console.error("[MockService] Error deleting neighborhood in Supabase:", error);
-            throw error;
+        const safeId = sanitizeUUID(id);
+        if (safeId) {
+            // Delete associated cameras first in supabase
+            await supabase.from('cameras').delete().eq('neighborhood_id', safeId);
+            const { error } = await supabase.from('neighborhoods').delete().eq('id', safeId);
+            if (error) {
+                console.error("[MockService] Error deleting neighborhood in Supabase:", error);
+                throw error;
+            }
         }
     } catch (err) {
         console.warn("[MockService] Bypass Supabase write during deleteNeighborhood due to network/quota error.");
@@ -298,7 +291,9 @@ export const MockService = {
                     lat: c.lat, 
                     lng: c.lng,
                     locationPhotoUrl: c.location_photo_url,
-                    maintenancePhotoUrl: c.maintenance_photo_url
+                    maintenancePhotoUrl: c.maintenance_photo_url,
+                    locationDescription: c.location_description || c.locationDescription,
+                    address: c.address
                 }));
             } else if (error) {
                 console.warn("[MockService] Erro de permissão ou banco ao buscar câmeras do Supabase:", error.message);
@@ -311,12 +306,8 @@ export const MockService = {
     const localCameras = getLocalCameras().filter(c => c.neighborhoodId === neighborhoodId);
     const mergedMap = new Map<string, Camera>();
 
-    if (dbCameras.length === 0 && localCameras.length === 0) {
-        DEMO_CAMERAS.filter(c => c.neighborhoodId === neighborhoodId || c.neighborhoodId === 'hood-demo-1').forEach(c => mergedMap.set(c.id, c));
-    } else {
-        dbCameras.forEach(c => mergedMap.set(c.id, c));
-        localCameras.forEach(c => mergedMap.set(c.id, c));
-    }
+    dbCameras.forEach(c => mergedMap.set(c.id, c));
+    localCameras.forEach(c => mergedMap.set(c.id, c));
 
     return Array.from(mergedMap.values());
   },
@@ -334,7 +325,9 @@ export const MockService = {
                 lat: c.lat, 
                 lng: c.lng,
                 locationPhotoUrl: c.location_photo_url,
-                maintenancePhotoUrl: c.maintenance_photo_url
+                maintenancePhotoUrl: c.maintenance_photo_url,
+                locationDescription: c.location_description || c.locationDescription,
+                address: c.address
             }));
         } else if (error) {
             console.warn("[MockService] Supabase cameras query returned error, using local fallback.", error);
@@ -346,17 +339,40 @@ export const MockService = {
     const localCameras = getLocalCameras();
     const mergedMap = new Map<string, Camera>();
     
-    if (dbCameras.length === 0 && localCameras.length === 0) {
-        DEMO_CAMERAS.forEach(c => mergedMap.set(c.id, c));
-    } else {
-        dbCameras.forEach(c => mergedMap.set(c.id, c));
-        localCameras.forEach(c => mergedMap.set(c.id, c));
-    }
+    // Overlay local cameras
+    localCameras.forEach(c => mergedMap.set(c.id, c));
+    // Overlay DB cameras
+    dbCameras.forEach(c => mergedMap.set(c.id, c));
     
     return Array.from(mergedMap.values());
   },
 
-  addCamera: async (neighborhoodId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string, maintenancePhotoUrl?: string): Promise<void> => {
+  getUserAccessibleCameras: async (user?: User | null): Promise<Camera[]> => {
+    const allCameras = await MockService.getAllSystemCameras();
+    if (!user) return allCameras;
+
+    if (user.role === UserRole.ADMIN) {
+      return allCameras;
+    }
+
+    if (user.neighborhoodId) {
+      return allCameras.filter(c => c.neighborhoodId === user.neighborhoodId);
+    }
+
+    return allCameras;
+  },
+
+  addCamera: async (
+    neighborhoodId: string, 
+    name: string, 
+    iframeCode: string, 
+    lat?: number, 
+    lng?: number, 
+    locationPhotoUrl?: string, 
+    maintenancePhotoUrl?: string,
+    locationDescription?: string,
+    address?: string
+  ): Promise<void> => {
     const id = generateUUID();
     
     const local = getLocalCameras();
@@ -368,7 +384,9 @@ export const MockService = {
         lat,
         lng,
         locationPhotoUrl,
-        maintenancePhotoUrl
+        maintenancePhotoUrl,
+        locationDescription,
+        address
     };
     local.push(newCam);
     saveLocalCameras(local);
@@ -381,32 +399,44 @@ export const MockService = {
             iframe_code: iframeCode,
             lat,
             lng,
-            location_photo_url: locationPhotoUrl
+            location_photo_url: locationPhotoUrl,
+            location_description: locationDescription,
+            address: address
         };
-        let error;
         if (maintenancePhotoUrl) {
             payload.maintenance_photo_url = maintenancePhotoUrl;
-            const res = await supabase.from('cameras').insert([payload]);
-            error = res.error;
-            if (error && error.message && error.message.includes("maintenance_photo_url")) {
-                console.warn("[MockService] Coluna maintenance_photo_url ausente, tentando sem ela...");
-                delete payload.maintenance_photo_url;
-                const res2 = await supabase.from('cameras').insert([payload]);
-                error = res2.error;
-            }
-        } else {
-            const res = await supabase.from('cameras').insert([payload]);
-            error = res.error;
         }
-        if (error) {
-            console.warn("[MockService] Failed to write camera to Supabase, saved locally:", error);
+        const res = await supabase.from('cameras').insert([payload]);
+        if (res.error) {
+            console.warn("[MockService] Failed to write full camera to Supabase, fallback to basic payload:", res.error);
+            const basicPayload: any = {
+                id,
+                neighborhood_id: sanitizeUUID(neighborhoodId),
+                name,
+                iframe_code: iframeCode,
+                lat,
+                lng,
+                location_photo_url: locationPhotoUrl
+            };
+            await supabase.from('cameras').insert([basicPayload]);
         }
     } catch (e) {
         console.warn("[MockService] Error adding camera to Supabase, saved locally:", e);
     }
   },
 
-  updateCamera: async (cameraId: string, name: string, iframeCode: string, lat?: number, lng?: number, locationPhotoUrl?: string, maintenancePhotoUrl?: string, neighborhoodId?: string): Promise<void> => {
+  updateCamera: async (
+    cameraId: string, 
+    name: string, 
+    iframeCode: string, 
+    lat?: number, 
+    lng?: number, 
+    locationPhotoUrl?: string, 
+    maintenancePhotoUrl?: string, 
+    neighborhoodId?: string,
+    locationDescription?: string,
+    address?: string
+  ): Promise<void> => {
     const local = getLocalCameras();
     const index = local.findIndex(c => c.id === cameraId);
     if (index !== -1) {
@@ -416,8 +446,10 @@ export const MockService = {
             iframeCode,
             lat,
             lng,
-            locationPhotoUrl,
-            maintenancePhotoUrl
+            locationPhotoUrl: locationPhotoUrl !== undefined ? locationPhotoUrl : local[index].locationPhotoUrl,
+            maintenancePhotoUrl: maintenancePhotoUrl !== undefined ? maintenancePhotoUrl : local[index].maintenancePhotoUrl,
+            locationDescription: locationDescription !== undefined ? locationDescription : local[index].locationDescription,
+            address: address !== undefined ? address : local[index].address
         };
     } else if (neighborhoodId) {
         local.push({
@@ -428,40 +460,102 @@ export const MockService = {
             lat,
             lng,
             locationPhotoUrl,
-            maintenancePhotoUrl
+            maintenancePhotoUrl,
+            locationDescription,
+            address
         });
     }
     saveLocalCameras(local);
 
     try {
         const payload: any = { 
-                name, 
+            name, 
+            iframe_code: iframeCode,
+            lat,
+            lng,
+            location_photo_url: locationPhotoUrl,
+            location_description: locationDescription,
+            address: address
+        };
+        if (maintenancePhotoUrl) {
+            payload.maintenance_photo_url = maintenancePhotoUrl;
+        }
+        const res = await supabase.from('cameras').update(payload).eq('id', cameraId);
+        if (res.error) {
+            console.warn("[MockService] Supabase extended update error, attempting standard update:", res.error);
+            const basicPayload: any = {
+                name,
                 iframe_code: iframeCode,
                 lat,
                 lng,
                 location_photo_url: locationPhotoUrl
             };
-            let error;
-            if (maintenancePhotoUrl) {
-                payload.maintenance_photo_url = maintenancePhotoUrl;
-                const res = await supabase.from('cameras').update(payload).eq('id', cameraId);
-                error = res.error;
-                if (error && error.message && error.message.includes("maintenance_photo_url")) {
-                    console.warn("[MockService] Coluna maintenance_photo_url ausente no update, tentando sem ela...");
-                    delete payload.maintenance_photo_url;
-                    const res2 = await supabase.from('cameras').update(payload).eq('id', cameraId);
-                    error = res2.error;
-                }
-            } else {
-                const res = await supabase.from('cameras').update(payload).eq('id', cameraId);
-                error = res.error;
-            }
-        if (error) {
-            console.warn("[MockService] Failed to update camera on Supabase, updated locally:", error);
+            await supabase.from('cameras').update(basicPayload).eq('id', cameraId);
         }
     } catch (e) {
         console.warn("[MockService] Error updating camera on Supabase, updated locally:", e);
     }
+  },
+
+  updateCameraLocation: async (
+    cameraId: string, 
+    lat: number, 
+    lng: number, 
+    locationDescription: string, 
+    address?: string, 
+    locationPhotoUrl?: string
+  ): Promise<Camera | null> => {
+    const local = getLocalCameras();
+    let updatedCam: Camera | null = null;
+    const index = local.findIndex(c => c.id === cameraId);
+    if (index !== -1) {
+        local[index] = {
+            ...local[index],
+            lat,
+            lng,
+            locationDescription,
+            address: address || local[index].address,
+            locationPhotoUrl: locationPhotoUrl !== undefined ? locationPhotoUrl : local[index].locationPhotoUrl
+        };
+        updatedCam = local[index];
+    } else {
+        // Se não estiver em localCameras, procura em DEMO_CAMERAS
+        const demo = DEMO_CAMERAS.find(c => c.id === cameraId);
+        if (demo) {
+            const newCam: Camera = {
+                ...demo,
+                lat,
+                lng,
+                locationDescription,
+                address: address || demo.address,
+                locationPhotoUrl: locationPhotoUrl !== undefined ? locationPhotoUrl : demo.locationPhotoUrl
+            };
+            local.push(newCam);
+            updatedCam = newCam;
+        }
+    }
+    saveLocalCameras(local);
+
+    try {
+        const payload: any = {
+            lat,
+            lng,
+            location_description: locationDescription,
+            address: address
+        };
+        if (locationPhotoUrl) {
+            payload.location_photo_url = locationPhotoUrl;
+        }
+        const res = await supabase.from('cameras').update(payload).eq('id', cameraId);
+        if (res.error) {
+            console.warn("[MockService] Update location supabase error, trying lat/lng only:", res.error);
+            await supabase.from('cameras').update({ lat, lng }).eq('id', cameraId);
+        }
+    } catch (e) {
+        console.warn("[MockService] Error in updateCameraLocation Supabase, saved locally:", e);
+    }
+
+    return updatedCam;
   },
 
   deleteCamera: async (id: string): Promise<void> => {
@@ -747,21 +841,22 @@ export const MockService = {
             const prefix = settings['template_broadcast_prefix'] || '[ATALAIA]';
             const message = `${prefix} ${typeLabels[alertData.type] || alertData.type}\n\nMorador: ${alertData.userName}\nBairro: ${hoodName}\n${alertData.message ? `Mensagem: ${alertData.message}` : ''}\n\nVerifique o app para mais detalhes.`;
 
-            // Fetch all phone numbers in the neighborhood
+            // Fetch all phone numbers in the neighborhood + admin monitor
             const { data: profiles, error: profileErr } = await supabase
                 .from('profiles')
                 .select('phone')
                 .eq('neighborhood_id', safeHoodId)
                 .not('phone', 'is', null);
 
-            if (!profileErr && profiles && profiles.length > 0) {
-                const numbers = profiles.map(p => p.phone).filter(Boolean) as string[];
-                if (numbers.length > 0) {
-                    // Dispara em background para não travar a resposta do app
-                    supabase.functions.invoke('send-alert', { 
-                        body: { message, numbers } 
-                    }).catch(err => console.error("[WhatsApp Broadcast] Error:", err));
-                }
+            const numbers = (!profileErr && profiles) ? profiles.map(p => p.phone).filter(Boolean) as string[] : [];
+            const adminPhone = settings['admin_whatsapp'];
+            if (adminPhone && !numbers.includes(adminPhone)) {
+                numbers.push(adminPhone);
+            }
+
+            if (numbers.length > 0) {
+                // Dispara em background para não travar a resposta do app
+                WhaticketService.sendMessage(message, numbers).catch(err => console.error("[WhatsApp Broadcast] Error:", err));
             }
         }
     } catch (e) {
@@ -810,21 +905,118 @@ export const MockService = {
         const template = settings['chat_mirror_template'] || "*CHAT ATALAIA*\nDe: {user}\n{text}";
         const message = template.replace('{user}', userName).replace('{text}', text);
 
-        supabase.functions.invoke('send-alert', { 
-            body: { message, numbers: [phoneNumber] } 
-        }).catch(e => console.error("[WhatsApp Chat Mirror] Failed:", e));
+        WhaticketService.sendMessage(message, [phoneNumber]).catch(e => console.error("[WhatsApp Chat Mirror] Failed:", e));
     } catch (e) {
         console.error("[WhatsApp Chat Mirror] Error:", e);
     }
   },
 
-  notifyUserLogin: async (user: User) => {
+  notifyUserLogin: async (user: any) => {
     try {
+        console.log("[WhatsApp Automation] Disparando aviso de login para:", user?.email || user?.name);
         const settings = await MockService.getSettings();
-        let waBody = settings['aviso_login'] || '✅ Login detectado: {{name}}';
-        waBody = waBody.replace('{{name}}', user.name).replace('{{time}}', new Date().toLocaleTimeString());
-        if (user.phone) { await supabase.functions.invoke('send-alert', { body: { message: waBody, numbers: [user.phone] } }); }
-    } catch (e) {}
+        const timeStr = new Date().toLocaleString('pt-BR');
+        
+        let targetPhone = user?.phone;
+        let userName = user?.name || (user?.email ? user.email.split('@')[0] : 'Usuário');
+
+        // Se o telefone não veio no objeto, busca no banco pelo id ou pelo email
+        if (!targetPhone && isRealSupabase) {
+            try {
+                let query = supabase.from('profiles').select('phone, name');
+                if (user?.id) {
+                    query = query.eq('id', user.id);
+                } else if (user?.email) {
+                    query = query.eq('email', user.email);
+                }
+                const { data } = await query.maybeSingle();
+                if (data?.phone) targetPhone = data.phone;
+                if (data?.name) userName = data.name;
+            } catch (err) {
+                console.warn("[WhatsApp Automation] Erro ao buscar telefone no profile:", err);
+            }
+        }
+
+        if (!targetPhone && typeof window !== 'undefined') {
+            targetPhone = localStorage.getItem('user_last_phone') || undefined;
+        }
+
+        const template = settings['aviso_login'] || '🔐 *ATALAIA - AVISO DE ACESSO*\n\nOlá *{{name}}*!\nDetectamos um novo login em sua conta.\n⏰ Data/Hora: {{time}}\n\nSe você reconhece este acesso, nenhuma ação é necessária.';
+        const msg = template
+            .replace(/{{name}}/g, userName)
+            .replace(/{name}/g, userName)
+            .replace(/{{time}}/g, timeStr)
+            .replace(/{time}/g, timeStr)
+            .replace(/{{email}}/g, user?.email || '')
+            .replace(/{email}/g, user?.email || '');
+
+        const adminPhone = settings['admin_whatsapp'] || '5548992067665';
+        const sendPromises: Promise<any>[] = [];
+
+        // 1. Envia para o telefone do morador (se cadastrado)
+        if (targetPhone) {
+            console.log("[WhatsApp Automation] Enviando login para morador:", targetPhone);
+            sendPromises.push(
+                WhaticketService.sendMessage(msg, [targetPhone])
+                    .then(() => console.log("[WhatsApp Automation] Sucesso no envio ao morador"))
+                    .catch(e => console.error("[WhatsApp Automation] Erro ao enviar ao morador:", e))
+            );
+        }
+
+        // 2. Notifica o Administrador Geral (admin_whatsapp)
+        if (adminPhone && adminPhone !== targetPhone) {
+            const adminMsg = `🔔 *ATALAIA - NOVO LOGIN DETECTADO*\n\n👤 Usuário: *${userName}*\n📧 E-mail: ${user?.email || 'N/A'}\n⏰ Horário: ${timeStr}\n\n_Segurança Colaborativa Atalaia_`;
+            console.log("[WhatsApp Automation] Enviando alerta de login para Admin:", adminPhone);
+            sendPromises.push(
+                WhaticketService.sendMessage(adminMsg, [adminPhone])
+                    .then(() => console.log("[WhatsApp Automation] Sucesso no envio ao Admin"))
+                    .catch(e => console.error("[WhatsApp Automation] Erro ao enviar ao Admin:", e))
+            );
+        }
+
+        // Aguarda os envios terminarem (com timeout de 4s para não segurar o login)
+        const timeoutPromise = new Promise(resolve => setTimeout(resolve, 4000));
+        await Promise.race([Promise.allSettled(sendPromises), timeoutPromise]);
+    } catch (e) {
+        console.error("[WhatsApp Automation] Falha geral em notifyUserLogin:", e);
+    }
+  },
+
+  notifyUserRegistration: async (userData: { name: string; email: string; phone?: string; neighborhoodName?: string }) => {
+    try {
+        console.log("[WhatsApp Automation] Disparando aviso de novo cadastro:", userData.email);
+        const settings = await MockService.getSettings();
+        const timeStr = new Date().toLocaleString('pt-BR');
+
+        // 1. Mensagem de Boas-Vindas para o Morador
+        if (userData.phone) {
+            const welcomeTemplate = settings['welcome_template'] || 
+                '🛡️ *BEM-VINDO AO PROJETO ATALAIA*\n\nOlá, *{{name}}*!\n\nSeu cadastro na rede de proteção comunitária foi realizado com sucesso.\nAgora você conta com monitoramento inteligente, rondas preventivas e canal de emergência direto pelo aplicativo!\n\n📌 Bairro: *{{neighborhood}}*\n⏰ Data: {{time}}\n\n_Atalaia - Segurança Colaborativa em Primeiro Lugar._';
+
+            const welcomeMsg = welcomeTemplate
+                .replace(/{{name}}/g, userData.name)
+                .replace(/{name}/g, userData.name)
+                .replace(/{{neighborhood}}/g, userData.neighborhoodName || 'Seu Bairro')
+                .replace(/{neighborhood}/g, userData.neighborhoodName || 'Seu Bairro')
+                .replace(/{{time}}/g, timeStr)
+                .replace(/{time}/g, timeStr);
+
+            WhaticketService.sendMessage(welcomeMsg, [userData.phone]).catch(err => {
+                console.error("[WhatsApp Automation] Erro ao enviar boas-vindas ao novo morador:", err);
+            });
+        }
+
+        // 2. Notificação de Novo Cadastro para o Administrador
+        const adminPhone = settings['admin_whatsapp'];
+        if (adminPhone) {
+            const adminNotifyMsg = `📋 *ATALAIA - NOVO MORADOR CADASTRADO*\n\n👤 Nome: *${userData.name}*\n📧 E-mail: ${userData.email}\n📱 WhatsApp: ${userData.phone || 'Não informado'}\n📌 Bairro: ${userData.neighborhoodName || 'Não informado'}\n⏰ Horário: ${timeStr}\n\n_Verifique no Painel Administrativo caso necessite de aprovação._`;
+            WhaticketService.sendMessage(adminNotifyMsg, [adminPhone]).catch(err => {
+                console.error("[WhatsApp Automation] Erro ao alertar Admin de novo morador:", err);
+            });
+        }
+    } catch (e) {
+        console.error("[WhatsApp Automation] Falha geral em notifyUserRegistration:", e);
+    }
   },
 
   sendCustomBroadcast: async (message: string, targetType: string, neighborhoodId?: string) => {
@@ -846,18 +1038,12 @@ export const MockService = {
           const numbers = (data || []).map(u => u.phone).filter(Boolean) as string[];
           
           if (numbers.length > 0) { 
-              const { data: funcData, error: funcError } = await supabase.functions.invoke('send-alert', { 
-                  body: { message, numbers } 
-              });
-              
-              if (funcError) throw funcError;
-              
-              const failed = funcData?.results?.find((r: any) => !r.success);
+              const result = await WhaticketService.sendMessage(message, numbers);
+              const failed = result?.results?.find(r => !r.success);
               if (failed) {
                   throw new Error(`Erro na API WhatsApp: ${failed.error || 'Falha no envio'}`);
               }
-              
-              return funcData;
+              return result;
           } else {
               throw new Error("Nenhum número de telefone encontrado para o alvo selecionado.");
           }
@@ -884,17 +1070,22 @@ export const MockService = {
     
     if (true) {
         if (error) console.error("[MockService] Ignorando erro no supabase para continuar o alerta:", error);
-        const integrator = await MockService.getNeighborhoodIntegrator(neighborhoodId);
-        if (integrator?.phone) {
-            const settings = await MockService.getSettings();
+        const [integrator, settings] = await Promise.all([
+            MockService.getNeighborhoodIntegrator(neighborhoodId),
+            MockService.getSettings()
+        ]);
+
+        const targets: string[] = [];
+        if (integrator?.phone) targets.push(integrator.phone);
+        const adminPhone = settings['admin_whatsapp'];
+        if (adminPhone && !targets.includes(adminPhone)) targets.push(adminPhone);
+
+        if (targets.length > 0) {
             const template = settings['service_request_template'] || "*SOLICITAÇÃO*\nTipo: {type}\nMorador: {user}";
             const label = requestType === 'ESCORT' ? 'ESCOLTA' : requestType === 'EXTRA_ROUND' ? 'RONDA EXTRA' : 'AVISO DE VIAGEM';
-            
             const message = template.replace('{type}', label).replace('{user}', userName);
 
-            await supabase.functions.invoke('send-alert', {
-                body: { message, numbers: [integrator.phone] }
-            });
+            await WhaticketService.sendMessage(message, targets).catch(() => {});
         }
     }
 
@@ -945,9 +1136,7 @@ export const MockService = {
                         .replace(/{time}/g, timeStr);
 
                     try {
-                        await supabase.functions.invoke('send-alert', {
-                            body: { message: customMessage, numbers: [profile.phone] }
-                        });
+                        await WhaticketService.sendMessage(customMessage, [profile.phone]);
                     } catch (err) {
                         console.error("[MockService/WhatsApp] Failed to dispatch patrol WhatsApp alert:", err);
                     }
@@ -1105,9 +1294,7 @@ export const MockService = {
         
         if (adminPhone) {
             const finalMsg = template.replace('{user}', userName).replace('{text}', message);
-            await supabase.functions.invoke('send-alert', {
-                body: { message: finalMsg, numbers: [adminPhone] }
-            });
+            await WhaticketService.sendMessage(finalMsg, [adminPhone]).catch(() => {});
         }
     }
 

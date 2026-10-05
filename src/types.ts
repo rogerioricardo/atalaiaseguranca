@@ -62,6 +62,14 @@ export interface Neighborhood {
   lng?: number;
 }
 
+export interface CameraSponsor {
+  id?: string;
+  name: string;
+  logoUrl?: string;
+  description?: string;
+  linkUrl?: string;
+}
+
 export interface Camera {
   id: string;
   neighborhoodId: string;
@@ -71,6 +79,10 @@ export interface Camera {
   lng?: number;
   locationPhotoUrl?: string;
   maintenancePhotoUrl?: string;
+  locationDescription?: string;
+  address?: string;
+  accessType?: 'PUBLIC' | 'PRIVATE';
+  sponsors?: CameraSponsor[];
 }
 
 export interface SupportTicket {

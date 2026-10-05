@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 // Fix: Declare Deno global to resolve TypeScript error
@@ -16,15 +15,16 @@ serve(async (req) => {
   }
 
   try {
-    const WHATSAPP_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "htGbba00iOEb9B74jRl2Y2lStYcSsEuJJvC2ST3IwCI5tcxFiu71WXxfHWwUeYC1"; // Use default if ENV not set
-    const WHATSAPP_URL = "https://app.whatendimento.digital/api/messages/send";
-    const SESSION_ID = "Default"; // Adjust according to Whaticket session if needed
+    const { message, number, numbers, token, apiKey } = await req.json().catch(() => ({}));
+
+    // Credenciais ativas com fallback direto para suas credenciais do Whaticket
+    const WHATSAPP_TOKEN = token || Deno.env.get("WHATSAPP_TOKEN") || "HSYumH8GyDXc90Bb1ZcBoVMBjatynktt";
+    const WHATSAPP_API_KEY = apiKey || Deno.env.get("WHATSAPP_API_KEY") || "Oava7PjfYdGfc6AwQXnNTrLDIj030OdtfHgm3o+bK2Qp";
+    const WHATSAPP_URL = "https://app.whatendimento.digital/backend/api/messages/send";
 
     if (!WHATSAPP_TOKEN) {
-      throw new Error("WHATSAPP_TOKEN não configurado nos Secrets do Supabase.");
+      throw new Error("WHATSAPP_TOKEN não configurado.");
     }
-
-    const { message, number, numbers } = await req.json()
 
     if (!message) {
       return new Response(JSON.stringify({ error: "Mensagem vazia" }), {
@@ -39,57 +39,56 @@ serve(async (req) => {
     } else if (number) {
       rawTargets = [number];
     } else {
-      // Default fallback if no numbers provided
-      return new Response(JSON.stringify({ error: "Nenhum número de destino fornecido." }), {
+      return new Response(JSON.stringify({ error: "Nenhum número de destino informado." }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
       })
     }
 
+    // Tratamento dos números para o padrão aceito pelo Whaticket
     const targets = rawTargets.map(t => {
       let clean = t.toString().trim();
       
-      // Se já tiver o sufixo, mantém
-      if (clean.includes('@g.us') || clean.includes('@c.us')) return clean;
+      // Se for ID de grupo do WhatsApp (@g.us), mantém inalterado
+      if (clean.includes('@g.us')) return clean;
 
-      // Remove TUDO que não for número
-      clean = clean.replace(/\D/g, '');
+      // Remove sufixo @c.us e qualquer caractere não numérico
+      clean = clean.replace('@c.us', '').replace(/\D/g, '');
 
-      // Se for número brasileiro sem 55 (10 ou 11 dígitos)
-      if (clean.length === 11 || clean.length === 10) {
-        clean = '55' + clean;
+      // Remove 0 após o 55 (ex: 55048... -> 5548...)
+      if (clean.startsWith('550')) {
+        clean = '55' + clean.substring(3);
       }
-      
-      // Caso especial: se começar com 0, remove o 0 e tenta de novo (vários usuários colocam 011...)
-      if (clean.startsWith('0') && (clean.length === 11 || clean.length === 12)) {
-          clean = '55' + clean.substring(1);
+
+      // Se tiver 10 ou 11 dígitos (DDD + Número), adiciona o DDI Brasil (55)
+      if (clean.length === 10 || clean.length === 11) {
+        clean = '55' + clean;
       }
 
       return clean;
     });
 
     const sendRequest = async (target: string) => {
-      let formattedTarget = target;
-      if (!formattedTarget.includes('@')) {
-        formattedTarget = `${formattedTarget}@c.us`;
+      console.log(`[WhatsApp] Disparando para: ${target}`);
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${WHATSAPP_TOKEN}`
+      };
+      if (WHATSAPP_API_KEY) {
+        headers['apikey'] = WHATSAPP_API_KEY;
       }
 
-      console.log(`[WhatsApp] Tentando envio para: ${formattedTarget}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
         const response = await fetch(WHATSAPP_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-            'apikey': WHATSAPP_TOKEN 
-          },
+          headers,
           body: JSON.stringify({
-            number: formattedTarget,
-            body: message,
+            number: target,
+            body: message
           }),
           signal: controller.signal
         });
@@ -98,36 +97,20 @@ serve(async (req) => {
         const resultText = await response.text();
         
         if (!response.ok) {
-          console.error(`[WhatsApp-Erro] API ${WHATSAPP_URL} retornou ${response.status}:`, resultText);
-          return { 
-            target, 
-            success: false, 
-            error: resultText || `Status ${response.status}`,
-            status: response.status 
-          };
+          console.error(`[WhatsApp-Erro] Status ${response.status} para ${target}:`, resultText);
+          return { target, success: false, error: resultText };
         }
 
-        console.log(`[WhatsApp-Sucesso] Enviado para ${formattedTarget}`);
-        return { target, success: true };
-      } catch (e: any) {
-        console.error(`[WhatsApp-Falha] Erro para ${formattedTarget}:`, e.message);
-        return { target, success: false, error: e.message };
+        console.log(`[WhatsApp-Sucesso] Whaticket colocou na fila para ${target}:`, resultText);
+        return { target, success: true, details: resultText };
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        console.error(`[WhatsApp-Falha] Erro de rede para ${target}:`, err.message);
+        return { target, success: false, error: err.message };
       }
     };
 
-    // Envio em lotes para evitar sobrecarga (5 por vez)
-    const batchSize = 5;
-    const results = [];
-    for (let i = 0; i < targets.length; i += batchSize) {
-      const batch = targets.slice(i, i + batchSize);
-      console.log(`[WhatsApp] Processando lote ${Math.floor(i/batchSize) + 1} (${batch.length} envios)`);
-      const batchResults = await Promise.all(batch.map(t => sendRequest(t)));
-      results.push(...batchResults);
-      // Pequeno intervalo entre lotes se houver mais
-      if (i + batchSize < targets.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    }
+    const results = await Promise.all(targets.map(t => sendRequest(t)));
     
     return new Response(JSON.stringify({ 
       success: results.some(r => r.success), 
