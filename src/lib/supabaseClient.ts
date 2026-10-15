@@ -19,7 +19,25 @@ if (!isRealSupabase) {
   console.info("Para usar seu banco de dados real, adicione VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY nas configurações (Settings).");
 }
 
+const customSupabaseFetch: typeof fetch = async (input, init) => {
+  try {
+    return await fetch(input, init);
+  } catch (err) {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    if (urlStr.includes('nfbolgqsrpjqhpoplulf.supabase.co') && typeof window !== 'undefined') {
+      const proxiedUrl = urlStr.replace('https://nfbolgqsrpjqhpoplulf.supabase.co', '/supabase-proxy');
+      return await fetch(proxiedUrl, init);
+    }
+    throw err;
+  }
+};
+
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder-url.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
+  supabaseAnonKey || 'placeholder-key',
+  {
+    global: {
+      fetch: customSupabaseFetch
+    }
+  }
 );

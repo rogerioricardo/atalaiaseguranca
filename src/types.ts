@@ -70,6 +70,22 @@ export interface CameraSponsor {
   linkUrl?: string;
 }
 
+export interface MaskPoint {
+  x: number; // 0 - 100 (%)
+  y: number; // 0 - 100 (%)
+}
+
+export interface PrivacyMask {
+  id: string;
+  x: number;       // 0 - 100 (%)
+  y: number;       // 0 - 100 (%)
+  width: number;   // 0 - 100 (%)
+  height: number;  // 0 - 100 (%)
+  points?: MaskPoint[]; // Lista de vértices para desenho ponto a ponto
+  type?: 'polygon' | 'rect';
+  label?: string;  // e.g. "Janela Privativa"
+}
+
 export interface Camera {
   id: string;
   neighborhoodId: string;
@@ -83,6 +99,7 @@ export interface Camera {
   address?: string;
   accessType?: 'PUBLIC' | 'PRIVATE';
   sponsors?: CameraSponsor[];
+  privacyMasks?: PrivacyMask[];
 }
 
 export interface SupportTicket {

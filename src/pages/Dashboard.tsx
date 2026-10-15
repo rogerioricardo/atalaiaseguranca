@@ -7,6 +7,7 @@ import { Card, Badge, Button, Modal, Input } from '@/components/UI';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { ContractSignature } from '@/components/ContractSignature';
 import { MockService } from '@/services/mockService';
+import { CameraPrivacyMaskOverlay } from '@/components/CameraPrivacyMaskOverlay';
 import { supabase } from '@/lib/supabaseClient';
 import { 
     AlertTriangle, Video, Users, Activity, MapPin, Inbox, Copy, Trash2, 
@@ -159,6 +160,7 @@ const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ 
                           referrerPolicy="no-referrer"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                       />
+                      <CameraPrivacyMaskOverlay masks={cam.privacyMasks} />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/map-cam:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                           <button 
                               onClick={() => {

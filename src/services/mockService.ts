@@ -1,7 +1,54 @@
 
 import { supabase, isRealSupabase } from '../lib/supabaseClient';
 import { WhaticketService } from './whaticketService';
-import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, ServiceRequest, Camera, SupportTicket, Coupon, RecordingRequest } from '../types';
+import { Neighborhood, Alert, ChatMessage, UserRole, User, Notification, ServiceRequest, Camera, SupportTicket, Coupon, RecordingRequest, PrivacyMask } from '../types';
+
+export const cleanLocationDescription = (desc?: string): string => {
+  if (!desc) return '';
+  return desc.replace(/<!--PM_JSON:.*?-->/g, '').trim();
+};
+
+export const extractPrivacyMasks = (c: any): PrivacyMask[] => {
+  if (!c) return [];
+  // 1. Array direto no objeto
+  if (c.privacyMasks && Array.isArray(c.privacyMasks)) {
+    return c.privacyMasks;
+  }
+  if (c.privacy_masks && Array.isArray(c.privacy_masks)) {
+    return c.privacy_masks;
+  }
+  if (typeof c.privacy_masks === 'string') {
+    try {
+      const parsed = JSON.parse(c.privacy_masks);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+
+  // 2. Extrair de location_description (<!--PM_JSON:[...]-->)
+  const locDesc = c.location_description || c.locationDescription || '';
+  if (typeof locDesc === 'string' && locDesc.includes('<!--PM_JSON:')) {
+    try {
+      const match = locDesc.match(/<!--PM_JSON:(.*?)-->/);
+      if (match && match[1]) {
+        const parsed = JSON.parse(match[1]);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+  }
+
+  // 3. Cache local no navegador
+  if (typeof window !== 'undefined' && c.id) {
+    try {
+      const cached = localStorage.getItem(`atalaia_camera_privacy_masks_${c.id}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+  }
+
+  return [];
+};
 
 const generateUUID = () => {
     if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
@@ -59,14 +106,14 @@ export const MockService = {
       try {
           const { data, error } = await supabase.from('system_settings').select('key, value');
           if (error) {
-              console.error("[MockService] Error fetching settings:", error);
+              console.warn("[MockService] Warning fetching settings:", error.message);
               throw error;
           }
           const settings: Record<string, string> = {};
           (data || []).forEach(s => settings[s.key] = s.value);
           return settings;
       } catch (e) { 
-          console.error("[MockService] Catch in getSettings:", e);
+          console.warn("[MockService] Fallback in getSettings");
           return {}; 
       }
   },
@@ -79,7 +126,7 @@ export const MockService = {
           updated_at: new Date().toISOString() 
       }, { onConflict: 'key' });
       if (error) {
-          console.error("[MockService] Error updating setting:", error);
+          console.warn("[MockService] Warning updating setting:", error.message);
           throw error;
       }
   },
@@ -88,37 +135,49 @@ export const MockService = {
       if (!isRealSupabase) return;
       const { error } = await supabase.from('system_settings').delete().eq('key', key);
       if (error) {
-          console.error("[MockService] Error deleting setting:", error);
+          console.warn("[MockService] Warning deleting setting:", error.message);
           throw error;
       }
   },
 
   // --- BAIRROS ---
   getNeighborhoods: async (forceRefresh = false): Promise<Neighborhood[]> => {
-    const demoHoods = [
+    const defaultHoods: Neighborhood[] = [
       {
-        id: 'hood-demo-1',
-        name: 'Atalaia Central',
-        description: 'Bairro central sob monitoramento integrado Atalaia.',
-        iframeUrl: 'about:blank',
-        lat: -27.5969,
-        lng: -48.5495
+        id: '1d01b1a1-dae1-4319-b347-fd93f1b29f4b',
+        name: 'Bairro Sanga Funda - Içara/SC',
+        description: 'Proximo a vila nova',
+        iframeUrl: ''
       },
       {
-        id: 'hood-demo-2',
-        name: 'Jardim Alvorada',
-        description: 'Bairro monitorado com câmeras de alta definição e ronda ativa.',
-        iframeUrl: 'about:blank',
-        lat: -27.6012,
-        lng: -48.5410
+        id: '39a02d9d-9b02-4948-8233-275cb61ed3b9',
+        name: 'Campinas - São Jose/SC',
+        description: 'Central Alien Monitoramento',
+        iframeUrl: ''
       },
       {
-        id: 'hood-demo-3',
-        name: 'Porto Seguro',
-        description: 'Bairro litorâneo com monitoramento patrimonial ativo.',
-        iframeUrl: 'about:blank',
-        lat: -27.5850,
-        lng: -48.5600
+        id: '14178a91-0e15-464b-a175-e80bbcc70c02',
+        name: 'Casa Taynara',
+        description: 'Monitoramento integrado Atalaia.',
+        iframeUrl: ''
+      },
+      {
+        id: '64c16c06-2338-41b2-92f5-a740a3e5b2c3',
+        name: 'KitNets  Sanga Funda',
+        description: 'Casa em Sanga Funda',
+        iframeUrl: ''
+      },
+      {
+        id: '085f1198-684b-49fb-8f6b-ca99bb0ec634',
+        name: 'Sítio do Beto',
+        description: 'Arroio Corrente',
+        iframeUrl: ''
+      },
+      {
+        id: 'a7af175c-5c72-4d10-b589-8800ed72b61e',
+        name: 'Vila Rica - Criciúma/SC',
+        description: 'Proximo João de Barro.',
+        iframeUrl: ''
       }
     ];
 
@@ -128,22 +187,26 @@ export const MockService = {
         if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed)) {
-                localList = parsed;
+                const filtered = parsed.filter((h: any) => !h?.id?.startsWith('hood-demo-'));
+                if (filtered.length > 0) {
+                    localList = filtered;
+                }
             }
-        } else {
-            localStorage.setItem('atalaia_local_neighborhoods', JSON.stringify(demoHoods));
-            localList = demoHoods;
+        }
+        if (!localList) {
+            localStorage.setItem('atalaia_local_neighborhoods', JSON.stringify(defaultHoods));
+            localList = defaultHoods;
         }
     } catch (err) {}
 
     if (!isRealSupabase) {
-        return localList && localList.length > 0 ? localList : demoHoods;
+        return localList && localList.length > 0 ? localList : defaultHoods;
     }
     try {
         const { data, error } = await supabase.from('neighborhoods').select('*').order('name');
         if (error) {
-            console.error("[MockService] Error fetching neighborhoods:", JSON.stringify(error));
-            throw error;
+            console.warn("[MockService] Warning fetching neighborhoods, using local fallback:", error.message);
+            return localList || defaultHoods;
         }
         const mapped = (data || []).map(n => ({ 
             id: n.id, 
@@ -160,10 +223,10 @@ export const MockService = {
             } catch (err) {}
             return mapped;
         }
-        return localList || demoHoods;
+        return localList || defaultHoods;
     } catch (e) { 
-        console.error("[MockService] Catch in getNeighborhoods, using local fallback:", e instanceof Error ? e.message : JSON.stringify(e));
-        return localList || demoHoods; 
+        console.warn("[MockService] Using local fallback for neighborhoods");
+        return localList || defaultHoods; 
     }
   },
 
@@ -292,8 +355,9 @@ export const MockService = {
                     lng: c.lng,
                     locationPhotoUrl: c.location_photo_url,
                     maintenancePhotoUrl: c.maintenance_photo_url,
-                    locationDescription: c.location_description || c.locationDescription,
-                    address: c.address
+                    locationDescription: cleanLocationDescription(c.location_description || c.locationDescription),
+                    address: c.address,
+                    privacyMasks: extractPrivacyMasks(c)
                 }));
             } else if (error) {
                 console.warn("[MockService] Erro de permissão ou banco ao buscar câmeras do Supabase:", error.message);
@@ -307,7 +371,10 @@ export const MockService = {
     const mergedMap = new Map<string, Camera>();
 
     dbCameras.forEach(c => mergedMap.set(c.id, c));
-    localCameras.forEach(c => mergedMap.set(c.id, c));
+    localCameras.forEach(c => {
+      const masks = extractPrivacyMasks(c);
+      mergedMap.set(c.id, { ...c, privacyMasks: masks });
+    });
 
     return Array.from(mergedMap.values());
   },
@@ -326,8 +393,9 @@ export const MockService = {
                 lng: c.lng,
                 locationPhotoUrl: c.location_photo_url,
                 maintenancePhotoUrl: c.maintenance_photo_url,
-                locationDescription: c.location_description || c.locationDescription,
-                address: c.address
+                locationDescription: cleanLocationDescription(c.location_description || c.locationDescription),
+                address: c.address,
+                privacyMasks: extractPrivacyMasks(c)
             }));
         } else if (error) {
             console.warn("[MockService] Supabase cameras query returned error, using local fallback.", error);
@@ -340,7 +408,10 @@ export const MockService = {
     const mergedMap = new Map<string, Camera>();
     
     // Overlay local cameras
-    localCameras.forEach(c => mergedMap.set(c.id, c));
+    localCameras.forEach(c => {
+      const masks = extractPrivacyMasks(c);
+      mergedMap.set(c.id, { ...c, privacyMasks: masks });
+    });
     // Overlay DB cameras
     dbCameras.forEach(c => mergedMap.set(c.id, c));
     
@@ -494,6 +565,43 @@ export const MockService = {
         }
     } catch (e) {
         console.warn("[MockService] Error updating camera on Supabase, updated locally:", e);
+    }
+  },
+
+  updateCameraPrivacyMasks: async (cameraId: string, masks: PrivacyMask[]): Promise<void> => {
+    // 1. Salvar no localStorage específico da câmera
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`atalaia_camera_privacy_masks_${cameraId}`, JSON.stringify(masks));
+      } catch (err) {}
+    }
+
+    // 2. Atualizar no array de câmeras locais
+    const local = getLocalCameras();
+    const idx = local.findIndex(c => c.id === cameraId);
+    if (idx !== -1) {
+      local[idx].privacyMasks = masks;
+      saveLocalCameras(local);
+    }
+
+    // 3. Persistir no Supabase com fallback no location_description
+    if (isRealSupabase) {
+      try {
+        const { data: camData } = await supabase.from('cameras').select('location_description').eq('id', cameraId).maybeSingle();
+        const baseDesc = cleanLocationDescription(camData?.location_description || '');
+        const newDesc = masks.length > 0 ? `${baseDesc} <!--PM_JSON:${JSON.stringify(masks)}-->`.trim() : baseDesc;
+
+        // Atualiza location_description
+        const res = await supabase.from('cameras').update({
+          location_description: newDesc
+        }).eq('id', cameraId);
+
+        if (res.error) {
+          console.warn("[MockService] Aviso ao persistir máscaras de privacidade:", res.error.message);
+        }
+      } catch (e) {
+        console.warn("[MockService] Exceção ao salvar máscaras de privacidade:", e);
+      }
     }
   },
 

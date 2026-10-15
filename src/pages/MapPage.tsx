@@ -8,6 +8,7 @@ import L from 'leaflet';
 import { useAuth } from '@/auth/context';
 import { Video, MapPin, Globe, Lock, AlertTriangle, Wrench } from 'lucide-react';
 import { UpgradeModal } from '@/components/UpgradeModal';
+import { CameraPrivacyMaskOverlay } from '@/components/CameraPrivacyMaskOverlay';
 import { supabase } from '../lib/supabaseClient';
 
 // Fix Leaflet Default Icon in React using CDN URLs
@@ -166,6 +167,7 @@ const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ 
                           referrerPolicy="no-referrer"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                       />
+                      <CameraPrivacyMaskOverlay masks={cam.privacyMasks} />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/map-cam:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                           <button 
                               onClick={() => {

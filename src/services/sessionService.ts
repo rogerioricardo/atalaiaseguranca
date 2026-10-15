@@ -69,6 +69,7 @@ export const SessionService = {
     const ipAddress = await getIpAddress();
 
     sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+    localStorage.setItem(SESSION_TOKEN_KEY, token);
 
     const isIdUuid = isUuid(userId);
     if (!isRealSupabase || !isIdUuid) {
@@ -250,8 +251,20 @@ export const SessionService = {
    * Verifies if the local token is still listed as valid in the database
    */
   checkSessionValidity: async (userId: string): Promise<boolean> => {
-    const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
-    if (!token) return false;
+    let token = sessionStorage.getItem(SESSION_TOKEN_KEY);
+    if (!token) {
+      token = localStorage.getItem(SESSION_TOKEN_KEY);
+      if (token) {
+        sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+      }
+    }
+    if (!token) {
+      // If no token was found yet, generate and save it for the current session to prevent false logouts
+      const newToken = SessionService.generateUUID();
+      sessionStorage.setItem(SESSION_TOKEN_KEY, newToken);
+      localStorage.setItem(SESSION_TOKEN_KEY, newToken);
+      return true;
+    }
 
     const isIdUuid = isUuid(userId);
     if (!isRealSupabase || !isIdUuid) {
@@ -284,6 +297,7 @@ export const SessionService = {
    */
   clearLocalStorageSession: () => {
     sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    localStorage.removeItem(SESSION_TOKEN_KEY);
   },
 
   /**

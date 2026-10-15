@@ -194,6 +194,11 @@ const AppRoutes = () => {
 
 const VersionChecker = () => {
   useEffect(() => {
+    // In development mode, don't auto-reload
+    if (import.meta.env.DEV) {
+      return;
+    }
+
     let checking = false;
     
     // Unregister any active Service Workers to avoid aggressive caching
@@ -212,15 +217,20 @@ const VersionChecker = () => {
       if (checking) return;
       checking = true;
       try {
-        const res = await fetch(`/version.json?t=${new Date().getTime()}`, { cache: 'no-store' });
+        const res = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) return;
         const data = await res.json();
         
         // @ts-ignore
         if (data.version && typeof __APP_VERSION__ !== 'undefined') {
           // @ts-ignore
           if (data.version.toString() !== __APP_VERSION__.toString()) {
-            console.log("Nova versão encontrada, recarregando...");
-            window.location.reload(); // Force reload to clear cache
+            const lastReload = sessionStorage.getItem('last_version_reload');
+            if (lastReload !== data.version.toString()) {
+              sessionStorage.setItem('last_version_reload', data.version.toString());
+              console.log("Nova versão encontrada, recarregando...");
+              window.location.reload(); // Force reload to clear cache
+            }
           }
         }
       } catch (e) {
@@ -230,8 +240,8 @@ const VersionChecker = () => {
       }
     };
 
-    // Verifica no load inicial
-    checkVersion();
+    // Delay initial check by 15s to allow app to fully mount and settle
+    const initialTimer = setTimeout(checkVersion, 15000);
 
     // Verifica ao voltar para a aba
     const onVisibilityChange = () => {
@@ -241,9 +251,10 @@ const VersionChecker = () => {
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
-    // E a cada 5 minutos
-    const interval = setInterval(checkVersion, 5 * 60 * 1000);
+    // E a cada 10 minutos
+    const interval = setInterval(checkVersion, 10 * 60 * 1000);
     return () => {
+      clearTimeout(initialTimer);
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };

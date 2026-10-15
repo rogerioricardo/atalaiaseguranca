@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/auth/context';
-import { UserRole, Neighborhood, Camera, CameraSponsor, RecordingRequest, UserPlan } from '@/types';
+import { UserRole, Neighborhood, Camera, CameraSponsor, RecordingRequest, UserPlan, PrivacyMask } from '@/types';
 import { MockService } from '@/services/mockService';
 import { supabase } from '@/lib/supabaseClient';
 import { 
@@ -11,7 +11,7 @@ import {
     ChevronRight, Camera as CameraIcon, Loader2, Edit2, X, Lock,
     Maximize2, Clock, Wrench, RefreshCw, Calendar, Download, 
     Upload, FileText, Phone, UploadCloud, Sparkles, Check,
-    Building2, Settings2, ShieldAlert, Layers
+    Building2, Settings2, ShieldAlert, Layers, EyeOff
 } from 'lucide-react';
 import { Card, Button, Input, Badge } from '@/components/UI';
 import { UpgradeModal } from '@/components/UpgradeModal';
@@ -19,6 +19,8 @@ import { ImagePolicyButton } from '@/components/ImagePolicyModal';
 import { CameraLocationModal } from '@/components/CameraLocationModal';
 import { NeighborhoodsManagerModal } from '@/components/NeighborhoodsManagerModal';
 import { CameraSponsorsFooter } from '@/components/CameraSponsorsFooter';
+import { CameraPrivacyMaskModal } from '@/components/CameraPrivacyMaskModal';
+import { CameraPrivacyMaskOverlay } from '@/components/CameraPrivacyMaskOverlay';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Relógio tático isolado para impedir que todo o painel de câmeras re-renderize a cada 1 segundo
@@ -61,6 +63,8 @@ interface CameraStreamPlayerProps {
   userRole?: UserRole;
   onUpgrade?: () => void;
   onContactSponsor?: () => void;
+  privacyMasks?: PrivacyMask[];
+  onConfigurePrivacyMasks?: () => void;
 }
 
 // Player de streaming com suporte a reprodução em tempo real, patrocinadores e travas de privacidade
@@ -82,9 +86,42 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
   userPlan = 'FREE',
   userRole,
   onUpgrade,
-  onContactSponsor
+  onContactSponsor,
+  privacyMasks = [],
+  onConfigurePrivacyMasks
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [activeMasks, setActiveMasks] = useState<PrivacyMask[]>(() => {
+    if (privacyMasks && privacyMasks.length > 0) return privacyMasks;
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(`atalaia_camera_privacy_masks_${id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    if (privacyMasks && privacyMasks.length > 0) {
+      setActiveMasks(privacyMasks);
+    } else if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(`atalaia_camera_privacy_masks_${id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            setActiveMasks(parsed);
+            return;
+          }
+        }
+      } catch {}
+      setActiveMasks([]);
+    }
+  }, [privacyMasks, id]);
 
   if (!iframeCode || iframeCode.trim() === '') {
     return (
@@ -192,6 +229,24 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
       const popupWindow = window.open('', `cam_${id}`, 'width=980,height=700,menubar=no,status=no,location=no,toolbar=no,scrollbars=yes,resizable=yes');
       
       if (popupWindow) {
+        const masksHtml = (activeMasks && activeMasks.length > 0)
+          ? activeMasks.map(m => {
+              if (m.points && m.points.length >= 3) {
+                const pts = m.points.map(p => `${p.x},${p.y}`).join(' ');
+                return `
+                  <svg style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 99;" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <polygon points="${pts}" fill="#000000" />
+                  </svg>
+                `;
+              }
+              return `
+                <div style="position: absolute; left: ${m.x}%; top: ${m.y}%; width: ${m.width}%; height: ${m.height}%; background-color: #000000; z-index: 99; display: flex; align-items: center; justify-content: center; pointer-events: none;">
+                  <span style="font-family: monospace; font-size: 8px; font-weight: bold; color: rgba(255,255,255,0.25); text-transform: uppercase; letter-spacing: 1px;">ÁREA PRIVADA</span>
+                </div>
+              `;
+            }).join('')
+          : '';
+
         const htmlContent = `
           <!DOCTYPE html>
           <html lang="pt-BR">
@@ -205,6 +260,7 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
               .header { background: #09090b; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
               .title { font-weight: 800; font-size: 15px; color: #fff; display: flex; align-items: center; gap: 8px; }
               .live-badge { background: rgba(0, 240, 255, 0.15); color: #00f0ff; font-size: 11px; font-weight: 900; padding: 3px 10px; border-radius: 8px; border: 1px solid rgba(0, 240, 255, 0.4); letter-spacing: 1px; }
+              .mask-badge { background: rgba(16, 185, 129, 0.15); color: #10b981; font-size: 10px; font-weight: 900; padding: 3px 8px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.4); margin-left: 8px; }
               .video-container { flex: 1; position: relative; background: #000; width: 100%; height: 100%; overflow: hidden; }
               .video-container iframe, .video-container video { width: 100%; height: 100%; border: none; object-fit: cover; }
             </style>
@@ -213,11 +269,13 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
             <div class="header">
               <div class="title">
                 <span>📹 ${name}</span>
+                ${activeMasks.length > 0 ? `<span class="mask-badge">🔒 ${activeMasks.length} ÁREA(S) PRIVADA(S)</span>` : ''}
               </div>
               <span class="live-badge">⚡ AO VIVO</span>
             </div>
             <div class="video-container">
               <iframe src="${targetUrl}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+              ${masksHtml}
             </div>
           </body>
           </html>
@@ -269,6 +327,9 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
           />
         )}
 
+        {/* Máscaras Pretas de Privacidade sobre o Player */}
+        <CameraPrivacyMaskOverlay masks={activeMasks} />
+
         {/* Identificador sutil de Live */}
         <div 
           data-ignore-screenshot="true"
@@ -281,8 +342,37 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
           <span className="text-[10px] text-atalaia-neon font-black font-mono tracking-widest uppercase">AO VIVO</span>
         </div>
 
-        {/* Botão de Popup de Altíssima Visibilidade */}
-        <div className="absolute top-3 right-3 z-30 pointer-events-auto">
+        {/* Selo indicador de Máscara de Privacidade Ativa */}
+        {activeMasks && activeMasks.length > 0 && (
+          <div 
+            data-ignore-screenshot="true"
+            className="absolute top-3 left-28 hidden sm:flex items-center gap-1.5 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-emerald-500/40 z-20 pointer-events-none shadow-lg"
+            title={`${activeMasks.length} área(s) mascarada(s) em preto absoluto`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[9px] text-emerald-400 font-bold font-mono tracking-wider uppercase">
+              MÁSCARA ATIVA ({activeMasks.length})
+            </span>
+          </div>
+        )}
+
+        {/* Botões de Ação no Player: Configurar Máscara e Popup */}
+        <div className="absolute top-3 right-3 z-30 pointer-events-auto flex items-center gap-2">
+          {onConfigurePrivacyMasks && (
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onConfigurePrivacyMasks();
+              }}
+              className="px-2.5 py-1.5 bg-black/80 hover:bg-black text-gray-300 hover:text-emerald-400 border border-white/20 hover:border-emerald-500/50 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 backdrop-blur-md transition-all cursor-pointer shadow-lg"
+              title="Desenhar ou editar máscara preta de privacidade"
+            >
+              <EyeOff size={13} className="text-emerald-400" />
+              <span className="hidden sm:inline">MÁSCARA</span>
+            </button>
+          )}
+
           <button 
             type="button"
             onClick={handleOpenHttp}
@@ -336,6 +426,43 @@ const Cameras: React.FC = () => {
   const [selectedCameraForModal, setSelectedCameraForModal] = useState<Camera | null>(null);
   const [cameraForLocationModal, setCameraForLocationModal] = useState<Camera | null>(null);
   const [openLocationInEditMode, setOpenLocationInEditMode] = useState(false);
+  const [cameraForPrivacyMaskModal, setCameraForPrivacyMaskModal] = useState<Camera | null>(null);
+
+  const handleSavePrivacyMasks = async (masks: PrivacyMask[], updatedPhotoUrl?: string) => {
+    if (!cameraForPrivacyMaskModal) return;
+    const targetId = cameraForPrivacyMaskModal.id;
+    try {
+      await MockService.updateCameraPrivacyMasks(targetId, masks);
+      if (updatedPhotoUrl && updatedPhotoUrl !== cameraForPrivacyMaskModal.locationPhotoUrl) {
+        try {
+          await MockService.updateCameraLocation(
+            targetId, 
+            cameraForPrivacyMaskModal.lat || 0, 
+            cameraForPrivacyMaskModal.lng || 0, 
+            cameraForPrivacyMaskModal.locationDescription || '', 
+            cameraForPrivacyMaskModal.address, 
+            updatedPhotoUrl
+          );
+        } catch (photoErr) {
+          console.warn("Aviso ao salvar print da câmera no banco:", photoErr);
+        }
+      }
+      setCameras(prev => prev.map(c => c.id === targetId ? { 
+        ...c, 
+        privacyMasks: masks,
+        ...(updatedPhotoUrl ? { locationPhotoUrl: updatedPhotoUrl } : {})
+      } : c));
+      if (selectedCameraForModal?.id === targetId) {
+        setSelectedCameraForModal(prev => prev ? { 
+          ...prev, 
+          privacyMasks: masks,
+          ...(updatedPhotoUrl ? { locationPhotoUrl: updatedPhotoUrl } : {})
+        } : null);
+      }
+    } catch (err) {
+      console.error("Erro ao salvar máscaras de privacidade:", err);
+    }
+  };
 
   // States for adding a new neighborhood and managing neighborhoods
   const [showAddHood, setShowAddHood] = useState(false);
@@ -931,6 +1058,7 @@ const Cameras: React.FC = () => {
                              iframeCode={cam.iframeCode}
                              name={cam.name}
                              id={cam.id}
+                             privacyMasks={cam.privacyMasks}
                              neighborhoodName={neighborhoods.find(h => h.id === cam.neighborhoodId)?.name}
                              coordinates={{ lat: cam.lat, lng: cam.lng }}
                              locationDescription={cam.locationDescription}
@@ -946,6 +1074,7 @@ const Cameras: React.FC = () => {
                                  setCameraForLocationModal(cam);
                                  setOpenLocationInEditMode(false);
                              }}
+                             onConfigurePrivacyMasks={(user?.role === UserRole.ADMIN || user?.role === UserRole.INTEGRATOR) ? () => setCameraForPrivacyMaskModal(cam) : undefined}
                          />
                          {false && (
                              <div className="relative w-full h-full group/video-container">
@@ -1058,20 +1187,35 @@ const Cameras: React.FC = () => {
                             title="Ver localização exata, mapa e descrição da câmera"
                           >
                             <MapPin size={13} className="text-atalaia-neon animate-pulse" />
-                            <span>Onde está esta câmera?</span>
+                            <span>Onde está?</span>
                           </button>
                           {(user?.role === UserRole.ADMIN || user?.role === UserRole.INTEGRATOR) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCameraForLocationModal(cam);
-                                setOpenLocationInEditMode(true);
-                              }}
-                              className="p-2 rounded-xl bg-white/5 hover:bg-atalaia-neon/20 border border-white/10 hover:border-atalaia-neon text-gray-400 hover:text-atalaia-neon transition-all cursor-pointer"
-                              title="Editar localização e descrição no mapa"
-                            >
-                              <Edit2 size={13} />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setCameraForPrivacyMaskModal(cam)}
+                                className={`py-2 px-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1 text-[11px] font-mono font-bold ${
+                                  (cam.privacyMasks && cam.privacyMasks.length > 0)
+                                    ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-400 hover:bg-emerald-900/60 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                                    : 'bg-white/5 hover:bg-emerald-500/20 border-white/10 hover:border-emerald-500/40 text-gray-400 hover:text-emerald-400'
+                                }`}
+                                title="Desenhar / Configurar Máscara Preta de Privacidade"
+                              >
+                                <EyeOff size={13} className={cam.privacyMasks && cam.privacyMasks.length > 0 ? 'text-emerald-400' : ''} />
+                                <span className="hidden sm:inline">Tarja Preta</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCameraForLocationModal(cam);
+                                  setOpenLocationInEditMode(true);
+                                }}
+                                className="p-2 rounded-xl bg-white/5 hover:bg-atalaia-neon/20 border border-white/10 hover:border-atalaia-neon text-gray-400 hover:text-atalaia-neon transition-all cursor-pointer"
+                                title="Editar localização e descrição no mapa"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -1346,20 +1490,35 @@ const Cameras: React.FC = () => {
                                 </div>
 
                                 {editingCameraId && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const camBeingEdited = cameras.find(c => c.id === editingCameraId);
-                                            if (camBeingEdited) {
-                                                setCameraForLocationModal(camBeingEdited);
-                                                setOpenLocationInEditMode(true);
-                                            }
-                                        }}
-                                        className="w-full py-2 px-3 rounded-xl bg-atalaia-neon/10 hover:bg-atalaia-neon/20 border border-atalaia-neon/30 hover:border-atalaia-neon text-atalaia-neon font-bold text-[11px] font-mono flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                                    >
-                                        <MapPin size={13} />
-                                        <span>Ajustar Localização e Pino no Mapa</span>
-                                    </button>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const camBeingEdited = cameras.find(c => c.id === editingCameraId);
+                                                if (camBeingEdited) {
+                                                    setCameraForLocationModal(camBeingEdited);
+                                                    setOpenLocationInEditMode(true);
+                                                }
+                                            }}
+                                            className="w-full py-2 px-3 rounded-xl bg-atalaia-neon/10 hover:bg-atalaia-neon/20 border border-atalaia-neon/30 hover:border-atalaia-neon text-atalaia-neon font-bold text-[11px] font-mono flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                                        >
+                                            <MapPin size={13} />
+                                            <span>Pino no Mapa</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const camBeingEdited = cameras.find(c => c.id === editingCameraId);
+                                                if (camBeingEdited) {
+                                                    setCameraForPrivacyMaskModal(camBeingEdited);
+                                                }
+                                            }}
+                                            className="w-full py-2 px-3 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 hover:border-emerald-400 text-emerald-400 font-bold text-[11px] font-mono flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                                        >
+                                            <EyeOff size={13} />
+                                            <span>Máscara Preta</span>
+                                        </button>
+                                    </div>
                                 )}
 
                                 <div className="space-y-2">
@@ -1403,7 +1562,15 @@ const Cameras: React.FC = () => {
                                                 <Video size={14} className="text-gray-400" />
                                                 <span className="text-[11px] font-medium">{cam.name}</span>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => setCameraForPrivacyMaskModal(cam)}
+                                                    className="p-1.5 hover:bg-emerald-500/20 rounded text-emerald-400 transition-colors"
+                                                    title="Desenhar / Configurar Máscara Preta de Privacidade"
+                                                >
+                                                    <EyeOff size={14} className="pointer-events-none" />
+                                                </button>
                                                 <button 
                                                     type="button"
                                                     onClick={() => handleEditCamera(cam)}
@@ -1548,18 +1715,29 @@ const Cameras: React.FC = () => {
                     </button>
 
                     {(user?.role === UserRole.ADMIN || user?.role === UserRole.INTEGRATOR) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCameraForLocationModal(selectedCameraForModal);
-                          setOpenLocationInEditMode(true);
-                        }}
-                        className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-white/10 hover:border-atalaia-neon text-zinc-300 hover:text-atalaia-neon text-xs font-mono uppercase flex items-center gap-1 transition-all cursor-pointer"
-                        title="Editar localização e descrição no mapa"
-                      >
-                        <Edit2 size={12} />
-                        <span className="hidden md:inline">Editar Ponto</span>
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setCameraForPrivacyMaskModal(selectedCameraForModal)}
+                          className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-emerald-500/40 hover:border-emerald-400 text-emerald-400 text-xs font-mono uppercase flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                          title="Desenhar ou editar máscara preta de privacidade no vídeo"
+                        >
+                          <EyeOff size={12} />
+                          <span className="hidden sm:inline">Tarja Preta ({selectedCameraForModal.privacyMasks?.length || 0})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCameraForLocationModal(selectedCameraForModal);
+                            setOpenLocationInEditMode(true);
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-white/10 hover:border-atalaia-neon text-zinc-300 hover:text-atalaia-neon text-xs font-mono uppercase flex items-center gap-1 transition-all cursor-pointer"
+                          title="Editar localização e descrição no mapa"
+                        >
+                          <Edit2 size={12} />
+                          <span className="hidden md:inline">Editar Ponto</span>
+                        </button>
+                      </>
                     )}
 
                     {/* Relógio Tático do Transmissor */}
@@ -1582,6 +1760,7 @@ const Cameras: React.FC = () => {
                      iframeCode={selectedCameraForModal.iframeCode}
                      name={selectedCameraForModal.name}
                      id={selectedCameraForModal.id}
+                     privacyMasks={selectedCameraForModal.privacyMasks}
                      neighborhoodName={neighborhoods.find(h => h.id === selectedCameraForModal.neighborhoodId)?.name}
                      coordinates={{ lat: selectedCameraForModal.lat, lng: selectedCameraForModal.lng }}
                      locationDescription={selectedCameraForModal.locationDescription}
@@ -1591,6 +1770,7 @@ const Cameras: React.FC = () => {
                          setCameraForLocationModal(selectedCameraForModal);
                          setOpenLocationInEditMode(false);
                      }}
+                     onConfigurePrivacyMasks={(user?.role === UserRole.ADMIN || user?.role === UserRole.INTEGRATOR) ? () => setCameraForPrivacyMaskModal(selectedCameraForModal) : undefined}
                      isModal={true}
                  />
                  
@@ -1610,6 +1790,15 @@ const Cameras: React.FC = () => {
                     <span>Transmissão comunitária monitorada e criptografada cooperativamente.</span>
                 </div>
                 <div className="flex gap-2 flex-wrap justify-end">
+                    {(user?.role === UserRole.ADMIN || user?.role === UserRole.INTEGRATOR) && (
+                      <Button 
+                          variant="outline"
+                          onClick={() => setCameraForPrivacyMaskModal(selectedCameraForModal)}
+                          className="text-[10px] h-8 font-black gap-1.5 border-emerald-500/40 text-emerald-400 hover:bg-emerald-950/40"
+                      >
+                          <EyeOff size={12} /> TARJA PRETA ({selectedCameraForModal.privacyMasks?.length || 0})
+                      </Button>
+                    )}
                     <Button 
                         onClick={() => {
                             setCameraForLocationModal(selectedCameraForModal);
@@ -2245,6 +2434,16 @@ const Cameras: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Máscara de Privacidade / Tarja Preta no Player */}
+      {cameraForPrivacyMaskModal && (
+        <CameraPrivacyMaskModal
+          camera={cameraForPrivacyMaskModal}
+          isOpen={!!cameraForPrivacyMaskModal}
+          onClose={() => setCameraForPrivacyMaskModal(null)}
+          onSave={handleSavePrivacyMasks}
+        />
+      )}
 
       {/* Modal Interativo de Onde Está Esta Câmera (Visualização e Edição Tática de Localização) */}
       {cameraForLocationModal && (

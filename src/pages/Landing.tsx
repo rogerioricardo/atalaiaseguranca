@@ -391,7 +391,11 @@ const Landing: React.FC = () => {
           <img 
             src="https://lh3.googleusercontent.com/d/1yg0QDslqgCr8k41c1GtK0VSNaLYxHrAq" 
             alt="Atalaia Security Environment" 
-            className="w-full h-full object-cover md:object-contain object-left opacity-60 animate-in fade-in duration-1000 ease-out"
+            onError={(e) => {
+              // Fallback to high-reliability security operations image if google usercontent is restricted
+              (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?auto=format&fit=crop&w=1600&q=80';
+            }}
+            className="w-full h-full object-cover md:object-contain object-left opacity-60 transition-opacity duration-700 ease-out"
             style={{ 
                 filter: 'brightness(0.7) contrast(1.4) grayscale(0.2)',
                 WebkitMaskImage: `linear-gradient(to right, black 0%, black 45%, rgba(0,0,0,0.85) 52%, rgba(0,0,0,0.6) 62%, rgba(0,0,0,0.35) 72%, rgba(0,0,0,0.15) 82%, rgba(0,0,0,0.04) 90%, transparent 98%), linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%)`,
