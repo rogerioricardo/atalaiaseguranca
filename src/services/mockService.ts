@@ -112,7 +112,41 @@ const sanitizeUUID = (id?: string): string | null => {
     return id;
 };
 
-const DEMO_CAMERAS: Camera[] = [];
+const DEMO_CAMERAS: Camera[] = [
+  {
+    id: 'cam-demo-1',
+    neighborhoodId: '1d01b1a1-dae1-4319-b347-fd93f1b29f4b',
+    name: 'Câmera 01 - Praça Central (Ao Vivo)',
+    iframeCode: 'https://www.youtube.com/embed/jfKfPfyJRdk',
+    lat: -28.7112,
+    lng: -49.3005,
+    locationPhotoUrl: 'https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&w=1200&q=80',
+    address: 'Praça Central - Sanga Funda',
+    locationDescription: 'Monitoramento 24h da praça central e entorno comercial.'
+  },
+  {
+    id: 'cam-demo-2',
+    neighborhoodId: '39a02d9d-9b02-4948-8233-275cb61ed3b9',
+    name: 'Câmera 02 - Avenida Campinas',
+    iframeCode: 'https://www.youtube.com/embed/5qap5aO4i9A',
+    lat: -27.5980,
+    lng: -48.6320,
+    locationPhotoUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
+    address: 'Av. Principal - Campinas',
+    locationDescription: 'Monitoramento do fluxo de veículos e pedestres na avenida.'
+  },
+  {
+    id: 'cam-demo-3',
+    neighborhoodId: '14178a91-0e15-464b-a175-e80bbcc70c02',
+    name: 'Câmera 03 - Perímetro Residencial',
+    iframeCode: 'https://www.youtube.com/embed/jfKfPfyJRdk',
+    lat: -28.7150,
+    lng: -49.3050,
+    locationPhotoUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80',
+    address: 'Rua Principal - Casa Taynara',
+    locationDescription: 'Cobertura perimetral de segurança residencial.'
+  }
+];
 
 const getLocalCameras = (): Camera[] => {
   if (typeof window === 'undefined') return [];
@@ -459,6 +493,11 @@ export const MockService = {
     const localCameras = getLocalCameras();
     const mergedMap = new Map<string, Camera>();
     
+    // Fallback to DEMO_CAMERAS if neither DB nor local storage has cameras (e.g. fresh production deployment)
+    if (dbCameras.length === 0 && localCameras.length === 0) {
+      DEMO_CAMERAS.forEach(c => mergedMap.set(c.id, c));
+    }
+
     // Overlay local cameras
     localCameras.forEach(c => {
       const masks = remoteMasks[c.id] || extractPrivacyMasks(c, remoteMasks);
