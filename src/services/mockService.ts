@@ -953,9 +953,24 @@ export const MockService = {
         if (safeId) query = query.eq('neighborhood_id', safeId);
         const { data, error } = await query;
         if (error) throw error;
-        return (data || []).map(a => ({ id: a.id, type: a.type as any, userId: a.user_id, userName: a.user_name, neighborhoodId: a.neighborhood_id, timestamp: new Date(a.timestamp), message: a.message, image: a.image }));
+        const alerts = (data || []).map(a => ({ id: a.id, type: a.type as any, userId: a.user_id, userName: a.user_name, neighborhoodId: a.neighborhood_id, timestamp: new Date(a.timestamp), message: a.message, image: a.image }));
+        if (typeof window !== 'undefined') {
+            try { localStorage.setItem('atalaia_cached_alerts', JSON.stringify(alerts)); } catch {}
+        }
+        return alerts;
     } catch (e) {
-        console.error("[MockService] Error in getAlerts:", e);
+        console.warn("[MockService] Network warning in getAlerts, using cache:", e);
+        if (typeof window !== 'undefined') {
+            try {
+                const cached = localStorage.getItem('atalaia_cached_alerts');
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (Array.isArray(parsed)) {
+                        return parsed.map((a: any) => ({ ...a, timestamp: new Date(a.timestamp) }));
+                    }
+                }
+            } catch {}
+        }
         return [];
     }
   },

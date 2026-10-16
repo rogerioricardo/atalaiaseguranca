@@ -389,10 +389,10 @@ const Landing: React.FC = () => {
       <section className="relative h-screen min-h-[600px] flex items-center justify-center pt-20 overflow-hidden print:hidden bg-[#010101]">
         <div className="absolute inset-0 z-0 select-none pointer-events-none overflow-hidden">
           <img 
-            src="https://lh3.googleusercontent.com/d/1yg0QDslqgCr8k41c1GtK0VSNaLYxHrAq" 
+            src="/images/home-hero.jpg" 
             alt="Atalaia Security Environment" 
             onError={(e) => {
-              // Fallback to high-reliability security operations image if google usercontent is restricted
+              // Fallback to Unsplash if custom image is not yet uploaded in public/images/
               (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?auto=format&fit=crop&w=1600&q=80';
             }}
             className="w-full h-full object-cover md:object-contain object-left opacity-60 transition-opacity duration-700 ease-out"

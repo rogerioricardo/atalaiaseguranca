@@ -195,10 +195,17 @@ const Login: React.FC = () => {
                   return;
               }
               setRedirectingToPay(true);
-              const activeCouponCode = appliedCoupon ? appliedCoupon.code : undefined;
-              const checkoutUrl = await PaymentService.createPreference(planParam, email, name, phone, activeCouponCode);
-              window.location.href = checkoutUrl;
-              return; 
+              try {
+                  const activeCouponCode = appliedCoupon ? appliedCoupon.code : undefined;
+                  const checkoutUrl = await PaymentService.createPreference(planParam, email, name, phone, activeCouponCode);
+                  window.location.href = checkoutUrl;
+                  return; 
+              } catch (payErr) {
+                  console.warn("[Login] Payment creation failed or timed out, redirecting to welcome:", payErr);
+                  setSuccess('Cadastro realizado com sucesso!');
+                  setTimeout(() => navigate('/welcome'), 1000);
+                  return;
+              }
           }
 
           setSuccess('Cadastro realizado com sucesso!');
@@ -228,7 +235,7 @@ const Login: React.FC = () => {
           
           const loginPromise = login(email, password);
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão ou tente novamente.')), 20000)
+            setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão ou tente novamente.')), 35000)
           );
 
           await Promise.race([loginPromise, timeoutPromise]);

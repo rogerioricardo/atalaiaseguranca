@@ -109,17 +109,33 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
   useEffect(() => {
     if (privacyMasks && privacyMasks.length > 0) {
       setActiveMasks(privacyMasks);
-    } else if (typeof window !== 'undefined') {
+      return;
+    }
+    
+    // 1. Tentar recuperar do localStorage
+    if (typeof window !== 'undefined') {
       try {
         const cached = localStorage.getItem(`atalaia_camera_privacy_masks_${id}`);
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed)) {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             setActiveMasks(parsed);
             return;
           }
         }
       } catch {}
+    }
+
+    // 2. Se for novo dispositivo ou aba anônima (sem cache local), buscar na nuvem (Supabase)
+    if (id) {
+      let isMounted = true;
+      MockService.getCameraPrivacyMasks(id).then(masks => {
+        if (isMounted && masks && masks.length > 0) {
+          setActiveMasks(masks);
+        }
+      }).catch(() => {});
+      return () => { isMounted = false; };
+    } else {
       setActiveMasks([]);
     }
   }, [privacyMasks, id]);
@@ -357,7 +373,7 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
         )}
 
         {/* Máscaras Pretas de Privacidade sobre o Player */}
-        <CameraPrivacyMaskOverlay masks={activeMasks} />
+        <CameraPrivacyMaskOverlay masks={activeMasks} cameraId={id} />
 
         {/* Identificador sutil de Live */}
         <div 

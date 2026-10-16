@@ -113,7 +113,8 @@ export const CameraPrivacyMaskModal: React.FC<CameraPrivacyMaskModalProps> = ({
   const isDirectVideo = isDirectVideoUrl(rawUrl);
 
   const getCleanStreamUrl = (urlStr: string) => {
-    if (isDirectImage || isDirectVideo) return '';
+    if (isDirectImage) return '';
+    if (isDirectVideo) return urlStr;
     let url = urlStr;
     try {
       if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
@@ -141,8 +142,8 @@ export const CameraPrivacyMaskModal: React.FC<CameraPrivacyMaskModalProps> = ({
     return url;
   };
 
-  const streamUrl = (rawUrl && !isDirectImage) ? getCleanStreamUrl(rawUrl) : '';
-  const isCustomVideoOrScript = isHtmlCode && !urlFromCode && !isDirectImage;
+  const streamUrl = (rawUrl && !isDirectImage) ? (isDirectVideo ? rawUrl : getCleanStreamUrl(rawUrl)) : '';
+  const isCustomVideoOrScript = (isHtmlCode && !urlFromCode && !isDirectImage) || isDirectVideo;
 
   // Print efetivo consolidado (prioridade: customizado/carregado > imagem direta > locationPhotoUrl > maintenancePhotoUrl)
   const effectivePrintUrl = customPrintUrl || (isDirectImage ? rawUrl : null) || camera?.locationPhotoUrl || camera?.maintenancePhotoUrl || null;

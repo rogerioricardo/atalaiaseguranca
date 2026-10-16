@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PrivacyMask } from '@/types';
+import { MockService } from '@/services/mockService';
 
 interface CameraPrivacyMaskOverlayProps {
+  cameraId?: string;
   masks?: PrivacyMask[];
   opacity?: number;
   selectedMaskId?: string | null;
@@ -11,6 +13,7 @@ interface CameraPrivacyMaskOverlayProps {
 }
 
 export const CameraPrivacyMaskOverlay: React.FC<CameraPrivacyMaskOverlayProps> = ({
+  cameraId,
   masks = [],
   opacity = 1,
   selectedMaskId = null,
@@ -18,19 +21,58 @@ export const CameraPrivacyMaskOverlay: React.FC<CameraPrivacyMaskOverlayProps> =
   showLabels = false,
   className = ''
 }) => {
-  if (!masks || masks.length === 0) return null;
+  const [internalMasks, setInternalMasks] = useState<PrivacyMask[]>(masks || []);
+
+  useEffect(() => {
+    if (masks && masks.length > 0) {
+      setInternalMasks(masks);
+      return;
+    }
+
+    if (cameraId) {
+      // 1. Tentar ler do cache local
+      if (typeof window !== 'undefined') {
+        try {
+          const cached = localStorage.getItem(`atalaia_camera_privacy_masks_${cameraId}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setInternalMasks(parsed);
+              return;
+            }
+          }
+        } catch {}
+      }
+
+      // 2. Se for novo dispositivo ou aba anônima, buscar no Supabase
+      let active = true;
+      MockService.getCameraPrivacyMasks(cameraId).then(res => {
+        if (active && res && res.length > 0) {
+          setInternalMasks(res);
+        }
+      }).catch(() => {});
+
+      return () => { active = false; };
+    } else {
+      setInternalMasks(masks || []);
+    }
+  }, [masks, cameraId]);
+
+  const effectiveMasks = (masks && masks.length > 0) ? masks : internalMasks;
+
+  if (!effectiveMasks || effectiveMasks.length === 0) return null;
 
   const fillColor = opacity === 1 ? '#000000' : `rgba(0, 0, 0, ${opacity})`;
 
   return (
-    <div className={`absolute inset-0 pointer-events-none overflow-hidden z-10 ${className}`}>
+    <div className={`absolute inset-0 pointer-events-none overflow-hidden z-20 ${className}`}>
       {/* SVG para renderizar todas as máscaras poligonais ponto a ponto com perfeição vetorial */}
       <svg 
         className="absolute inset-0 w-full h-full"
         viewBox="0 0 100 100" 
         preserveAspectRatio="none"
       >
-        {masks.map((mask, idx) => {
+        {effectiveMasks.map((mask, idx) => {
           if (!mask.points || mask.points.length < 3) return null;
           const isSelected = selectedMaskId === mask.id;
           const pointsString = mask.points.map(p => `${p.x},${p.y}`).join(' ');
@@ -63,7 +105,7 @@ export const CameraPrivacyMaskOverlay: React.FC<CameraPrivacyMaskOverlayProps> =
       </svg>
 
       {/* Renderização de máscaras retangulares clássicas ou rótulos */}
-      {masks.map((mask, idx) => {
+      {effectiveMasks.map((mask, idx) => {
         const isSelected = selectedMaskId === mask.id;
         const hasPolygon = mask.points && mask.points.length >= 3;
 
