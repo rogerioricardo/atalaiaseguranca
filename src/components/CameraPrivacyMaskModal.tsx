@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/UI';
 import { motion, AnimatePresence } from 'motion/react';
 import { CameraPrivacyMaskOverlay } from './CameraPrivacyMaskOverlay';
+import { isDirectVideoUrl } from '@/lib/mediaUtils';
 
 interface CameraPrivacyMaskModalProps {
   camera: Camera;
@@ -109,8 +110,10 @@ export const CameraPrivacyMaskModal: React.FC<CameraPrivacyMaskModalProps> = ({
     rawUrl.startsWith('data:image/')
   );
 
+  const isDirectVideo = isDirectVideoUrl(rawUrl);
+
   const getCleanStreamUrl = (urlStr: string) => {
-    if (isDirectImage) return '';
+    if (isDirectImage || isDirectVideo) return '';
     let url = urlStr;
     try {
       if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
@@ -802,6 +805,21 @@ export const CameraPrivacyMaskModal: React.FC<CameraPrivacyMaskModalProps> = ({
                       </span>
                     </div>
                   </div>
+                ) : displaySource === 'stream' && isDirectVideo ? (
+                  // VÍDEO DIRETO (MP4 / WEBM / HLS)
+                  <video
+                    key={rawUrl}
+                    src={rawUrl}
+                    autoPlay
+                    muted
+                    playsInline
+                    loop
+                    preload="auto"
+                    className="w-full h-full object-cover border-0 absolute inset-0 pointer-events-none"
+                    onLoadedData={(e) => {
+                      e.currentTarget.play().catch(() => {});
+                    }}
+                  />
                 ) : displaySource === 'stream' && isCustomVideoOrScript ? (
                   // CÓDIGO HTML DE VÍDEO
                   <div 

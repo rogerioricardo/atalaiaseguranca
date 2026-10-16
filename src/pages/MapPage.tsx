@@ -9,6 +9,7 @@ import { useAuth } from '@/auth/context';
 import { Video, MapPin, Globe, Lock, AlertTriangle, Wrench } from 'lucide-react';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { CameraPrivacyMaskOverlay } from '@/components/CameraPrivacyMaskOverlay';
+import { isDirectVideoUrl } from '@/lib/mediaUtils';
 import { supabase } from '../lib/supabaseClient';
 
 // Fix Leaflet Default Icon in React using CDN URLs
@@ -159,14 +160,25 @@ const CameraPopupContent: React.FC<{ cam: Camera; onUpgrade: () => void }> = ({ 
                 </div>
               ) : (
                   <div className="relative w-full h-full group/map-cam">
-                      <iframe 
-                          src={cam.iframeCode} 
-                          title={cam.name}
-                          className="w-full h-full border-0 pointer-events-none"
-                          allowFullScreen 
-                          referrerPolicy="no-referrer"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      />
+                      {isDirectVideoUrl(cam.iframeCode) ? (
+                        <video
+                          src={cam.iframeCode.trim()}
+                          autoPlay
+                          muted
+                          playsInline
+                          loop
+                          className="w-full h-full object-cover border-0 absolute inset-0 pointer-events-none"
+                        />
+                      ) : (
+                        <iframe 
+                            src={cam.iframeCode} 
+                            title={cam.name}
+                            className="w-full h-full border-0 pointer-events-none"
+                            allowFullScreen 
+                            referrerPolicy="no-referrer"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        />
+                      )}
                       <CameraPrivacyMaskOverlay masks={cam.privacyMasks} />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/map-cam:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                           <button 

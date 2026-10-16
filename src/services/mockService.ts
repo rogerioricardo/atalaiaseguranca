@@ -8,8 +8,53 @@ export const cleanLocationDescription = (desc?: string): string => {
   return desc.replace(/<!--PM_JSON:.*?-->/g, '').trim();
 };
 
-export const extractPrivacyMasks = (c: any): PrivacyMask[] => {
+export const fetchAllRemotePrivacyMasks = async (): Promise<Record<string, PrivacyMask[]>> => {
+  const result: Record<string, PrivacyMask[]> = {};
+  if (!isRealSupabase) return result;
+  try {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('key, value')
+      .like('key', 'camera_masks_%');
+    if (!error && data) {
+      data.forEach(row => {
+        try {
+          const camId = row.key.replace('camera_masks_', '');
+          const parsed = JSON.parse(row.value);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            result[camId] = parsed;
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem(`atalaia_camera_privacy_masks_${camId}`, row.value);
+              } catch {}
+            }
+          }
+        } catch {}
+      });
+    }
+  } catch (err) {
+    console.warn("[MockService] Erro ao sincronizar máscaras de privacidade de outros dispositivos:", err);
+  }
+  return result;
+};
+
+export const syncLocalMasksToRemote = async (camId: string, localMasks: PrivacyMask[]) => {
+  if (!isRealSupabase || !localMasks || localMasks.length === 0) return;
+  try {
+    await supabase.from('system_settings').upsert({
+      key: `camera_masks_${camId}`,
+      value: JSON.stringify(localMasks),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'key' });
+  } catch {}
+};
+
+export const extractPrivacyMasks = (c: any, remoteMaskMap?: Record<string, PrivacyMask[]>): PrivacyMask[] => {
   if (!c) return [];
+  // 0. Máscaras vindas do Supabase system_settings (sincronização entre múltiplos dispositivos)
+  if (remoteMaskMap && c.id && remoteMaskMap[c.id]) {
+    return remoteMaskMap[c.id];
+  }
   // 1. Array direto no objeto
   if (c.privacyMasks && Array.isArray(c.privacyMasks)) {
     return c.privacyMasks;
@@ -24,7 +69,7 @@ export const extractPrivacyMasks = (c: any): PrivacyMask[] => {
     } catch {}
   }
 
-  // 2. Extrair de location_description (<!--PM_JSON:[...]-->)
+  // 2. Extrair de location_description (compatibilidade reversa)
   const locDesc = c.location_description || c.locationDescription || '';
   if (typeof locDesc === 'string' && locDesc.includes('<!--PM_JSON:')) {
     try {
@@ -342,6 +387,8 @@ export const MockService = {
   getAdditionalCameras: async (neighborhoodId: string): Promise<Camera[]> => {
     const safeId = sanitizeUUID(neighborhoodId);
     let dbCameras: Camera[] = [];
+    const remoteMasks = await fetchAllRemotePrivacyMasks();
+
     try {
         if (safeId) {
             const { data, error } = await supabase.from('cameras').select('*').eq('neighborhood_id', safeId);
@@ -357,7 +404,7 @@ export const MockService = {
                     maintenancePhotoUrl: c.maintenance_photo_url,
                     locationDescription: cleanLocationDescription(c.location_description || c.locationDescription),
                     address: c.address,
-                    privacyMasks: extractPrivacyMasks(c)
+                    privacyMasks: remoteMasks[c.id] || extractPrivacyMasks(c, remoteMasks)
                 }));
             } else if (error) {
                 console.warn("[MockService] Erro de permissão ou banco ao buscar câmeras do Supabase:", error.message);
@@ -372,7 +419,10 @@ export const MockService = {
 
     dbCameras.forEach(c => mergedMap.set(c.id, c));
     localCameras.forEach(c => {
-      const masks = extractPrivacyMasks(c);
+      const masks = remoteMasks[c.id] || extractPrivacyMasks(c, remoteMasks);
+      if (masks && masks.length > 0 && !remoteMasks[c.id]) {
+        syncLocalMasksToRemote(c.id, masks);
+      }
       mergedMap.set(c.id, { ...c, privacyMasks: masks });
     });
 
@@ -381,6 +431,8 @@ export const MockService = {
 
   getAllSystemCameras: async (): Promise<Camera[]> => {
     let dbCameras: Camera[] = [];
+    const remoteMasks = await fetchAllRemotePrivacyMasks();
+
     try {
         const { data, error } = await supabase.from('cameras').select('*');
         if (!error && data) {
@@ -395,7 +447,7 @@ export const MockService = {
                 maintenancePhotoUrl: c.maintenance_photo_url,
                 locationDescription: cleanLocationDescription(c.location_description || c.locationDescription),
                 address: c.address,
-                privacyMasks: extractPrivacyMasks(c)
+                privacyMasks: remoteMasks[c.id] || extractPrivacyMasks(c, remoteMasks)
             }));
         } else if (error) {
             console.warn("[MockService] Supabase cameras query returned error, using local fallback.", error);
@@ -409,7 +461,10 @@ export const MockService = {
     
     // Overlay local cameras
     localCameras.forEach(c => {
-      const masks = extractPrivacyMasks(c);
+      const masks = remoteMasks[c.id] || extractPrivacyMasks(c, remoteMasks);
+      if (masks && masks.length > 0 && !remoteMasks[c.id]) {
+        syncLocalMasksToRemote(c.id, masks);
+      }
       mergedMap.set(c.id, { ...c, privacyMasks: masks });
     });
     // Overlay DB cameras
@@ -569,7 +624,7 @@ export const MockService = {
   },
 
   updateCameraPrivacyMasks: async (cameraId: string, masks: PrivacyMask[]): Promise<void> => {
-    // 1. Salvar no localStorage específico da câmera
+    // 1. Salvar no localStorage específico da câmera (cache imediato no dispositivo atual)
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(`atalaia_camera_privacy_masks_${cameraId}`, JSON.stringify(masks));
@@ -584,23 +639,22 @@ export const MockService = {
       saveLocalCameras(local);
     }
 
-    // 3. Persistir no Supabase com fallback no location_description
+    // 3. Persistir globalmente no Supabase na tabela system_settings (garante sincronização em TODOS os dispositivos: celular, outro computador, etc.)
     if (isRealSupabase) {
       try {
-        const { data: camData } = await supabase.from('cameras').select('location_description').eq('id', cameraId).maybeSingle();
-        const baseDesc = cleanLocationDescription(camData?.location_description || '');
-        const newDesc = masks.length > 0 ? `${baseDesc} <!--PM_JSON:${JSON.stringify(masks)}-->`.trim() : baseDesc;
+        const { error } = await supabase.from('system_settings').upsert({
+          key: `camera_masks_${cameraId}`,
+          value: JSON.stringify(masks),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'key' });
 
-        // Atualiza location_description
-        const res = await supabase.from('cameras').update({
-          location_description: newDesc
-        }).eq('id', cameraId);
-
-        if (res.error) {
-          console.warn("[MockService] Aviso ao persistir máscaras de privacidade:", res.error.message);
+        if (error) {
+          console.warn("[MockService] Erro ao salvar máscaras no system_settings:", error.message);
+        } else {
+          console.info(`[MockService] Máscaras da câmera ${cameraId} sincronizadas no Supabase com sucesso.`);
         }
       } catch (e) {
-        console.warn("[MockService] Exceção ao salvar máscaras de privacidade:", e);
+        console.warn("[MockService] Exceção ao persistir máscaras de privacidade no Supabase:", e);
       }
     }
   },

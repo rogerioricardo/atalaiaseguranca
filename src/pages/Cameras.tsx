@@ -21,6 +21,7 @@ import { NeighborhoodsManagerModal } from '@/components/NeighborhoodsManagerModa
 import { CameraSponsorsFooter } from '@/components/CameraSponsorsFooter';
 import { CameraPrivacyMaskModal } from '@/components/CameraPrivacyMaskModal';
 import { CameraPrivacyMaskOverlay } from '@/components/CameraPrivacyMaskOverlay';
+import { isDirectVideoUrl } from '@/lib/mediaUtils';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Relógio tático isolado para impedir que todo o painel de câmeras re-renderize a cada 1 segundo
@@ -274,7 +275,11 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
               <span class="live-badge">⚡ AO VIVO</span>
             </div>
             <div class="video-container">
-              <iframe src="${targetUrl}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+              ${isDirectVideoUrl(targetUrl) ? `
+                <video src="${targetUrl}" autoplay muted playsinline loop controls style="width: 100%; height: 100%; object-fit: contain; background: #000; border: none;"></video>
+              ` : `
+                <iframe src="${targetUrl}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+              `}
               ${masksHtml}
             </div>
           </body>
@@ -314,8 +319,32 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
                 })
             }}
           />
+        ) : isDirectVideoUrl(rawUrl) ? (
+          // Caso de vídeo direto (MP4, HLS, WebM) - reprodução nativa e confiável em mobile e desktop
+          <video
+            key={rawUrl}
+            src={rawUrl}
+            autoPlay
+            muted
+            playsInline
+            loop
+            preload="auto"
+            className="w-full h-full object-cover border-0 absolute inset-0 pointer-events-none"
+            onLoadedData={(e) => {
+              e.currentTarget.play().catch(() => {});
+            }}
+            onError={(e) => {
+              const el = e.currentTarget;
+              setTimeout(() => {
+                if (el && el.src) {
+                  el.load();
+                  el.play().catch(() => {});
+                }
+              }, 3000);
+            }}
+          />
         ) : (
-          // Caso padrão (URLs puras ou iframes de provedores que extraímos o link)
+          // Caso padrão (URLs de provedores/embeds em iframe)
           <iframe 
             src={cleanStreamUrl} 
             title={name}
