@@ -1129,6 +1129,25 @@ export const MockService = {
 
   notifyUserLogin: async (user: any) => {
     try {
+        const userKey = user?.email || user?.id || 'unknown';
+        const now = Date.now();
+        const lastLoginKey = `atalaia_last_login_notified_${userKey}`;
+        
+        if (typeof window !== 'undefined') {
+            try {
+                const lastNotified = localStorage.getItem(lastLoginKey);
+                if (lastNotified) {
+                    const diff = now - parseInt(lastNotified, 10);
+                    // Ignora se já foi enviado nos últimos 5 minutos (300000ms) para evitar disparos duplicados
+                    if (diff < 300000) {
+                        console.log("[WhatsApp Automation] Notificação de login ignorada (já enviada recentemente para):", userKey);
+                        return;
+                    }
+                }
+                localStorage.setItem(lastLoginKey, now.toString());
+            } catch {}
+        }
+
         console.log("[WhatsApp Automation] Disparando aviso de login para:", user?.email || user?.name);
         const settings = await MockService.getSettings();
         const timeStr = new Date().toLocaleString('pt-BR');

@@ -36,6 +36,15 @@ export const supabase = createClient(
   supabaseUrl || 'https://placeholder-url.supabase.co',
   supabaseAnonKey || 'placeholder-key',
   {
+    auth: {
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+      lock: async (_name, _acquireTimeout, fn) => {
+        return await fn();
+      }
+    },
     global: {
       fetch: customSupabaseFetch
     }

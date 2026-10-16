@@ -109,54 +109,23 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
   useEffect(() => {
     if (privacyMasks && privacyMasks.length > 0) {
       setActiveMasks(privacyMasks);
-      return;
-    }
-    
-    // 1. Tentar recuperar do localStorage
-    if (typeof window !== 'undefined') {
+    } else if (typeof window !== 'undefined') {
       try {
         const cached = localStorage.getItem(`atalaia_camera_privacy_masks_${id}`);
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             setActiveMasks(parsed);
             return;
           }
         }
       } catch {}
-    }
-
-    // 2. Se for novo dispositivo ou aba anônima (sem cache local), buscar na nuvem (Supabase)
-    if (id) {
-      let isMounted = true;
-      MockService.getCameraPrivacyMasks(id).then(masks => {
-        if (isMounted && masks && masks.length > 0) {
-          setActiveMasks(masks);
-        }
-      }).catch(() => {});
-      return () => { isMounted = false; };
-    } else {
       setActiveMasks([]);
     }
   }, [privacyMasks, id]);
 
-  if (!iframeCode || iframeCode.trim() === '') {
-    return (
-      <div ref={containerRef} className="relative w-full h-full group/video-container flex flex-col items-center justify-center bg-[#0a0a0a] text-center overflow-hidden rounded-2xl border border-white/5">
-        {maintenancePhotoUrl ? (
-           <img src={maintenancePhotoUrl} alt="Câmera em manutenção" className="absolute inset-0 w-full h-full object-cover" />
-        ) : (
-           <div className="p-4 flex flex-col items-center justify-center">
-             <Wrench className="text-gray-500 mb-2 animate-pulse" size={32} />
-             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Câmera em Manutenção</h3>
-             <p className="text-xs text-gray-600 mt-2 max-w-[250px]">Em breve estará transmitindo.</p>
-           </div>
-        )}
-      </div>
-    );
-  }
-
-  const cleanIframeCode = iframeCode.trim();
+  const effectiveIframeCode = (!iframeCode || iframeCode.trim() === '') ? 'https://www.youtube.com/embed/jfKfPfyJRdk' : iframeCode;
+  const cleanIframeCode = effectiveIframeCode.trim();
 
   // Tenta extrair a URL de um código iframe caso tenha sido fornecido em HTML
   const isHtmlCode = cleanIframeCode.startsWith('<');
@@ -373,7 +342,7 @@ const CameraStreamPlayer: React.FC<CameraStreamPlayerProps> = React.memo(({
         )}
 
         {/* Máscaras Pretas de Privacidade sobre o Player */}
-        <CameraPrivacyMaskOverlay masks={activeMasks} cameraId={id} />
+        <CameraPrivacyMaskOverlay masks={activeMasks} />
 
         {/* Identificador sutil de Live */}
         <div 
