@@ -15,12 +15,12 @@ serve(async (req) => {
   }
 
   try {
-    const { message, number, numbers, token, apiKey } = await req.json().catch(() => ({}));
+    const { message, number, numbers, token, apiKey, url } = await req.json().catch(() => ({}));
 
     // Credenciais ativas com fallback direto para suas credenciais do Whaticket
     const WHATSAPP_TOKEN = token || Deno.env.get("WHATSAPP_TOKEN") || "HSYumH8GyDXc90Bb1ZcBoVMBjatynktt";
     const WHATSAPP_API_KEY = apiKey || Deno.env.get("WHATSAPP_API_KEY") || "Oava7PjfYdGfc6AwQXnNTrLDIj030OdtfHgm3o+bK2Qp";
-    const WHATSAPP_URL = "https://app.whatendimento.digital/backend/api/messages/send";
+    const WHATSAPP_URL = url || Deno.env.get("WHATSAPP_URL") || "https://whatsapp.alienmonitoramento.com.br:443/backend/api/messages/send";
 
     if (!WHATSAPP_TOKEN) {
       throw new Error("WHATSAPP_TOKEN não configurado.");

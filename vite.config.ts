@@ -16,9 +16,95 @@ if (!fs.existsSync(publicDir)) {
 }
 fs.writeFileSync(versionFile, JSON.stringify({ version }));
 
+import https from 'https';
+import http from 'http';
+
+function whaticketProxyPlugin() {
+  return {
+    name: 'whaticket-custom-proxy',
+    configureServer(server: any) {
+      server.middlewares.use('/whaticket-proxy', (req: any, res: any, next: any) => {
+        if (req.method !== 'POST') {
+          return next();
+        }
+
+        let body = '';
+        req.on('data', (chunk: any) => { body += chunk; });
+        req.on('end', async () => {
+          const authHeader = req.headers['authorization'] || '';
+          const apikeyHeader = req.headers['apikey'] || '';
+          const subPath = '/backend' + (req.url || '');
+
+          const forwardRequest = (port: number, isHttps: boolean) => {
+            return new Promise<{ statusCode: number; headers: any; body: string }>((resolve, reject) => {
+              const client = isHttps ? https : http;
+              const options = {
+                hostname: 'whatsapp.alienmonitoramento.com.br',
+                port,
+                path: subPath,
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(body),
+                  ...(authHeader ? { 'Authorization': authHeader } : {}),
+                  ...(apikeyHeader ? { 'apikey': apikeyHeader } : {})
+                },
+                rejectUnauthorized: false,
+                timeout: 8000
+              };
+
+              const upstreamReq = client.request(options, (upstreamRes) => {
+                let responseData = '';
+                upstreamRes.on('data', (chunk) => { responseData += chunk; });
+                upstreamRes.on('end', () => {
+                  resolve({
+                    statusCode: upstreamRes.statusCode || 200,
+                    headers: upstreamRes.headers,
+                    body: responseData
+                  });
+                });
+              });
+
+              upstreamReq.on('error', reject);
+              upstreamReq.on('timeout', () => {
+                upstreamReq.destroy();
+                reject(new Error('Timeout de conexão com o servidor Whaticket'));
+              });
+              upstreamReq.write(body);
+              upstreamReq.end();
+            });
+          };
+
+          try {
+            // Tenta primeiro HTTPS (443)
+            let result: { statusCode: number; headers: any; body: string };
+            try {
+              result = await forwardRequest(443, true);
+            } catch {
+              // Se falhar o handshake SSL, tenta HTTP (80)
+              result = await forwardRequest(80, false);
+            }
+
+            res.writeHead(result.statusCode, {
+              'Content-Type': result.headers['content-type'] || 'application/json'
+            });
+            res.end(result.body);
+          } catch (err: any) {
+            res.writeHead(502, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              success: false,
+              error: `Servidor Whaticket indisponível (${err.message}). Verifique o SSL e o status do serviço na VPS.`
+            }));
+          }
+        });
+      });
+    }
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), whaticketProxyPlugin()],
   base: './',
   define: {
     '__APP_VERSION__': version,
@@ -33,13 +119,13 @@ export default defineConfig({
     sourcemap: false,
     emptyOutDir: true,
     rollupOptions: {
-        output: {
-            manualChunks: {
-                vendor: ['react', 'react-dom', 'react-router-dom'],
-                maps: ['leaflet', 'react-leaflet'],
-                db: ['@supabase/supabase-js']
-            }
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          maps: ['leaflet', 'react-leaflet'],
+          db: ['@supabase/supabase-js']
         }
+      }
     }
   },
   server: {
@@ -48,12 +134,6 @@ export default defineConfig({
     strictPort: true,
     hmr: false,
     proxy: {
-      '/whaticket-proxy': {
-        target: 'https://app.whatendimento.digital/backend',
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/whaticket-proxy/, '')
-      },
       '/supabase-proxy': {
         target: 'https://nfbolgqsrpjqhpoplulf.supabase.co',
         changeOrigin: true,

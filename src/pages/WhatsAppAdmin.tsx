@@ -25,7 +25,7 @@ const WhatsAppAdmin: React.FC = () => {
     // Credenciais Whaticket
     const [whaticketToken, setWhaticketToken] = useState('HSYumH8GyDXc90Bb1ZcBoVMBjatynktt');
     const [whaticketApiKey, setWhaticketApiKey] = useState('Oava7PjfYdGfc6AwQXnNTrLDIj030OdtfHgm3o+bK2Qp');
-    const [whaticketUrl, setWhaticketUrl] = useState('https://app.whatendimento.digital/backend/api/messages/send');
+    const [whaticketUrl, setWhaticketUrl] = useState('https://whatsapp.alienmonitoramento.com.br:443/backend/api/messages/send');
     const [savingCredentials, setSavingCredentials] = useState(false);
     const [credStatus, setCredStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
     const [testPhone, setTestPhone] = useState('');
@@ -116,12 +116,16 @@ const WhatsAppAdmin: React.FC = () => {
             );
             const failed = result?.results?.find((r: any) => !r.success);
             if (failed) {
-                setTestResult({ success: false, text: `Erro retornado pela API: ${failed.error || 'Falha no envio'}` });
+                let err = failed.error || 'Falha no envio';
+                if (err.includes('<') && err.includes('>')) {
+                    err = 'O servidor retornou uma página web em vez de resposta de API. Verifique a URL do Whaticket e o certificado SSL.';
+                }
+                setTestResult({ success: false, text: `Erro no envio: ${err}` });
             } else {
                 setTestResult({ success: true, text: 'Mensagem de teste disparada com sucesso via Whaticket (200 OK)!' });
             }
         } catch (e: any) {
-            setTestResult({ success: false, text: 'Falha ao testar envio: ' + e.message });
+            setTestResult({ success: false, text: 'Falha ao testar envio: ' + (e.message || 'Erro de conexão') });
         } finally {
             setTestingMessage(false);
         }
@@ -181,7 +185,7 @@ const WhatsAppAdmin: React.FC = () => {
                         <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
                             <MessageSquare className="text-green-500" size={32} /> Central WhatsApp (Whaticket)
                         </h1>
-                        <p className="text-gray-400">Canal: app.whatendimento.digital</p>
+                        <p className="text-gray-400">Canal: whatsapp.alienmonitoramento.com.br</p>
                     </div>
                     <div className="flex bg-[#111] p-1 rounded-xl border border-atalaia-border shadow-inner">
                         <button onClick={() => setActiveTab('credentials')} className={`px-5 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'credentials' ? 'bg-atalaia-neon text-black shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>Credenciais API</button>
@@ -237,7 +241,7 @@ const WhatsAppAdmin: React.FC = () => {
                                             </div>
                                             <div>
                                                 <h2 className="text-lg font-bold text-white uppercase tracking-wider font-mono">Credenciais da API Whaticket</h2>
-                                                <p className="text-xs text-zinc-400">Canal: app.whatendimento.digital</p>
+                                                <p className="text-xs text-zinc-400">Canal: whatsapp.alienmonitoramento.com.br</p>
                                             </div>
                                         </div>
                                     </div>
@@ -282,7 +286,7 @@ const WhatsAppAdmin: React.FC = () => {
                                                 value={whaticketUrl}
                                                 onChange={(e) => setWhaticketUrl(e.target.value)}
                                                 className="w-full bg-black border border-white/10 rounded-xl px-4 py-3.5 text-sm font-mono text-zinc-300 focus:border-atalaia-neon outline-none transition-all"
-                                                placeholder="https://app.whatendimento.digital/backend/api/messages/send"
+                                                placeholder="https://whatsapp.alienmonitoramento.com.br:443/backend/api/messages/send"
                                                 required
                                             />
                                             <p className="text-[10px] text-zinc-500 mt-1.5">Endpoint ativo do backend Whaticket: <code className="text-zinc-400">/backend/api/messages/send</code>.</p>
@@ -361,7 +365,7 @@ const WhatsAppAdmin: React.FC = () => {
                                                         </p>
                                                         <p>Se o aparelho ainda não recebeu a mensagem, verifique no painel do <strong>Whaticket</strong>:</p>
                                                         <ul className="list-disc list-inside text-zinc-400 space-y-1 pl-1">
-                                                            <li><strong>Conexão WhatsApp:</strong> Verifique se a conexão WhatsApp está com status <span className="text-emerald-400 font-bold">CONECTADO</span> (QR Code logado) em <code className="text-zinc-300">app.whatendimento.digital</code>.</li>
+                                                            <li><strong>Conexão WhatsApp:</strong> Verifique se a conexão WhatsApp está com status <span className="text-emerald-400 font-bold">CONECTADO</span> (QR Code logado) em <code className="text-zinc-300">whatsapp.alienmonitoramento.com.br</code>.</li>
                                                             <li><strong>Variação do 9º Dígito:</strong> Tente com ou sem o 9º dígito (ex: <code className="text-zinc-300">554899...</code> ou <code className="text-zinc-300">5548...</code>).</li>
                                                             <li><strong>Fila de Mensagens:</strong> Verifique na aba de filas/mensagens do Whaticket se o envio aguarda liberação.</li>
                                                         </ul>

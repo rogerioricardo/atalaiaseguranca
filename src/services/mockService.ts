@@ -698,6 +698,28 @@ export const MockService = {
     }
   },
 
+  getCameraPrivacyMasks: async (cameraId: string): Promise<PrivacyMask[]> => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(`atalaia_camera_privacy_masks_${cameraId}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    if (isRealSupabase) {
+      try {
+        const { data } = await supabase.from('system_settings').select('value').eq('key', `camera_masks_${cameraId}`).maybeSingle();
+        if (data && data.value) {
+          const parsed = JSON.parse(data.value);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  },
+
   updateCameraLocation: async (
     cameraId: string, 
     lat: number, 

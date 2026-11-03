@@ -145,7 +145,7 @@ ON CONFLICT (servcam_id) DO NOTHING;
 
 -- Configuração padrão do WhatsApp (Whaticket já com credenciais ativas)
 INSERT INTO public.whatsapp_config (cliente_id, provedor, api_url, api_token, template_mensagem)
-SELECT id, 'whaticket', 'https://app.whatendimento.digital/backend/api/messages/send', 'HSYumH8GyDXc90Bb1ZcBoVMBjatynktt',
+SELECT id, 'whaticket', 'https://whatsapp.alienmonitoramento.com.br:443/backend/api/messages/send', 'HSYumH8GyDXc90Bb1ZcBoVMBjatynktt',
 '🚨 *ALERTA SERVCAM*
 
 📷 *Câmera:* {camera}

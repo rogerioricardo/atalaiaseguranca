@@ -139,7 +139,7 @@ class WhatsAppSender:
             "body": message
         }
 
-        url = self.api_url or "https://app.whatendimento.digital/backend/api/messages/send"
+        url = self.api_url or "https://whatsapp.alienmonitoramento.com.br:443/backend/api/messages/send"
         if not url.endswith("/messages/send"):
             url = url.rstrip("/") + "/api/messages/send"
 

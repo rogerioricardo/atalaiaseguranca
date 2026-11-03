@@ -24,6 +24,7 @@ import {
   Scale,
   Server
 } from 'lucide-react';
+import { IntegratorManualModal } from './IntegratorManualModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -38,6 +39,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const [partnerLogo, setPartnerLogo] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState<string | null>(null);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
   useEffect(() => {
     const loadHoods = async () => {
@@ -237,6 +239,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <NavItem to="/docs" icon={FileText} label="Manual do Sistema" />
           <NavItem to="/politica-imagens" icon={Scale} label="Política de Imagens" />
 
+          {(user?.role === UserRole.INTEGRATOR || user?.role === UserRole.ADMIN) && (
+            <div className="pt-2 px-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setSidebarOpen(false);
+                  setIsManualModalOpen(true);
+                }}
+                className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-atalaia-neon/15 via-atalaia-neon/5 to-transparent hover:from-atalaia-neon/25 border border-atalaia-neon/30 hover:border-atalaia-neon text-atalaia-neon font-bold text-xs flex items-center justify-between transition-all group cursor-pointer shadow-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText size={16} className="text-atalaia-neon group-hover:scale-110 transition-transform" />
+                  <span>Guia Integrador (PDF)</span>
+                </div>
+                <Download size={13} className="text-zinc-400 group-hover:text-atalaia-neon transition-colors" />
+              </button>
+            </div>
+          )}
+
         </nav>
 
         <div className="p-4 border-t border-atalaia-border">
@@ -325,6 +346,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
         </main>
       </div>
+
+      <IntegratorManualModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+        integratorData={{
+          integratorName: user?.name,
+          companyName: user?.companyName,
+          companyCnpj: user?.cnpj,
+          phone: user?.phone
+        }}
+      />
     </div>
   );
 };

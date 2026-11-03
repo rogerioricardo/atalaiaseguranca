@@ -59,7 +59,7 @@ serve(async (req) => {
     let sendSuccess = false;
     for (const phone of finalDestinatarios) {
       try {
-        const resp = await fetch("https://app.whatendimento.digital/backend/api/messages/send", {
+        const resp = await fetch("https://whatsapp.alienmonitoramento.com.br:443/backend/api/messages/send", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

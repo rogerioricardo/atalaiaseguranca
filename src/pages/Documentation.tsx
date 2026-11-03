@@ -5,14 +5,35 @@ import { useAuth } from '@/auth/context';
 import { 
     ShieldCheck, Users, Video, Bell, MessageCircle, MapPin, 
     Smartphone, CreditCard, Lock, ArrowLeft, Star, 
-    AlertTriangle, CheckCircle, FileText, Menu, X
+    AlertTriangle, CheckCircle, FileText, Menu, X, Download, BookOpen, Sparkles
 } from 'lucide-react';
 import { Button, Card, Badge } from '../components/UI';
+import { IntegratorManualModal } from '../components/IntegratorManualModal';
+import { generateIntegratorPdf } from '../utils/integratorPdfGenerator';
 
 const Documentation: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+    const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+    const handleDownloadPdf = async () => {
+        setDownloadingPdf(true);
+        try {
+            await generateIntegratorPdf({
+                integratorName: user?.name,
+                companyName: user?.companyName,
+                companyCnpj: user?.cnpj,
+                phone: user?.phone
+            });
+        } catch (err: any) {
+            console.error(err);
+            alert('Erro ao gerar PDF: ' + err.message);
+        } finally {
+            setDownloadingPdf(false);
+        }
+    };
 
     const scrollToSection = (id: string) => {
         const element = document.getElementById(id);
@@ -247,30 +268,86 @@ const Documentation: React.FC = () => {
 
                     {/* Integrator */}
                     <section id="integrator" className="border-t border-white/10 pt-12 pb-20">
-                        <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-3">
-                            <Lock className="text-blue-500" /> Para Integradores
-                        </h2>
-                        <p className="mb-4">
-                            O Integrador é o responsável técnico pelo bairro.
-                        </p>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                            <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                                <Lock className="text-atalaia-neon" /> Para Integradores & Parceiros
+                            </h2>
+                            <Button 
+                                onClick={handleDownloadPdf} 
+                                disabled={downloadingPdf}
+                                className="bg-atalaia-neon text-black font-black text-xs gap-2 shadow-[0_0_20px_rgba(0,255,102,0.3)] hover:scale-105 transition-all"
+                            >
+                                <Download size={15} />
+                                {downloadingPdf ? 'Gerando PDF...' : 'Baixar Manual do Integrador (PDF)'}
+                            </Button>
+                        </div>
+
+                        {/* Banner de destaque do manual em PDF */}
+                        <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-zinc-950 via-[#072014] to-zinc-950 border border-atalaia-neon/40 shadow-[0_0_30px_rgba(0,255,102,0.1)] flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                            <div className="space-y-2 max-w-2xl">
+                                <div className="flex items-center gap-2">
+                                    <Badge color="green" className="text-[10px] font-mono uppercase">Documento Homologado v2.5 (RTMP & STREAMS)</Badge>
+                                    <span className="text-xs text-atalaia-neon font-bold flex items-center gap-1">
+                                        <Sparkles size={12} /> Ilustrado com fotos de campo
+                                    </span>
+                                </div>
+                                <h3 className="text-xl font-black text-white">Manual Operacional Passo a Passo em PDF</h3>
+                                <p className="text-sm text-zinc-300 leading-relaxed">
+                                    Guia técnico com passo a passo de configuração RTMP, parâmetros ideais de codecs H.264, servidores de retransmissão HTTPS, fotos do padrão de caixas herméticas, placas de advertência, homologação de câmeras com pinos verdes no mapa, máscaras LGPD e automação de Split financeiro.
+                                </p>
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto shrink-0">
+                                <Button 
+                                    onClick={() => setIsManualModalOpen(true)}
+                                    variant="outline"
+                                    className="text-xs font-bold border-white/20 hover:border-atalaia-neon text-white justify-center"
+                                >
+                                    <BookOpen size={15} className="mr-1.5" /> Ler Online
+                                </Button>
+                                <Button 
+                                    onClick={handleDownloadPdf}
+                                    disabled={downloadingPdf}
+                                    className="bg-atalaia-neon text-black font-black text-xs px-5 justify-center shadow-lg hover:scale-105 transition-all"
+                                >
+                                    <Download size={15} className="mr-1.5" />
+                                    {downloadingPdf ? 'Baixando...' : 'Baixar Arquivo PDF (9 Páginas)'}
+                                </Button>
+                            </div>
+                        </div>
+
                         <ul className="space-y-4">
-                            <li className="bg-[#111] p-4 rounded-lg">
-                                <strong className="text-white block mb-1">Gestão de Moradores</strong>
-                                <span className="text-sm">O Integrador pode ver a lista de moradores do seu bairro, mas apenas o Admin pode alterar planos ou excluir usuários.</span>
+                            <li className="bg-[#111] p-4 rounded-xl border border-white/5">
+                                <strong className="text-emerald-400 block mb-1">Configuração de Câmeras em RTMP e Codecs H.264</strong>
+                                <span className="text-sm">Passo a passo para enviar o fluxo de vídeo direto da câmera ou DVR para a nuvem via Push RTMP (porta 1935), sem precisar de IP fixo nem abrir portas no roteador do morador. Parâmetros homologados: H.264, 15 FPS, CBR 2048kbps e GOP de 30.</span>
                             </li>
-                            <li className="bg-[#111] p-4 rounded-lg">
-                                <strong className="text-white block mb-1">Recebimento de Doações</strong>
-                                <span className="text-sm">Moradores do plano gratuito podem fazer doações. O Integrador deve configurar suas chaves do <strong>Mercado Pago</strong> no menu "Gestão de Moradores" para receber esses valores diretamente.</span>
+                            <li className="bg-[#111] p-4 rounded-xl border border-white/5">
+                                <strong className="text-white block mb-1">Homologação de Câmeras no Mapa</strong>
+                                <span className="text-sm">O integrador cadastra streams em protocolo HTTPS (Iframe, RTSP.me, HLS, WebRTC, YouTube Live) e marca o ponto georreferenciado direto no mapa para criar o pino verde comunitário.</span>
                             </li>
-                            <li className="bg-[#111] p-4 rounded-lg">
-                                <strong className="text-white block mb-1">Protocolos de Câmera</strong>
-                                <span className="text-sm">Ferramenta para gerar links RTMP/RTSP padronizados e enviar para a administração configurar no servidor de mídia.</span>
+                            <li className="bg-[#111] p-4 rounded-xl border border-white/5">
+                                <strong className="text-white block mb-1">Máscaras de Privacidade (LGPD)</strong>
+                                <span className="text-sm">Desenho de retângulos e polígonos pretos opacos sobre janelas e áreas privadas de vizinhos, com sincronização em tempo real para proteção jurídica.</span>
+                            </li>
+                            <li className="bg-[#111] p-4 rounded-xl border border-white/5">
+                                <strong className="text-white block mb-1">Gestão da Base de Moradores e Faturamento</strong>
+                                <span className="text-sm">Acompanhamento de moradores no período de testes (Trial Promocional), assinantes pagos e configuração das chaves de Split do Mercado Pago.</span>
                             </li>
                         </ul>
                     </section>
 
                 </main>
             </div>
+
+            <IntegratorManualModal
+                isOpen={isManualModalOpen}
+                onClose={() => setIsManualModalOpen(false)}
+                integratorData={{
+                    integratorName: user?.name,
+                    companyName: user?.companyName,
+                    companyCnpj: user?.cnpj,
+                    phone: user?.phone
+                }}
+            />
         </div>
     );
 };

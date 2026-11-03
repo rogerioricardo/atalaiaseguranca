@@ -11,7 +11,7 @@ import {
     ChevronRight, Camera as CameraIcon, Loader2, Edit2, X, Lock,
     Maximize2, Clock, Wrench, RefreshCw, Calendar, Download, 
     Upload, FileText, Phone, UploadCloud, Sparkles, Check,
-    Building2, Settings2, ShieldAlert, Layers, EyeOff
+    Building2, Settings2, ShieldAlert, Layers, EyeOff, Radio
 } from 'lucide-react';
 import { Card, Button, Input, Badge } from '@/components/UI';
 import { UpgradeModal } from '@/components/UpgradeModal';
@@ -21,6 +21,7 @@ import { NeighborhoodsManagerModal } from '@/components/NeighborhoodsManagerModa
 import { CameraSponsorsFooter } from '@/components/CameraSponsorsFooter';
 import { CameraPrivacyMaskModal } from '@/components/CameraPrivacyMaskModal';
 import { CameraPrivacyMaskOverlay } from '@/components/CameraPrivacyMaskOverlay';
+import { IntegratorManualModal } from '@/components/IntegratorManualModal';
 import { isDirectVideoUrl } from '@/lib/mediaUtils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -487,6 +488,8 @@ const Cameras: React.FC = () => {
   const [isNeighborhoodsManagerOpen, setIsNeighborhoodsManagerOpen] = useState(false);
   const [neighborhoodToDelete, setNeighborhoodToDelete] = useState<Neighborhood | null>(null);
   const [isDeletingNeighborhood, setIsDeletingNeighborhood] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [manualInitialTab, setManualInitialTab] = useState<'all' | 'mod1' | 'mod2' | 'rtmp' | 'streaming' | 'cameras' | 'lgpd' | 'users' | 'checklist'>('all');
 
   // Estados para Pedidos de Gravação
   const [isRecordingModalOpen, setIsRecordingModalOpen] = useState(false);
@@ -989,11 +992,22 @@ const Cameras: React.FC = () => {
             <p className="text-gray-400 text-sm font-medium">Gestão e monitoramento de ativos de segurança.</p>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+             {(user?.role === UserRole.INTEGRATOR || user?.role === UserRole.ADMIN) && (
+               <button
+                 type="button"
+                 onClick={() => setIsManualModalOpen(true)}
+                 className="px-3.5 py-2.5 bg-gradient-to-r from-atalaia-neon/20 via-atalaia-neon/10 to-transparent hover:from-atalaia-neon/30 hover:to-atalaia-neon/20 border border-atalaia-neon/40 text-atalaia-neon font-black text-xs rounded-xl transition-all shadow-[0_0_15px_rgba(0,255,102,0.15)] hover:scale-105 flex items-center gap-1.5 cursor-pointer shrink-0"
+                 title="Abrir o Manual Operacional do Integrador em PDF"
+               >
+                 <FileText size={16} />
+                 <span>Manual do Integrador (PDF)</span>
+               </button>
+             )}
              <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <Input 
-                  className="pl-10 min-w-[240px]" 
+                  className="pl-10 min-w-[200px]" 
                   placeholder="Pesquisar câmeras..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -1472,7 +1486,22 @@ const Cameras: React.FC = () => {
 
                                 <Input label="Nome da Câmera" value={newCameraName} onChange={e => setNewCameraName(e.target.value)} placeholder="Ex: Câmera Rua X" required />
                                 <div className="space-y-1">
-                                    <Input label="Código Iframe ou Link" value={newCameraCode} onChange={e => setNewCameraCode(e.target.value)} placeholder="https://... ou <iframe... />" />
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest pl-1">Código Iframe ou Link</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setManualInitialTab('rtmp');
+                                                setIsManualModalOpen(true);
+                                            }}
+                                            className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                            title="Ver passo a passo de configuração RTMP, RTSP e codecs"
+                                        >
+                                            <Radio size={11} className="text-emerald-400" />
+                                            <span>Guia RTMP / Codecs</span>
+                                        </button>
+                                    </div>
+                                    <Input value={newCameraCode} onChange={e => setNewCameraCode(e.target.value)} placeholder="https://atalaiadobairro.com.br/live/cam01/index.m3u8 ou <iframe... />" />
                                     <p className="text-[9px] text-amber-500/80 px-1 leading-tight">
                                         💡 <strong>Atenção MisterServer / Servidores Locais:</strong> Browsers modernos bloqueiam links <code className="bg-black/40 px-1">http://</code> por segurança em sites seguros. Se sua câmera não aparecer, use o botão de <strong>Monitor Externo</strong> que aparecerá no card, ou configure SSL (HTTPS) no seu servidor.
                                     </p>
@@ -2555,6 +2584,18 @@ const Cameras: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      <IntegratorManualModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+        initialTab={manualInitialTab}
+        integratorData={{
+          integratorName: user?.name,
+          companyName: user?.companyName,
+          companyCnpj: user?.cnpj,
+          phone: user?.phone
+        }}
+      />
 
     </Layout>
   );

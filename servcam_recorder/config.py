@@ -17,7 +17,7 @@ SERVCAM_ID = os.getenv("SERVCAM_ID", "SERVCAM-001")
 
 # Configurações Padrão de WhatsApp (Fallback se não houver no banco)
 WHATSAPP_PROVIDER = os.getenv("WHATSAPP_PROVIDER", "whaticket")  # 'whaticket', 'evolution_api', 'z_api', 'generic'
-WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL", "https://app.whatendimento.digital/backend/api/messages/send")
+WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL", "https://whatsapp.alienmonitoramento.com.br:443/backend/api/messages/send")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "HSYumH8GyDXc90Bb1ZcBoVMBjatynktt")
 WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY", "Oava7PjfYdGfc6AwQXnNTrLDIj030OdtfHgm3o+bK2Qp")
 WHATSAPP_INSTANCE = os.getenv("WHATSAPP_INSTANCE", "default")

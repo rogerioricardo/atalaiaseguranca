@@ -26,6 +26,24 @@ export const formatWhatsAppNumber = (rawNumber: string): string => {
   return clean;
 };
 
+const sanitizeErrorMessage = (raw: string, status?: number): string => {
+  if (!raw) return status ? `Erro HTTP ${status}` : 'Falha na comunicação com o servidor';
+  const clean = raw.trim();
+  if (clean.toLowerCase().includes('<!doctype') || clean.toLowerCase().includes('<html')) {
+    if (clean.includes('503 Service Temporarily Unavailable') || status === 503) {
+      return 'Serviço temporariamente indisponível no servidor Whaticket (HTTP 503). O backend na VPS pode estar parado ou reiniciando.';
+    }
+    if (clean.includes('502 Bad Gateway') || status === 502) {
+      return 'Erro 502 (Bad Gateway). O proxy/Nginx não conseguiu se comunicar com o backend do Whaticket na VPS.';
+    }
+    if (clean.includes('Starting Server') || clean.includes('Please wait while your application starts')) {
+      return 'O servidor de hospedagem ainda estava inicializando. Por favor, tente novamente agora.';
+    }
+    return `O servidor retornou uma página web HTML em vez da resposta JSON da API (HTTP ${status || 'desconhecido'}). Verifique se o endereço da API está correto e com SSL ativo.`;
+  }
+  return clean.slice(0, 300);
+};
+
 export const WhaticketService = {
   /**
    * Envia mensagem WhatsApp tentando primeiro via Proxy Local/Direto (com o token Whaticket atualizado),
@@ -47,6 +65,7 @@ export const WhaticketService = {
     const settings = await MockService.getSettings().catch(() => ({}));
     const token = overrideToken || (settings as any)['whaticket_token'] || "HSYumH8GyDXc90Bb1ZcBoVMBjatynktt";
     const apiKey = (settings as any)['whaticket_api_key'] || "Oava7PjfYdGfc6AwQXnNTrLDIj030OdtfHgm3o+bK2Qp";
+    const apiUrl = overrideUrl || (settings as any)['whaticket_url'] || "https://whatsapp.alienmonitoramento.com.br:443/backend/api/messages/send";
 
     // 1. Tentar primeiro via Edge Function Supabase (servidor direto para o Whaticket, sem bloqueio de navegador/proxy)
     try {
@@ -55,7 +74,8 @@ export const WhaticketService = {
           message,
           numbers: validTargets,
           token,
-          apiKey
+          apiKey,
+          url: apiUrl
         }
       });
 
@@ -67,7 +87,7 @@ export const WhaticketService = {
         };
       }
       if (error) {
-        console.warn("[WhaticketService] Edge Function falhou, tentando proxy local:", error.message);
+        console.warn("[WhaticketService] Edge Function falhou ou não implantada, tentando canais alternativos:", error.message);
       }
     } catch (edgeError) {
       console.warn("[WhaticketService] Erro ao invocar Edge Function, acionando proxy:", edgeError);
@@ -94,20 +114,24 @@ export const WhaticketService = {
           });
 
           const contentType = resp.headers.get('content-type') || '';
-          // Garante que a resposta é JSON real do Whaticket (e não HTML do SPA index.html)
-          if (resp.ok && contentType.includes('application/json')) {
+          // Garante que a resposta é JSON real (e não HTML do SPA index.html)
+          if (contentType.includes('application/json')) {
             const json = await resp.json().catch(() => null);
-            if (json && (json.mensagem || json.message || json.id)) {
+            if (resp.ok && json && (json.mensagem || json.message || json.id)) {
               anyProxySuccess = true;
               results.push({ target, success: true });
+              continue;
+            }
+            if (json && json.error) {
+              results.push({ target, success: false, error: sanitizeErrorMessage(json.error, resp.status) });
               continue;
             }
           }
           
           const errText = await resp.text().catch(() => '');
-          results.push({ target, success: false, error: errText || `HTTP ${resp.status}` });
+          results.push({ target, success: false, error: sanitizeErrorMessage(errText, resp.status) });
         } catch (targetErr: any) {
-          results.push({ target, success: false, error: targetErr?.message });
+          results.push({ target, success: false, error: targetErr?.message || 'Erro de conexão de rede' });
         }
       }
 
@@ -119,7 +143,7 @@ export const WhaticketService = {
       console.error("[WhaticketService] Falha em todos os canais de envio:", proxyError);
       return {
         success: false,
-        results: validTargets.map(t => ({ target: t, success: false, error: proxyError?.message }))
+        results: validTargets.map(t => ({ target: t, success: false, error: sanitizeErrorMessage(proxyError?.message) }))
       };
     }
   }

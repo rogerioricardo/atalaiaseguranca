@@ -623,7 +623,7 @@ const Landing: React.FC = () => {
                                           <p>🕒 <span className="font-bold text-gray-400">Horário:</span> 15:30:00</p>
                                       </div>
                                       <div className="mt-2 pt-2 border-t border-white/5">
-                                          <p className="text-[#53bdeb] text-[10px] truncate">🔗 atalaia.cloud/#/login</p>
+                                          <p className="text-[#53bdeb] text-[10px] truncate">🔗 atalaiadobairro.com.br/#/login</p>
                                       </div>
                                       <span className="text-[9px] text-gray-500 absolute bottom-1 right-2">15:30</span>
                                   </div>

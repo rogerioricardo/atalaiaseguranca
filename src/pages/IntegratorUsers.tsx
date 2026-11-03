@@ -9,9 +9,11 @@ import { Card, Button, Input, Modal, Badge } from '../components/UI';
 import { 
     Trash2, MapPin, Users, Search, 
     Edit2, Loader2, Wrench, CheckCircle, Smartphone, Mail, RefreshCw, Filter, Database, AlertTriangle,
-    Star, Upload, Check, Settings, Building, CreditCard, Sparkles, AlertCircle, Sliders, FileText
+    Star, Upload, Check, Settings, Building, CreditCard, Sparkles, AlertCircle, Sliders, FileText, Download, BookOpen, Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { IntegratorManualModal } from '../components/IntegratorManualModal';
+import { generateIntegratorPdf } from '../utils/integratorPdfGenerator';
 
 const IntegratorUsers: React.FC = () => {
   const { user, updateProfile } = useAuth();
@@ -24,6 +26,25 @@ const IntegratorUsers: React.FC = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [selectedReceipt, setSelectedReceipt] = useState<{ userName: string, amount: number, name: string, base64: string } | null>(null);
   const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [downloadingManualPdf, setDownloadingManualPdf] = useState(false);
+
+  const handleDirectPdfDownload = async () => {
+    setDownloadingManualPdf(true);
+    try {
+      await generateIntegratorPdf({
+        integratorName: user?.name,
+        companyName: user?.companyName,
+        companyCnpj: user?.cnpj,
+        phone: user?.phone
+      });
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro ao gerar PDF: ' + err.message);
+    } finally {
+      setDownloadingManualPdf(false);
+    }
+  };
 
   const handleFetchAndActionReceipt = async (payment: any, resident: any, action: 'view' | 'download') => {
     setLoadingReceiptId(payment.id);
@@ -237,11 +258,63 @@ const IntegratorUsers: React.FC = () => {
                 <Database className="text-atalaia-neon" size={32} /> 
                 {user?.role === UserRole.ADMIN ? 'Gestão Geral do Sistema' : 'Gestão de Moradores'}
             </h1>
-            <div className="flex gap-2 w-full md:w-auto">
-                <button onClick={fetchData} className="flex-1 md:flex-none p-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 hover:text-atalaia-neon transition-colors flex items-center justify-center gap-2">
-                    <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                <button 
+                  onClick={() => setIsManualModalOpen(true)}
+                  className="flex-1 md:flex-none px-4 py-2.5 bg-gradient-to-r from-atalaia-neon/20 via-atalaia-neon/10 to-transparent hover:from-atalaia-neon/30 hover:to-atalaia-neon/20 border border-atalaia-neon/40 text-atalaia-neon font-black text-xs rounded-xl transition-all shadow-[0_0_15px_rgba(0,255,102,0.15)] hover:scale-105 flex items-center justify-center gap-2 group cursor-pointer"
+                >
+                  <FileText size={16} className="text-atalaia-neon group-hover:animate-bounce" />
+                  <span>Manual do Integrador (PDF)</span>
+                </button>
+                <button 
+                  onClick={handleDirectPdfDownload}
+                  disabled={downloadingManualPdf}
+                  className="px-3.5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white hover:text-atalaia-neon rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Baixar arquivo PDF direto"
+                >
+                  <Download size={15} className={downloadingManualPdf ? 'animate-bounce' : ''} />
+                  <span className="hidden sm:inline">{downloadingManualPdf ? 'Gerando...' : 'Baixar PDF'}</span>
+                </button>
+                <button onClick={fetchData} className="p-3 bg-white/5 border border-white/10 rounded-xl text-gray-400 hover:text-atalaia-neon transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                    <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                     <span className="md:hidden">Sincronizar</span>
                 </button>
+            </div>
+        </div>
+
+        {/* BANNER OFICIAL DO MANUAL DO INTEGRADOR */}
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-zinc-950 via-[#071d12] to-zinc-950 border border-atalaia-neon/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[0_0_25px_rgba(0,255,102,0.08)]">
+            <div className="flex items-start sm:items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-atalaia-neon/15 border border-atalaia-neon/40 text-atalaia-neon flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(0,255,102,0.2)]">
+                    <BookOpen size={24} />
+                </div>
+                <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-black text-white">Manual Operacional do Integrador (Passo a Passo)</h3>
+                        <Badge color="green" className="text-[10px] uppercase font-mono">PDF v2.5 (RTMP & STREAMS)</Badge>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
+                        Aprenda o passo a passo de configuração RTMP, codecs H.264, homologação de câmeras no mapa, padrão de caixas herméticas, aplicação de máscaras LGPD e Split recorrente.
+                    </p>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+                <Button
+                    onClick={() => setIsManualModalOpen(true)}
+                    variant="outline"
+                    className="text-xs font-bold border-white/15 hover:border-atalaia-neon text-white flex-1 md:flex-none justify-center"
+                >
+                    <Eye size={14} className="mr-1.5" /> Ler Online
+                </Button>
+                <Button
+                    onClick={handleDirectPdfDownload}
+                    disabled={downloadingManualPdf}
+                    className="bg-atalaia-neon text-black font-black text-xs px-4 shadow-[0_0_20px_rgba(0,255,102,0.3)] hover:scale-105 transition-all flex-1 md:flex-none justify-center"
+                >
+                    <Download size={14} className="mr-1.5" />
+                    {downloadingManualPdf ? 'Gerando...' : 'Baixar PDF'}
+                </Button>
             </div>
         </div>
 
@@ -666,6 +739,17 @@ const IntegratorUsers: React.FC = () => {
               </div>
             </div>
           )}
+
+      <IntegratorManualModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+        integratorData={{
+          integratorName: user?.name,
+          companyName: user?.companyName,
+          companyCnpj: user?.cnpj,
+          phone: user?.phone
+        }}
+      />
     </Layout>
   );
 };
