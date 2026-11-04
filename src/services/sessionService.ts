@@ -124,9 +124,6 @@ export const SessionService = {
       await supabase.from('user_sessions').insert({
         user_id: userId,
         token: token,
-        ip_address: ipAddress,
-        browser: browser,
-        os: os,
       });
     } catch (err) {
       console.warn("[SessionService] Session DB register skipped:", err);

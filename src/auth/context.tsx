@@ -592,6 +592,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!user?.id) return;
 
+    /*
     const intervalId = setInterval(async () => {
       // Check cross-tab session collision on the same browser first
       if (typeof window !== 'undefined') {
@@ -613,6 +614,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 5000);
 
     return () => clearInterval(intervalId);
+    */
+    return () => {};
   }, [user?.id]);
 
   // Real-time listen channel for instant logout alert
